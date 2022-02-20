@@ -1,3 +1,3 @@
-# 1.0.0 / __Not released yet__
+# 1.0.0 / 2022-02-20
 
 - First public release.
