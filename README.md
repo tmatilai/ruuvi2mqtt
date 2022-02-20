@@ -31,5 +31,5 @@ docker run --rm \
     -v /run/dbus/system_bus_socket:/run/dbus/system_bus_socket \
     -v "$PWD/ruuvi2mqtt.yaml:/app/ruuvi2mqtt.yaml" \
     -e "LOG_LEVEL=ruuvi2mqtt=DEBUG" \
-    ghcr.io/tmatilai/ruuvi2mqtt:1.0.0
+    ghcr.io/tmatilai/ruuvi2mqtt:v1.0.1
 ```
