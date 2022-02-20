@@ -1,0 +1,134 @@
+name: CI
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+
+jobs:
+  rustfmt:
+    name: Rustfmt
+    runs-on: ubuntu-latest
+    steps:
+      - name: Setup | Checkout
+        uses: actions/checkout@v2.4.0
+
+      - name: Setup | Rust
+        uses: actions-rs/toolchain@v1.0.7
+        with:
+          toolchain: stable
+          override: true
+          profile: minimal
+          components: rustfmt
+
+      - name: Run fmt
+        uses: actions-rs/cargo@v1.0.3
+        with:
+          command: fmt
+          args: --all -- --check
+
+  clippy:
+    name: Clippy
+    runs-on: ubuntu-latest
+    steps:
+      - name: Setup | Checkout
+        uses: actions/checkout@v2.4.0
+
+      - name: Setup | Rust
+        uses: actions-rs/toolchain@v1.0.7
+        with:
+          toolchain: stable
+          override: true
+          profile: minimal
+          components: clippy
+
+      - name: Setup | Cache
+        uses: Swatinem/rust-cache@v1.3.0
+
+      - name: Setup | Install build dependencies
+        run: |
+          sudo apt update
+          sudo apt install libdbus-1-dev pkg-config
+
+      - name: Run clippy
+        uses: actions-rs/cargo@v1.0.3
+        with:
+          command: clippy
+          args: --locked --all-targets --all-features -- -D clippy::all
+
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Setup | Checkout
+        uses: actions/checkout@v2.4.0
+
+      - name: Setup | Rust
+        uses: actions-rs/toolchain@v1.0.7
+        with:
+          toolchain: stable
+          override: true
+          profile: minimal
+
+      - name: Setup | Cache
+        uses: Swatinem/rust-cache@v1.3.0
+
+      - name: Setup | Install build dependencies
+        run: |
+          sudo apt update
+          sudo apt install libdbus-1-dev pkg-config
+
+      - name: Run tests
+        run: cargo test --locked --verbose
+
+  check:
+    name: Check
+    permissions:
+      contents: read
+      packages: read
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - armv7-unknown-linux-gnueabihf
+          - x86_64-unknown-linux-gnu
+    env:
+      USE_CROSS: ${{ matrix.target != 'x86_64-unknown-linux-gnu' }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Setup | Checkout
+        uses: actions/checkout@v2.4.0
+
+      - name: Setup | Rust
+        uses: actions-rs/toolchain@v1.0.7
+        with:
+          toolchain: stable
+          override: true
+          profile: minimal
+          target: ${{ matrix.target }}
+
+      - name: Setup | Cache
+        uses: Swatinem/rust-cache@v1.3.0
+
+      - name: Setup | Log in to the Container registry
+        if: env.USE_CROSS == 'true'
+        uses: docker/login-action@v1.13.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup | Install build dependencies
+        if: env.USE_CROSS == 'false'
+        run: |
+          sudo apt update
+          sudo apt install libdbus-1-dev pkg-config
+
+      - name: Run check
+        uses: actions-rs/cargo@v1.0.3
+        with:
+          command: check
+          args: --locked --target ${{ matrix.target }}
+          use-cross: ${{ env.USE_CROSS }}

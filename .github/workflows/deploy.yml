@@ -1,0 +1,137 @@
+name: Deploy
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch: {}
+
+jobs:
+  build:
+    name: Build binaries
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - armv7-unknown-linux-gnueabihf
+          - x86_64-unknown-linux-gnu
+    env:
+      RELEASE: ${{ startsWith(github.ref, 'refs/tags/v') }}
+      USE_CROSS: ${{ matrix.target != 'x86_64-unknown-linux-gnu' }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Setup | Checkout
+        uses: actions/checkout@v2.4.0
+
+      - name: Setup | Rust
+        uses: actions-rs/toolchain@v1.0.7
+        with:
+          toolchain: stable
+          override: true
+          profile: minimal
+          target: ${{ matrix.target }}
+
+      - name: Setup | Cache
+        uses: Swatinem/rust-cache@v1.3.0
+
+      - name: Setup | Log in to the Container registry
+        if: env.USE_CROSS == 'true'
+        uses: docker/login-action@v1.12.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup | Set build options
+        run: |
+          if [[ "${{ matrix.target }}" == armv7-* ]]; then
+            echo 'RUSTFLAGS=-L /usr/arm-linux-gnueabihf/lib/ -L /usr/lib/arm-linux-gnueabihf/' >> $GITHUB_ENV
+          fi
+          if [[ "$RELEASE" == 'true' ]]; then
+            echo 'RELEASE_FLAG=--release' >> $GITHUB_ENV
+          fi
+
+      - name: Setup | Install build dependencies
+        if: env.USE_CROSS == 'false'
+        run: |
+          sudo apt update
+          sudo apt install libdbus-1-dev pkg-config
+
+      - name: Build
+        uses: actions-rs/cargo@v1.0.3
+        with:
+          command: build
+          args: --locked ${{ env.RELEASE_FLAG }} --target ${{ matrix.target }}
+          use-cross: ${{ env.USE_CROSS }}
+
+      - name: Prepare artifacts
+        run: |
+          mkdir -p 'binaries/${{ matrix.target }}'
+          cp target/${{ matrix.target }}/*/ruuvi2mqtt 'binaries/${{ matrix.target }}/'
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v2.3.1
+        with:
+          name: binaries
+          path: binaries
+
+  docker:
+    name: Build and push Docker images
+    needs: build
+    permissions:
+      contents: read
+      packages: write
+    env:
+      PLATFORMS: linux/amd64,linux/arm/v7
+      REGISTRY: ghcr.io
+      IMAGE_NAME: ${{ github.repository }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Setup | Checkout
+        uses: actions/checkout@v2.4.0
+
+      - name: Setup | Download artifacts
+        uses: actions/download-artifact@v2.1.0
+        with:
+          name: binaries
+          path: binaries
+
+      - name: Setup | Prepare binaries
+        run: |
+          chmod 0755 binaries/*/ruuvi2mqtt
+          mkdir -p binaries/{${{ env.PLATFORMS }}}
+          ln -s ../../../armv7-unknown-linux-gnueabihf/ruuvi2mqtt binaries/linux/arm/v7/
+          ln -s ../../x86_64-unknown-linux-gnu/ruuvi2mqtt binaries/linux/amd64/
+
+      - name: Setup | Log in to the Container registry
+        uses: docker/login-action@v1.13.0
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup | Docker QEMU
+        uses: docker/setup-qemu-action@v1.2.0
+
+      - name: Setup | Docker Buildx
+        uses: docker/setup-buildx-action@v1.6.0
+
+      - name: Extract metadata (tags, labels) for Docker
+        id: meta
+        uses: docker/metadata-action@v3.6.2
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v2.9.0
+        with:
+          context: .
+          platforms: ${{ env.PLATFORMS }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}

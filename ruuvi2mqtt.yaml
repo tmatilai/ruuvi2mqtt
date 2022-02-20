@@ -1,0 +1,11 @@
+mqtt:
+  server: "homeassistant.local"
+  user: "ruuvi2mqtt"
+  password: "changeme"
+  throttle: 60
+
+devices:
+  AA:12:BB:34:CC:56:
+    name: Ruuvi Indoors
+  AB:CD:EF:98:76:54:
+    name: Ruuvi Outdoors

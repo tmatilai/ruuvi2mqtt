@@ -1,0 +1,7 @@
+[target.armv7-unknown-linux-gnueabihf]
+image = "ghcr.io/tmatilai/rustcross:dbus-armv7-gnu-1.0.0"
+
+[build.env]
+passthrough = [
+    "RUSTFLAGS",
+]
