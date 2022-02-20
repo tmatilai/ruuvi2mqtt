@@ -71,7 +71,11 @@ jobs:
       - name: Prepare artifacts
         run: |
           mkdir -p 'binaries/${{ matrix.target }}'
-          cp target/${{ matrix.target }}/*/ruuvi2mqtt 'binaries/${{ matrix.target }}/'
+          case "$RELEASE" in
+            true) profile=release;;
+            *) profile=debug;;
+          esac
+          cp target/${{ matrix.target }}/$profile/ruuvi2mqtt 'binaries/${{ matrix.target }}/'
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v2.3.1
