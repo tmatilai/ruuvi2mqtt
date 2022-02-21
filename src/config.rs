@@ -1,10 +1,7 @@
-use std::collections::HashMap;
-use std::env;
-use std::fmt;
-use std::fs;
-use std::time::Duration;
+use std::{collections::HashMap, fmt, fs, path::PathBuf, time::Duration};
 
 use anyhow::{Context, Result};
+use clap::{CommandFactory, Parser};
 use derivative::Derivative;
 use rand::Rng;
 use serde::Deserialize;
@@ -45,19 +42,40 @@ pub struct Device {
     pub name: String,
 }
 
+#[derive(Debug, Parser)]
+#[clap(version)]
+pub struct CliOptions {
+    /// Configuration file
+    #[clap(
+        long,
+        parse(from_os_str),
+        env = "CONFIG_FILE",
+        default_value = "ruuvi2mqtt.yaml"
+    )]
+    pub config: PathBuf,
+    #[clap(long, env, default_value = "INFO")]
+    pub log_level: log::LevelFilter,
+}
+
 impl Config {
-    pub fn config_file() -> String {
-        env::var("CONFIG_FILE").unwrap_or_else(|_| "ruuvi2mqtt.yaml".to_string())
-    }
+    pub fn load(options: CliOptions) -> Result<Self> {
+        let config_file = &options.config;
 
-    pub fn load() -> Result<Self> {
-        let config_file = Self::config_file();
-        log::debug!("Config file: {}", config_file);
-
-        let config_str = fs::read_to_string(&config_file)
-            .with_context(|| format!("Failed to read {}", config_file))?;
-        serde_yaml::from_str(&config_str).with_context(|| format!("Failed to load {}", config_file))
+        let config_str = fs::read_to_string(config_file)
+            .with_context(|| format!("Failed to read {}", config_file.display()))?;
+        serde_yaml::from_str(&config_str)
+            .with_context(|| format!("Failed to load {}", config_file.display()))
     }
+}
+
+impl CliOptions {
+    pub fn read() -> Self {
+        Self::parse()
+    }
+}
+
+pub fn version_info() -> String {
+    CliOptions::command().render_long_version()
 }
 
 fn default_mqtt_port() -> u16 {

@@ -10,15 +10,13 @@ mod ruuvi;
 use anyhow::Result;
 use tokio::sync::mpsc;
 
-use crate::config::Config;
+use crate::config::{CliOptions, Config};
 use crate::devices::{Devices, TryUpdate};
 use crate::homeassistant::SensorData;
 use crate::mqtt::Mqtt;
 use crate::ruuvi::{BDAddr, RuuviListener};
 
 type EventSender = mpsc::Sender<crate::Event>;
-
-const PROGRAM: &str = concat!(env!("CARGO_PKG_NAME"), " v", env!("CARGO_PKG_VERSION"));
 
 #[derive(Debug)]
 pub enum Event {
@@ -29,11 +27,14 @@ pub enum Event {
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    init_logger();
+    let options = CliOptions::read();
 
-    log::info!("{}", PROGRAM);
+    init_logger(options.log_level);
 
-    let config = Config::load()?;
+    log::info!("{}", config::version_info().trim_end());
+    log::debug!("{:?}", options);
+
+    let config = Config::load(options)?;
     log::debug!("{:?}", config);
 
     let mut devices = Devices::new(&config.devices, config.mqtt.throttle);
@@ -79,7 +80,6 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
-fn init_logger() {
-    let env = env_logger::Env::default().filter_or("LOG_LEVEL", "ruuvi2mqtt=INFO");
-    env_logger::init_from_env(env);
+fn init_logger(log_level: log::LevelFilter) {
+    env_logger::Builder::new().filter_level(log_level).init();
 }
