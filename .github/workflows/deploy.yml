@@ -78,7 +78,7 @@ jobs:
           cp target/${{ matrix.target }}/$profile/ruuvi2mqtt 'binaries/${{ matrix.target }}/'
 
       - name: Upload artifacts
-        uses: actions/upload-artifact@v2.3.1
+        uses: actions/upload-artifact@v3
         with:
           name: binaries
           path: binaries
