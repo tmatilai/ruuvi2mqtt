@@ -100,7 +100,7 @@ jobs:
         uses: actions/checkout@v2.4.0
 
       - name: Setup | Download artifacts
-        uses: actions/download-artifact@v2.1.0
+        uses: actions/download-artifact@v3
         with:
           name: binaries
           path: binaries
