@@ -1,6 +1,7 @@
 BIN := ruuvi2mqtt
-ARCHS := armv7 x86_64
+ARCHS := aarch64 armv7 x86_64
 
+TARGET_ARCH_aarch64 = aarch64-unknown-linux-gnu
 TARGET_ARCH_x86_64 = x86_64-unknown-linux-gnu
 TARGET_ARCH_armv7 = armv7-unknown-linux-gnueabihf
 
