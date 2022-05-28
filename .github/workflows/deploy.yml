@@ -36,7 +36,7 @@ jobs:
           target: ${{ matrix.target }}
 
       - name: Setup | Cache
-        uses: Swatinem/rust-cache@v1.3.0
+        uses: Swatinem/rust-cache@v1.4.0
 
       - name: Setup | Log in to the Container registry
         if: env.USE_CROSS == 'true'
@@ -78,7 +78,7 @@ jobs:
           cp target/${{ matrix.target }}/$profile/ruuvi2mqtt 'binaries/${{ matrix.target }}/'
 
       - name: Upload artifacts
-        uses: actions/upload-artifact@v2.3.1
+        uses: actions/upload-artifact@v3.1.0
         with:
           name: binaries
           path: binaries
@@ -100,7 +100,7 @@ jobs:
         uses: actions/checkout@v2.4.0
 
       - name: Setup | Download artifacts
-        uses: actions/download-artifact@v2.1.0
+        uses: actions/download-artifact@v3.0.0
         with:
           name: binaries
           path: binaries
