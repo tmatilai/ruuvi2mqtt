@@ -16,6 +16,7 @@ jobs:
       fail-fast: false
       matrix:
         target:
+          - aarch64-unknown-linux-gnu
           - armv7-unknown-linux-gnueabihf
           - x86_64-unknown-linux-gnu
     env:
@@ -48,9 +49,14 @@ jobs:
 
       - name: Setup | Set build options
         run: |
-          if [[ "${{ matrix.target }}" == armv7-* ]]; then
+          case "${{ matrix.target }}" in
+          aarch64-unknown-linux-gnu)
+            echo 'RUSTFLAGS=-L /usr/aarch64-linux-gnu/lib/ -L /usr/lib/aarch64-linux-gnu/' >> $GITHUB_ENV
+            ;;
+          armv7-unknown-linux-gnueabihf)
             echo 'RUSTFLAGS=-L /usr/arm-linux-gnueabihf/lib/ -L /usr/lib/arm-linux-gnueabihf/' >> $GITHUB_ENV
-          fi
+            ;;
+          esac
           if [[ "$RELEASE" == 'true' ]]; then
             echo 'RELEASE_FLAG=--release' >> $GITHUB_ENV
           fi
@@ -90,7 +96,7 @@ jobs:
       contents: read
       packages: write
     env:
-      PLATFORMS: linux/amd64,linux/arm/v7
+      PLATFORMS: linux/amd64,linux/arm64,linux/arm/v7
       REGISTRY: ghcr.io
       IMAGE_NAME: ${{ github.repository }}
     runs-on: ubuntu-latest
@@ -109,6 +115,7 @@ jobs:
         run: |
           chmod 0755 binaries/*/ruuvi2mqtt
           mkdir -p binaries/{${{ env.PLATFORMS }}}
+          ln -s ../../aarch64-unknown-linux-gnu/ruuvi2mqtt binaries/linux/arm64/
           ln -s ../../../armv7-unknown-linux-gnueabihf/ruuvi2mqtt binaries/linux/arm/v7/
           ln -s ../../x86_64-unknown-linux-gnu/ruuvi2mqtt binaries/linux/amd64/
 

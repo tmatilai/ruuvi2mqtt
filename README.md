@@ -13,7 +13,7 @@ The second bullet means that the documentation, configuration, and code quality 
 
 ## Requirements
 
-The target platforms are Linux on amd64 and arm7 (Raspberry Pi). Because of [dbus](https://docs.rs/dbus/latest/dbus/) dependency, (cross) compiling and MUSL can get complicated. MacOS should be fine otherwise, but scanning events on MacOS 12 [is not working](https://github.com/deviceplug/btleplug/issues/224) as is.
+The target platforms are Linux on amd64, arm64, and arm7 (Raspberry Pi). Because of [dbus](https://docs.rs/dbus/latest/dbus/) dependency, (cross) compiling and MUSL can get complicated. MacOS should be fine otherwise, but scanning events on MacOS 12 [is not working](https://github.com/deviceplug/btleplug/issues/224) as is.
 
 ---
 
