@@ -7,14 +7,23 @@ use crate::ruuvi::{self, BDAddr};
 pub struct Device<'a> {
     name: String,
     unique_id: String,
+    state_class: &'a str,
     state_topic: String,
     value_template: String,
     #[serde(flatten)]
     device_type: DeviceType<'a>,
+    device: DeviceInfo<'a>,
     #[serde(skip)]
     bdaddr: BDAddr,
     #[serde(skip)]
     pub topic: String,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct DeviceInfo<'a> {
+    name: String,
+    identifiers: Vec<String>,
+    manufacturer: &'a str,
 }
 
 #[derive(Clone, Copy, Debug, Serialize)]
@@ -39,24 +48,20 @@ impl<'a> Device<'a> {
         let mut devices = Vec::new();
 
         for (bdaddr, device) in &config.devices {
+            let id = bdaddr.to_string_no_delim();
+
             for device_type in DeviceType::all() {
                 let device_class = device_type.device_class;
                 devices.push(Self {
                     name: format!("{} {}", device.name, device_class),
-                    unique_id: format!("{}_{}", bdaddr, device_class),
-                    state_topic: format!(
-                        "{}/{}",
-                        config.mqtt.base_topic,
-                        bdaddr.to_string_no_delim()
-                    ),
+                    unique_id: format!("ruuvi_{}_{}", id, device_class),
+                    state_class: "measurement",
+                    state_topic: format!("{}/{}", config.mqtt.base_topic, id),
                     value_template: format!("{{{{ value_json.{} }}}}", device_class),
                     device_type: *device_type,
+                    device: DeviceInfo::new(device.name.clone(), bdaddr),
                     bdaddr: *bdaddr,
-                    topic: format!(
-                        "homeassistant/sensor/ruuvi_{}/{}/config",
-                        bdaddr.to_string_no_delim(),
-                        device_class
-                    ),
+                    topic: format!("homeassistant/sensor/ruuvi_{}/{}/config", id, device_class),
                 });
             }
         }
@@ -76,6 +81,16 @@ impl SensorData {
             humidity: data.humidity(),
             pressure: data.pressure(),
             temperature: data.temperature(),
+        }
+    }
+}
+
+impl<'a> DeviceInfo<'a> {
+    pub fn new(name: String, bdaddr: &BDAddr) -> Self {
+        Self {
+            name,
+            identifiers: vec![bdaddr.to_string()],
+            manufacturer: "Ruuvi",
         }
     }
 }
