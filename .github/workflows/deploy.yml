@@ -64,8 +64,8 @@ jobs:
       - name: Setup | Install build dependencies
         if: env.USE_CROSS == 'false'
         run: |
-          sudo apt update
-          sudo apt install libdbus-1-dev pkg-config
+          sudo apt-get update
+          sudo apt-get install --assume-yes libdbus-1-dev pkg-config
 
       - name: Build
         uses: actions-rs/cargo@v1.0.3
