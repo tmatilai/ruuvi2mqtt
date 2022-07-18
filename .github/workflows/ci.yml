@@ -44,7 +44,7 @@ jobs:
           components: clippy
 
       - name: Setup | Cache
-        uses: Swatinem/rust-cache@v1.4.0
+        uses: Swatinem/rust-cache@v2.0.0
 
       - name: Setup | Install build dependencies
         run: |
@@ -72,7 +72,7 @@ jobs:
           profile: minimal
 
       - name: Setup | Cache
-        uses: Swatinem/rust-cache@v1.4.0
+        uses: Swatinem/rust-cache@v2.0.0
 
       - name: Setup | Install build dependencies
         run: |
@@ -111,7 +111,7 @@ jobs:
           target: ${{ matrix.target }}
 
       - name: Setup | Cache
-        uses: Swatinem/rust-cache@v1.4.0
+        uses: Swatinem/rust-cache@v2.0.0
 
       - name: Setup | Log in to the Container registry
         if: env.USE_CROSS == 'true'
