@@ -17,8 +17,12 @@ help: ## Display this help
 all: local $(ARCHS) ## Lint and build all architectures
 
 .PHONY: local
-local: lint ## Lint and build locally
+local: test ## Test and build locally
 	cargo build
+
+.PHONY: test
+test: lint ## Lint and test
+	cargo test
 
 .PHONY: lint
 lint: ## Format and lint

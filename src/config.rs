@@ -43,17 +43,12 @@ pub struct Device {
 }
 
 #[derive(Debug, Parser)]
-#[clap(version)]
+#[command(version)]
 pub struct CliOptions {
     /// Configuration file
-    #[clap(
-        long,
-        parse(from_os_str),
-        env = "CONFIG_FILE",
-        default_value = "ruuvi2mqtt.yaml"
-    )]
+    #[arg(long, env = "CONFIG_FILE", default_value = "ruuvi2mqtt.yaml")]
     pub config: PathBuf,
-    #[clap(long, env, default_value = "INFO")]
+    #[arg(long, env, default_value = "INFO")]
     pub log_level: log::LevelFilter,
 }
 
@@ -104,4 +99,10 @@ fn fmt_secret(value: &Option<String>, formatter: &mut fmt::Formatter) -> Result<
         None => formatter.write_str("None"),
         Some(_) => formatter.write_str("Some(<REDACTED>)"),
     }
+}
+
+#[test]
+fn verify_cli() {
+    use clap::CommandFactory;
+    CliOptions::command().debug_assert()
 }

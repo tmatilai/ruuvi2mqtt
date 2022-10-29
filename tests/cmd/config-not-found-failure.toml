@@ -1,0 +1,3 @@
+bin.name = "ruuvi2mqtt"
+args = "--config non-existing.yaml"
+status.code = 1
