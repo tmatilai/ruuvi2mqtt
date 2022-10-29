@@ -13,7 +13,7 @@ The second bullet means that the documentation, configuration, and code quality 
 
 ## Requirements
 
-The target platforms are Linux on amd64, arm64, and arm7 (Raspberry Pi). Because of [dbus](https://docs.rs/dbus/latest/dbus/) dependency, (cross) compiling and MUSL can get complicated. MacOS should be fine otherwise, but scanning events on MacOS 12 [is not working](https://github.com/deviceplug/btleplug/issues/224) as is.
+The target platforms are Linux on amd64, arm64, and arm7 (Raspberry Pi). Because of [dbus](https://docs.rs/dbus/latest/dbus/) dependency, (cross) compiling and MUSL can get complicated. MacOS is supposed to work as well.
 
 ---
 
@@ -22,7 +22,7 @@ The target platforms are Linux on amd64, arm64, and arm7 (Raspberry Pi). Because
 Pre-build binaries and container images can be found in <https://github.com/tmatilai/ruuvi2mqtt>.
 
 An example configuration file can be seen in [ruuvi2mqtt.yaml](./ruuvi2mqtt.yaml).
-Configuration file is by default searched from the working directory, but the path can be specified with `CONFIG_FILE` environment variable.
+Configuration file is by default searched from the working directory, but the path can be specified with `--config` CLI option or `CONFIG_FILE` environment variable.
 
 Example command to run in a Docker container:
 
@@ -30,6 +30,6 @@ Example command to run in a Docker container:
 docker run --rm \
     -v /run/dbus/system_bus_socket:/run/dbus/system_bus_socket \
     -v "$PWD/ruuvi2mqtt.yaml:/app/ruuvi2mqtt.yaml" \
-    -e "LOG_LEVEL=ruuvi2mqtt=DEBUG" \
-    ghcr.io/tmatilai/ruuvi2mqtt:v1.0.1
+    ghcr.io/tmatilai/ruuvi2mqtt:v1.1.0 \
+    --log-level=DEBUG
 ```
