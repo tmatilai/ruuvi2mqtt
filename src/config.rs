@@ -100,3 +100,9 @@ fn fmt_secret(value: &Option<String>, formatter: &mut fmt::Formatter) -> Result<
         Some(_) => formatter.write_str("Some(<REDACTED>)"),
     }
 }
+
+#[test]
+fn verify_cli() {
+    use clap::CommandFactory;
+    CliOptions::command().debug_assert()
+}
