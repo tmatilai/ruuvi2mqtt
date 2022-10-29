@@ -1,5 +1,6 @@
 # 1.1.1 / _Not released yet_
 
+
 # 1.1.0 / 2022-10-29
 
 - Add arm64 (aarch64) to build targets ([#49](https://github.com/tmatilai/ruuvi2mqtt/pull/49)).
