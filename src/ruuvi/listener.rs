@@ -3,7 +3,7 @@ use btleplug::api::{Central, CentralEvent, Manager as _, Peripheral as _, ScanFi
 use btleplug::platform::{Adapter, Manager, Peripheral, PeripheralId};
 use futures::stream::StreamExt;
 use rand::Rng;
-use ruuvi_sensor_protocol::SensorValues;
+use ruuvi_sensor_protocol::{MacAddress, SensorValues};
 use tokio::time::{sleep, Duration};
 
 use crate::ruuvi::SensorData;
@@ -66,7 +66,8 @@ impl RuuviListener {
             CentralEvent::DeviceDiscovered(id) | CentralEvent::DeviceUpdated(id) => {
                 let peripheral = self.find_peripheral(&id).await?;
                 if let Some(values) = Self::parse_data(&peripheral).await? {
-                    let data = SensorData::new(peripheral.address(), values);
+                    let address = values.mac_address().context("BDAddr now found")?;
+                    let data = SensorData::new(address.into(), values);
                     // Sleep a bit to avoid multiple/simultaneus updates
                     sleep(self.sleep).await;
                     self.tx.send(RuuviUpdate(data)).await?;
