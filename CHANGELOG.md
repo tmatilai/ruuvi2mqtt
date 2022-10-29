@@ -1,5 +1,6 @@
 # 1.1.1 / _Not released yet_
 
+- Upgrade dependencies to fix e.g. timeout issues in the MQTT connection ([#105](https://github.com/tmatilai/ruuvi2mqtt/pull/105)).
 
 # 1.1.0 / 2022-10-29
 
