@@ -26,7 +26,7 @@ lint: ## Format and lint
 	cargo clippy --all --all-features
 
 .PHONY: cross
-cross: $(ARCHS) ## Build add non-local architectures
+cross: $(ARCHS) ## Build all non-local architectures
 
 .PHONY: $(ARCHS)
 $(ARCHS): ## Build for the specified architecture
