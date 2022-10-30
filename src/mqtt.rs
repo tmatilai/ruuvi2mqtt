@@ -90,7 +90,7 @@ impl Mqtt {
 }
 
 impl EventLoop {
-    pub fn new(tx: EventSender, state_topic_prefix: String) -> Self {
+    pub const fn new(tx: EventSender, state_topic_prefix: String) -> Self {
         Self {
             tx,
             state_topic_prefix,

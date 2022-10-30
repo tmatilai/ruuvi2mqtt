@@ -52,7 +52,7 @@ impl RuuviListener {
                 tokio::spawn(async move {
                     log::trace!("BLE event: {:?}", event);
                     if let Err(err) = ruuvi.on_event(event).await {
-                        log::error!("Failed to handle BLE event: {:?}", err)
+                        log::error!("Failed to handle BLE event: {:?}", err);
                     }
                 });
             }
