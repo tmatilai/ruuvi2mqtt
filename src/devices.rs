@@ -68,7 +68,7 @@ impl<T: std::clone::Clone> DeviceData<T> {
         }
     }
 
-    pub fn last_updated(&self) -> &Option<Instant> {
+    pub const fn last_updated(&self) -> &Option<Instant> {
         &self.last_updated
     }
 

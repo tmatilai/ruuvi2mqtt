@@ -53,7 +53,7 @@ pub struct CliOptions {
 }
 
 impl Config {
-    pub fn load(options: CliOptions) -> Result<Self> {
+    pub fn load(options: &CliOptions) -> Result<Self> {
         let config_file = &options.config;
 
         let config_str = fs::read_to_string(config_file)
@@ -73,7 +73,7 @@ pub fn version_info() -> String {
     CliOptions::command().render_long_version()
 }
 
-fn default_mqtt_port() -> u16 {
+const fn default_mqtt_port() -> u16 {
     1883
 }
 
@@ -85,7 +85,7 @@ fn default_mqtt_throttle() -> Duration {
 fn default_mqtt_client_id() -> String {
     let suffix = System::new().host_name().unwrap_or_else(|| {
         log::warn!("Failed to read hostname. Generating random suffix for the client_id.");
-        format!("{:03}", rand::thread_rng().gen_range(1..1000) as u8)
+        format!("{:03}", rand::thread_rng().gen::<u8>())
     });
     format!("ruuvi2mqtt_{}", suffix)
 }
@@ -104,5 +104,5 @@ fn fmt_secret(value: &Option<String>, formatter: &mut fmt::Formatter) -> Result<
 #[test]
 fn verify_cli() {
     use clap::CommandFactory;
-    CliOptions::command().debug_assert()
+    CliOptions::command().debug_assert();
 }

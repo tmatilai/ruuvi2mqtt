@@ -9,7 +9,7 @@ pub struct SensorData {
 }
 
 impl SensorData {
-    pub fn new(bdaddr: BDAddr, values: SensorValues) -> Self {
+    pub const fn new(bdaddr: BDAddr, values: SensorValues) -> Self {
         Self { bdaddr, values }
     }
 

@@ -59,7 +59,7 @@ impl<'a> Device<'a> {
                     state_topic: format!("{}/{}", config.mqtt.base_topic, id),
                     value_template: format!("{{{{ value_json.{} }}}}", device_class),
                     device_type: *device_type,
-                    device: DeviceInfo::new(device.name.clone(), bdaddr),
+                    device: DeviceInfo::new(device.name.clone(), *bdaddr),
                     bdaddr: *bdaddr,
                     topic: format!("homeassistant/sensor/ruuvi_{}/{}/config", id, device_class),
                 });
@@ -74,7 +74,7 @@ impl<'a> Device<'a> {
 }
 
 impl SensorData {
-    pub fn new(name: String, data: ruuvi::SensorData, base_topic: &str) -> Self {
+    pub fn new(name: String, data: &ruuvi::SensorData, base_topic: &str) -> Self {
         Self {
             name,
             topic: format!("{}/{}", base_topic, data.bdaddr.to_string_no_delim()),
@@ -86,7 +86,7 @@ impl SensorData {
 }
 
 impl<'a> DeviceInfo<'a> {
-    pub fn new(name: String, bdaddr: &BDAddr) -> Self {
+    pub fn new(name: String, bdaddr: BDAddr) -> Self {
         Self {
             name,
             identifiers: vec![bdaddr.to_string()],

@@ -34,7 +34,7 @@ async fn main() -> Result<()> {
     log::info!("{}", config::version_info().trim_end());
     log::debug!("{:?}", options);
 
-    let config = Config::load(options)?;
+    let config = Config::load(&options)?;
     log::debug!("{:?}", config);
 
     let mut devices = Devices::new(&config.devices, config.mqtt.throttle);
@@ -47,7 +47,7 @@ async fn main() -> Result<()> {
         .await?;
 
     while let Some(event) = rx.recv().await {
-        use Event::*;
+        use Event::{MqttConnect, MqttDeviceUpdate, RuuviUpdate};
 
         log::trace!("Received event: {:?}", event);
         match event {
@@ -71,7 +71,7 @@ async fn main() -> Result<()> {
                 }
                 TryUpdate::Update(device) => {
                     log::info!("Updating: '{}' [{}]", device.name, sensor.bdaddr);
-                    let data = SensorData::new(device.name, sensor, &config.mqtt.base_topic);
+                    let data = SensorData::new(device.name, &sensor, &config.mqtt.base_topic);
                     mqtt.publish_sensor_data(data).await;
                 }
             },
