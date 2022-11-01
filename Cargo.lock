@@ -104,9 +104,9 @@ dependencies = [
 
 [[package]]
 name = "btleplug"
-version = "0.10.1"
+version = "0.10.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "de2583ed1bbad11cc75649a771a4a340dff69809643f760832f4a1e8cb9f617c"
+checksum = "3d55974d03f4d95a867941514ee93bfe46e4866c17403b7d9c7ea6096bf74805"
 dependencies = [
  "async-trait",
  "bitflags",
