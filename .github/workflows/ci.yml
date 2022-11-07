@@ -36,7 +36,7 @@ jobs:
           components: clippy
 
       - name: Setup | Cache
-        uses: Swatinem/rust-cache@v2.0.1
+        uses: Swatinem/rust-cache@v2.1.0
 
       - name: Setup | Install build dependencies
         run: |
@@ -59,7 +59,7 @@ jobs:
           toolchain: stable
 
       - name: Setup | Cache
-        uses: Swatinem/rust-cache@v2.0.1
+        uses: Swatinem/rust-cache@v2.1.0
 
       - name: Setup | Install build dependencies
         run: |
@@ -102,7 +102,7 @@ jobs:
           echo "CARGO=cross" >> $GITHUB_ENV
 
       - name: Setup | Cache
-        uses: Swatinem/rust-cache@v2.0.1
+        uses: Swatinem/rust-cache@v2.1.0
 
       - name: Setup | Log in to the Container registry
         if: env.USE_CROSS == 'true'
