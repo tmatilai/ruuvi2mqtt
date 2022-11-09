@@ -33,7 +33,6 @@ jobs:
         uses: dtolnay/rust-toolchain@55c7845fad90d0ae8b2e83715cb900e5e861e8cb
         with:
           toolchain: stable
-          targets: ${{ matrix.target }}
 
       - name: Setup | Cross
         if: env.USE_CROSS == 'true'
