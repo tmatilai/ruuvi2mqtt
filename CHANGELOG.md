@@ -1,5 +1,10 @@
 # 1.1.2 / _Not released yet_
 
+- Expose diagnostic information ([#124](https://github.com/tmatilai/ruuvi2mqtt/pull/124)):
+    * Battery voltage
+    * Low batter indicator
+    * Transmitter power
+    * All data in attributes for all sensors
 
 # 1.1.1 / 2022-10-30
 

@@ -1,4 +1,5 @@
 use serde::Serialize;
+use std::str;
 
 use crate::config;
 use crate::ruuvi::{self, BDAddr};
@@ -9,7 +10,10 @@ pub struct Device<'a> {
     unique_id: String,
     state_class: &'a str,
     state_topic: String,
+    json_attributes_topic: String,
     value_template: String,
+    #[serde(flatten, skip_serializing_if = "Option::is_none")]
+    payload_info: Option<PayloadInfo>,
     #[serde(flatten)]
     device_type: DeviceType<'a>,
     device: DeviceInfo<'a>,
@@ -26,10 +30,20 @@ pub struct DeviceInfo<'a> {
     manufacturer: &'a str,
 }
 
-#[derive(Clone, Copy, Debug, Serialize)]
+#[derive(Clone, Copy, Debug, Default, Serialize)]
 pub struct DeviceType<'a> {
-    pub device_class: &'a str,
-    pub unit_of_measurement: &'a str,
+    #[serde(skip)]
+    pub component: &'a str,
+    #[serde(skip)]
+    pub name: &'a str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub device_class: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub unit_of_measurement: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub entity_category: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub icon: Option<&'a str>,
 }
 
 #[derive(Debug, Serialize)]
@@ -41,6 +55,15 @@ pub struct SensorData {
     humidity: Option<f32>,
     pressure: Option<f32>,
     temperature: Option<f32>,
+    battery: Option<f32>,
+    battery_low: Option<bool>,
+    tx_power: Option<i8>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct PayloadInfo {
+    payload_on: bool,
+    payload_off: bool,
 }
 
 impl<'a> Device<'a> {
@@ -51,17 +74,23 @@ impl<'a> Device<'a> {
             let id = bdaddr.to_string_no_delim();
 
             for device_type in DeviceType::all() {
-                let device_class = device_type.device_class;
+                let state_topic = format!("{}/{}", config.mqtt.base_topic, id);
+                let snake_name = device_type.name.to_lowercase().replace(' ', "_");
                 devices.push(Self {
-                    name: format!("{} {}", device.name, device_class),
-                    unique_id: format!("ruuvi_{}_{}", id, device_class),
+                    name: format!("{} {}", device.name, device_type.name),
+                    unique_id: format!("ruuvi_{}_{}", id, snake_name),
                     state_class: "measurement",
-                    state_topic: format!("{}/{}", config.mqtt.base_topic, id),
-                    value_template: format!("{{{{ value_json.{} }}}}", device_class),
+                    state_topic: state_topic.clone(),
+                    json_attributes_topic: state_topic,
+                    value_template: format!("{{{{ value_json.{} }}}}", snake_name),
+                    payload_info: PayloadInfo::from(device_type),
                     device_type: *device_type,
                     device: DeviceInfo::new(device.name.clone(), *bdaddr),
                     bdaddr: *bdaddr,
-                    topic: format!("homeassistant/sensor/ruuvi_{}/{}/config", id, device_class),
+                    topic: format!(
+                        "homeassistant/{}/ruuvi_{}/{}/config",
+                        device_type.component, id, snake_name
+                    ),
                 });
             }
         }
@@ -81,6 +110,9 @@ impl SensorData {
             humidity: data.humidity(),
             pressure: data.pressure(),
             temperature: data.temperature(),
+            battery: data.battery(),
+            battery_low: data.battery_low(),
+            tx_power: data.tx_power(),
         }
     }
 }
@@ -97,20 +129,68 @@ impl<'a> DeviceInfo<'a> {
 
 impl<'a> DeviceType<'a> {
     pub fn all() -> std::slice::Iter<'a, Self> {
-        static DEVICE_TYPES: [DeviceType<'static>; 3] = [
+        static DEVICE_TYPES: [DeviceType<'static>; 6] = [
             DeviceType {
-                device_class: "temperature",
-                unit_of_measurement: "°C",
+                component: "sensor",
+                name: "Temperature",
+                device_class: Some("temperature"),
+                unit_of_measurement: Some("°C"),
+                entity_category: None,
+                icon: None,
             },
             DeviceType {
-                device_class: "humidity",
-                unit_of_measurement: "%",
+                component: "sensor",
+                name: "Humidity",
+                device_class: Some("humidity"),
+                unit_of_measurement: Some("%"),
+                entity_category: None,
+                icon: None,
             },
             DeviceType {
-                device_class: "pressure",
-                unit_of_measurement: "hPa",
+                component: "sensor",
+                name: "Pressure",
+                device_class: Some("pressure"),
+                unit_of_measurement: Some("hPa"),
+                entity_category: None,
+                icon: None,
+            },
+            DeviceType {
+                component: "sensor",
+                name: "Battery",
+                device_class: None,
+                unit_of_measurement: Some("V"),
+                entity_category: Some("diagnostic"),
+                icon: Some("mdi:battery"),
+            },
+            DeviceType {
+                component: "binary_sensor",
+                name: "Battery Low",
+                device_class: Some("battery"),
+                unit_of_measurement: None,
+                entity_category: Some("diagnostic"),
+                icon: None,
+            },
+            DeviceType {
+                component: "sensor",
+                name: "TX Power",
+                device_class: None,
+                unit_of_measurement: Some("dBm"),
+                entity_category: Some("diagnostic"),
+                icon: Some("mdi:signal"),
             },
         ];
         DEVICE_TYPES.iter()
+    }
+}
+
+impl PayloadInfo {
+    pub fn from(device_type: &DeviceType) -> Option<Self> {
+        match device_type.component {
+            "binary_sensor" => Some(Self {
+                payload_on: true,
+                payload_off: false,
+            }),
+            _ => None,
+        }
     }
 }
