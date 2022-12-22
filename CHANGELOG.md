@@ -1,4 +1,4 @@
-# 1.1.2 / _Not released yet_
+# 1.2.0 / _Not released yet_
 
 - Expose diagnostic information ([#124](https://github.com/tmatilai/ruuvi2mqtt/pull/124)):
     * Battery voltage
