@@ -65,8 +65,12 @@ impl RuuviListener {
         match event {
             CentralEvent::DeviceDiscovered(id) | CentralEvent::DeviceUpdated(id) => {
                 let peripheral = self.find_peripheral(&id).await?;
+                log::trace!("BLE Peripheral: {:?}", peripheral);
                 if let Some(values) = Self::parse_data(&peripheral).await? {
-                    let address = values.mac_address().context("BDAddr now found")?;
+                    log::trace!("Ruuvi event: {:?}", values);
+                    let address = values
+                        .mac_address()
+                        .context(format!("BDAddr not found: {}", peripheral))?;
                     let data = SensorData::new(address.into(), values);
                     // Sleep a bit to avoid multiple/simultaneus updates
                     sleep(self.sleep).await;
