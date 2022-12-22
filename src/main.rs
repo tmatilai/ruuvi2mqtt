@@ -81,5 +81,8 @@ async fn main() -> Result<()> {
 }
 
 fn init_logger(log_level: log::LevelFilter) {
-    env_logger::Builder::new().filter_level(log_level).init();
+    env_logger::Builder::new()
+        .filter_level(log_level)
+        .parse_default_env()
+        .init();
 }
