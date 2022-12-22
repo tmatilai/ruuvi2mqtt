@@ -5,6 +5,7 @@
     * Low batter indicator
     * Transmitter power
     * All data in attributes for all sensors
+- Support more detailed log level configuration with the `RUST_LOG` env var ([#145](https://github.com/tmatilai/ruuvi2mqtt/pull/145)):
 
 # 1.1.1 / 2022-10-30
 
