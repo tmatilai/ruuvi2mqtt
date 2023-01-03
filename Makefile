@@ -5,8 +5,6 @@ TARGET_ARCH_aarch64 = aarch64-unknown-linux-gnu
 TARGET_ARCH_x86_64 = x86_64-unknown-linux-gnu
 TARGET_ARCH_armv7 = armv7-unknown-linux-gnueabihf
 
-CROSS_IMAGE := $(BIN)-dev
-
 .DEFAULT_GOAL := help
 
 .PHONY: help
@@ -34,11 +32,4 @@ cross: $(ARCHS) ## Build all non-local architectures
 
 .PHONY: $(ARCHS)
 $(ARCHS): ## Build for the specified architecture
-	docker run --rm -ti -v $$PWD:/usr/src/app \
-	    -e CARGO_HOME=/usr/src/app/target/.cargo \
-	    $(CROSS_IMAGE) \
-	    cargo build --target $(TARGET_ARCH_$@)
-
-.PHONY: cross-image
-cross-image: ## Build Docker image for cross compiling
-	docker build -t $(CROSS_IMAGE) dev
+	cross build --target $(TARGET_ARCH_$@)
