@@ -28,7 +28,7 @@ jobs:
 
     steps:
       - name: Setup | Checkout
-        uses: actions/checkout@v3.2.0
+        uses: actions/checkout@v3.3.0
 
       - name: Setup | Rust
         uses: dtolnay/rust-toolchain@e645b0cf01249a964ec099494d38d2da0f0b349f
@@ -104,7 +104,7 @@ jobs:
 
     steps:
       - name: Setup | Checkout
-        uses: actions/checkout@v3.2.0
+        uses: actions/checkout@v3.3.0
 
       - name: Setup | Download artifacts
         uses: actions/download-artifact@v3.0.1
