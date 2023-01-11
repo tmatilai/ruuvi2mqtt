@@ -36,7 +36,7 @@ jobs:
           components: clippy
 
       - name: Setup | Cache
-        uses: Swatinem/rust-cache@v2.2.0
+        uses: Swatinem/rust-cache@359a70e43a0bb8a13953b04a90f76428b4959bb6 # v2.2.0
 
       - name: Setup | Install build dependencies
         run: |
@@ -48,29 +48,6 @@ jobs:
 
   test:
     name: Test
-    runs-on: ubuntu-latest
-    steps:
-      - name: Setup | Checkout
-        uses: actions/checkout@v3.3.0
-
-      - name: Setup | Rust
-        uses: dtolnay/rust-toolchain@e645b0cf01249a964ec099494d38d2da0f0b349f
-        with:
-          toolchain: stable
-
-      - name: Setup | Cache
-        uses: Swatinem/rust-cache@v2.2.0
-
-      - name: Setup | Install build dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install --assume-yes libdbus-1-dev pkg-config
-
-      - name: Run tests
-        run: cargo test --verbose
-
-  check:
-    name: Check
     permissions:
       contents: read
       packages: read
@@ -80,12 +57,15 @@ jobs:
         target:
           - aarch64-unknown-linux-gnu
           - armv7-unknown-linux-gnueabihf
-          - x86_64-unknown-linux-gnu
+        os: [ubuntu-latest]
+        include:
+          # Use an older Ubuntu version for glibc compatibility with Debian v11 Buster
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-20.04
     env:
-      USE_CROSS: ${{ matrix.target != 'x86_64-unknown-linux-gnu' }}
+      USE_CROSS: "${{ !startsWith(matrix.target, 'x86_64-unknown-linux-') }}"
       CARGO: cargo
-    runs-on: ubuntu-latest
-
+    runs-on: ${{ matrix.os }}
     steps:
       - name: Setup | Checkout
         uses: actions/checkout@v3.3.0
@@ -95,14 +75,23 @@ jobs:
         with:
           toolchain: stable
 
+      - name: Setup | Cache
+        uses: Swatinem/rust-cache@359a70e43a0bb8a13953b04a90f76428b4959bb6 # v2.2.0
+        with:
+          key: "${{ matrix.target }}-${{ matrix.os }}"
+
       - name: Setup | Cross
         if: env.USE_CROSS == 'true'
         run: |
           cargo install --bins cross
           echo "CARGO=cross" >> $GITHUB_ENV
 
-      - name: Setup | Cache
-        uses: Swatinem/rust-cache@v2.2.0
+      - name: Setup | Install build dependencies
+        if: env.USE_CROSS == 'false'
+        run: |
+          rustup target add ${{ matrix.target }}
+          sudo apt-get update
+          sudo apt-get install --assume-yes libdbus-1-dev pkg-config
 
       - name: Setup | Log in to the Container registry
         if: env.USE_CROSS == 'true'
@@ -112,11 +101,11 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Setup | Install build dependencies
-        if: env.USE_CROSS == 'false'
-        run: |
-          sudo apt-get update
-          sudo apt-get install --assume-yes libdbus-1-dev pkg-config
-
       - name: Run check
         run: ${{ env.CARGO }} check --target ${{ matrix.target }}
+
+      - name: Run tests
+        # Disable on cross until find a way to use trycmd with it:
+        # https://github.com/assert-rs/trycmd/issues/51
+        if: env.USE_CROSS == 'false'
+        run: ${{ env.CARGO }} test --target ${{ matrix.target }}
