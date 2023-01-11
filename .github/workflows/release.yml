@@ -18,14 +18,16 @@ jobs:
         target:
           - aarch64-unknown-linux-gnu
           - armv7-unknown-linux-gnueabihf
-          - x86_64-unknown-linux-gnu
+        os: [ubuntu-latest]
+        include:
+          # Use an older Ubuntu version for glibc compatibility with Debian v11 Buster
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-20.04
     env:
       RELEASE: ${{ startsWith(github.ref, 'refs/tags/v') }}
-      USE_CROSS: ${{ matrix.target != 'x86_64-unknown-linux-gnu' }}
+      USE_CROSS: "${{ !startsWith(matrix.target, 'x86_64-unknown-linux-') }}"
       CARGO: cargo
-    # Use an older Ubuntu version for glibc compatibility with Debian v11 Buster
-    runs-on: ubuntu-20.04
-
+    runs-on: ${{ matrix.os }}
     steps:
       - name: Setup | Checkout
         uses: actions/checkout@v3.3.0
@@ -35,14 +37,23 @@ jobs:
         with:
           toolchain: stable
 
+      - name: Setup | Cache
+        uses: Swatinem/rust-cache@359a70e43a0bb8a13953b04a90f76428b4959bb6 # v2.2.0
+        with:
+          key: "${{ matrix.target }}-${{ matrix.os }}"
+
       - name: Setup | Cross
         if: env.USE_CROSS == 'true'
         run: |
           cargo install --bins cross
           echo "CARGO=cross" >> $GITHUB_ENV
 
-      - name: Setup | Cache
-        uses: Swatinem/rust-cache@v2.2.0
+      - name: Setup | Install build dependencies
+        if: env.USE_CROSS == 'false'
+        run: |
+          rustup target add ${{ matrix.target }}
+          sudo apt-get update
+          sudo apt-get install --assume-yes libdbus-1-dev pkg-config
 
       - name: Setup | Log in to the Container registry
         if: env.USE_CROSS == 'true'
@@ -65,12 +76,6 @@ jobs:
           if [[ "$RELEASE" == 'true' ]]; then
             echo 'RELEASE_FLAG=--release' >> $GITHUB_ENV
           fi
-
-      - name: Setup | Install build dependencies
-        if: env.USE_CROSS == 'false'
-        run: |
-          sudo apt-get update
-          sudo apt-get install --assume-yes libdbus-1-dev pkg-config
 
       - name: Build
         run: ${{ env.CARGO }} build --verbose ${{ env.RELEASE_FLAG }} --target ${{ matrix.target }}
