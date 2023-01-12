@@ -25,6 +25,7 @@ jobs:
             os: ubuntu-20.04
     env:
       RELEASE: ${{ startsWith(github.ref, 'refs/tags/v') }}
+      PROFILE: ${{ startsWith(github.ref, 'refs/tags/v') && 'release' || 'debug' }}
       USE_CROSS: "${{ !startsWith(matrix.target, 'x86_64-unknown-linux-') }}"
       CARGO: cargo
     runs-on: ${{ matrix.os }}
@@ -40,7 +41,7 @@ jobs:
       - name: Setup | Cache
         uses: Swatinem/rust-cache@359a70e43a0bb8a13953b04a90f76428b4959bb6 # v2.2.0
         with:
-          key: "${{ matrix.target }}-${{ matrix.os }}"
+          shared-key: ${{ matrix.target }}-${{ matrix.os }}-${{ env.PROFILE }}-build
 
       - name: Setup | Cross
         if: env.USE_CROSS == 'true'
@@ -83,11 +84,7 @@ jobs:
       - name: Prepare artifacts
         run: |
           mkdir -p 'binaries/${{ matrix.target }}'
-          case "$RELEASE" in
-            true) profile=release;;
-            *) profile=debug;;
-          esac
-          cp target/${{ matrix.target }}/$profile/ruuvi2mqtt 'binaries/${{ matrix.target }}/'
+          cp target/${{ matrix.target }}/${{ ENV.PROFILE }}/ruuvi2mqtt binaries/${{ matrix.target }}/
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v3.1.2
@@ -106,7 +103,6 @@ jobs:
       REGISTRY: ghcr.io
       IMAGE_NAME: ${{ github.repository }}
     runs-on: ubuntu-latest
-
     steps:
       - name: Setup | Checkout
         uses: actions/checkout@v3.3.0
