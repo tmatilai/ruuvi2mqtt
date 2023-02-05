@@ -1,3 +1,6 @@
+# 1.3.1 / _Not released yet_
+
+
 # 1.3.0 / 2023-02-05
 
 - Support vendoring libdbus and building statically linked binaries ([#172](https://github.com/tmatilai/ruuvi2mqtt/pull/172)).
