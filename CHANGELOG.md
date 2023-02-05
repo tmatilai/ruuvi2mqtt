@@ -1,5 +1,8 @@
 # 1.2.1 / _Not released yet_
 
+- Support vendoring libdbus and build statically linked binaries ([#172](https://github.com/tmatilai/ruuvi2mqtt/pull/172)).
+- Build the container images from `scratch`, and only include a statically linked (MUSL) binary.
+  The default path of the config file is changed to `/ruuvi2mqtt.yaml`.
 
 # 1.2.0 / 2022-12-22
 
