@@ -78,11 +78,11 @@ impl<'a> Device<'a> {
                 let snake_name = device_type.name.to_lowercase().replace(' ', "_");
                 devices.push(Self {
                     name: format!("{} {}", device.name, device_type.name),
-                    unique_id: format!("ruuvi_{}_{}", id, snake_name),
+                    unique_id: format!("ruuvi_{id}_{snake_name}"),
                     state_class: "measurement",
                     state_topic: state_topic.clone(),
                     json_attributes_topic: state_topic,
-                    value_template: format!("{{{{ value_json.{} }}}}", snake_name),
+                    value_template: format!("{{{{ value_json.{snake_name} }}}}"),
                     payload_info: PayloadInfo::from(device_type),
                     device_type: *device_type,
                     device: DeviceInfo::new(device.name.clone(), *bdaddr),

@@ -87,7 +87,7 @@ fn default_mqtt_client_id() -> String {
         log::warn!("Failed to read hostname. Generating random suffix for the client_id.");
         format!("{:03}", rand::thread_rng().gen::<u8>())
     });
-    format!("ruuvi2mqtt_{}", suffix)
+    format!("ruuvi2mqtt_{suffix}")
 }
 
 fn default_mqtt_base_topic() -> String {

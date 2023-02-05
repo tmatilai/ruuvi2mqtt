@@ -32,7 +32,7 @@ impl SensorData {
     pub fn battery(&self) -> Option<f32> {
         self.values
             .battery_potential_as_millivolts()
-            .map(|v| v as f32 / 1000.0)
+            .map(|v| f32::from(v) / 1000.0)
     }
 
     pub fn battery_low(&self) -> Option<bool> {

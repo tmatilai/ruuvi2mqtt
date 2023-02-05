@@ -70,7 +70,7 @@ impl RuuviListener {
                     log::trace!("Ruuvi event: {:?}", values);
                     let address = values
                         .mac_address()
-                        .context(format!("BDAddr not found: {:?}", peripheral))?;
+                        .context(format!("BDAddr not found: {peripheral:?}"))?;
                     let data = SensorData::new(address.into(), values);
                     // Sleep a bit to avoid multiple/simultaneus updates
                     sleep(self.sleep).await;
