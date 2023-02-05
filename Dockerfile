@@ -1,12 +1,7 @@
-FROM debian:11-slim
+FROM scratch
 
 ARG TARGETPLATFORM
 
-RUN apt update \
-    && apt install -y dbus \
-    && rm -rf /var/lib/apt/lists/*
+COPY binaries/$TARGETPLATFORM/ruuvi2mqtt /
 
-WORKDIR /app
-COPY binaries/$TARGETPLATFORM/ruuvi2mqtt /app/
-
-ENTRYPOINT ["/app/ruuvi2mqtt"]
+ENTRYPOINT ["/ruuvi2mqtt"]

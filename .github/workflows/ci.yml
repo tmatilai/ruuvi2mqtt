@@ -38,11 +38,6 @@ jobs:
       - name: Setup | Cache
         uses: Swatinem/rust-cache@359a70e43a0bb8a13953b04a90f76428b4959bb6 # v2.2.0
 
-      - name: Setup | Install build dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install --assume-yes libdbus-1-dev pkg-config
-
       - name: Run clippy
         run: cargo clippy --locked --tests --all-targets --all-features -- -D clippy::all -W clippy::pedantic
 
@@ -56,7 +51,10 @@ jobs:
       matrix:
         target:
           - aarch64-unknown-linux-gnu
+          - aarch64-unknown-linux-musl
           - armv7-unknown-linux-gnueabihf
+          - armv7-unknown-linux-musleabihf
+          - x86_64-unknown-linux-musl
         os: [ubuntu-latest]
         include:
           # Use an older Ubuntu version for glibc compatibility with Debian v11 Buster
@@ -64,6 +62,7 @@ jobs:
             os: ubuntu-20.04
     env:
       USE_CROSS: "${{ !startsWith(matrix.target, 'x86_64-unknown-linux-') }}"
+      MUSL: ${{ contains(matrix.target, '-unknown-linux-musl') }}
       CARGO: cargo
     runs-on: ${{ matrix.os }}
     steps:
@@ -90,8 +89,10 @@ jobs:
         if: env.USE_CROSS == 'false'
         run: |
           rustup target add ${{ matrix.target }}
-          sudo apt-get update
-          sudo apt-get install --assume-yes libdbus-1-dev pkg-config
+          if [[ "$MUSL" == 'true' ]]; then
+            sudo apt-get update
+            sudo apt-get install --assume-yes musl-tools
+          fi
 
       - name: Setup | Log in to the Container registry
         if: env.USE_CROSS == 'true'
@@ -108,4 +109,4 @@ jobs:
         # Disable on cross until find a way to use trycmd with it:
         # https://github.com/assert-rs/trycmd/issues/51
         if: env.USE_CROSS == 'false'
-        run: ${{ env.CARGO }} test --target ${{ matrix.target }}
+        run: ${{ env.CARGO }} test --verbose --target ${{ matrix.target }}

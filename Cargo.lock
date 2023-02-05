@@ -894,6 +894,7 @@ version = "0.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2264f9d90a9b4e60a2dc722ad899ea0374f03c2e96e755fe22a8f551d4d5fb3c"
 dependencies = [
+ "cc",
  "pkg-config",
 ]
 
@@ -1363,6 +1364,7 @@ dependencies = [
  "anyhow",
  "btleplug",
  "clap",
+ "dbus",
  "derivative",
  "env_logger",
  "futures",

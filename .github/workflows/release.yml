@@ -17,7 +17,10 @@ jobs:
       matrix:
         target:
           - aarch64-unknown-linux-gnu
+          - aarch64-unknown-linux-musl
           - armv7-unknown-linux-gnueabihf
+          - armv7-unknown-linux-musleabihf
+          - x86_64-unknown-linux-musl
         os: [ubuntu-latest]
         include:
           # Use an older Ubuntu version for glibc compatibility with Debian v11 Buster
@@ -27,6 +30,7 @@ jobs:
       RELEASE: ${{ startsWith(github.ref, 'refs/tags/v') }}
       PROFILE: ${{ startsWith(github.ref, 'refs/tags/v') && 'release' || 'debug' }}
       USE_CROSS: "${{ !startsWith(matrix.target, 'x86_64-unknown-linux-') }}"
+      MUSL: ${{ contains(matrix.target, '-unknown-linux-musl') }}
       CARGO: cargo
     runs-on: ${{ matrix.os }}
     steps:
@@ -53,8 +57,10 @@ jobs:
         if: env.USE_CROSS == 'false'
         run: |
           rustup target add ${{ matrix.target }}
-          sudo apt-get update
-          sudo apt-get install --assume-yes libdbus-1-dev pkg-config
+          if [[ "$MUSL" == 'true' ]]; then
+            sudo apt-get update
+            sudo apt-get install --assume-yes musl-tools
+          fi
 
       - name: Setup | Log in to the Container registry
         if: env.USE_CROSS == 'true'
@@ -65,18 +71,9 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Setup | Set build options
+        if: env.RELEASE == 'true'
         run: |
-          case "${{ matrix.target }}" in
-          aarch64-unknown-linux-gnu)
-            echo 'RUSTFLAGS=-L /usr/aarch64-linux-gnu/lib/ -L /usr/lib/aarch64-linux-gnu/' >> $GITHUB_ENV
-            ;;
-          armv7-unknown-linux-gnueabihf)
-            echo 'RUSTFLAGS=-L /usr/arm-linux-gnueabihf/lib/ -L /usr/lib/arm-linux-gnueabihf/' >> $GITHUB_ENV
-            ;;
-          esac
-          if [[ "$RELEASE" == 'true' ]]; then
-            echo 'RELEASE_FLAG=--release' >> $GITHUB_ENV
-          fi
+          echo 'RELEASE_FLAG=--release' >> $GITHUB_ENV
 
       - name: Build
         run: ${{ env.CARGO }} build --verbose ${{ env.RELEASE_FLAG }} --target ${{ matrix.target }}
@@ -117,9 +114,9 @@ jobs:
         run: |
           chmod 0755 binaries/*/ruuvi2mqtt
           mkdir -p binaries/{${{ env.PLATFORMS }}}
-          ln -s ../../aarch64-unknown-linux-gnu/ruuvi2mqtt binaries/linux/arm64/
-          ln -s ../../../armv7-unknown-linux-gnueabihf/ruuvi2mqtt binaries/linux/arm/v7/
-          ln -s ../../x86_64-unknown-linux-gnu/ruuvi2mqtt binaries/linux/amd64/
+          ln -s ../../aarch64-unknown-linux-musl/ruuvi2mqtt binaries/linux/arm64/
+          ln -s ../../../armv7-unknown-linux-musleabihf/ruuvi2mqtt binaries/linux/arm/v7/
+          ln -s ../../x86_64-unknown-linux-musl/ruuvi2mqtt binaries/linux/amd64/
 
       - name: Setup | Log in to the Container registry
         uses: docker/login-action@v2.1.0
