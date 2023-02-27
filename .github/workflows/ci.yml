@@ -36,7 +36,7 @@ jobs:
           components: clippy
 
       - name: Setup | Cache
-        uses: Swatinem/rust-cache@359a70e43a0bb8a13953b04a90f76428b4959bb6 # v2.2.0
+        uses: Swatinem/rust-cache@6fd3edff6979b79f87531400ad694fb7f2c84b1f # v2.2.1
 
       - name: Run clippy
         run: cargo clippy --locked --tests --all-targets --all-features -- -D clippy::all -W clippy::pedantic
@@ -75,7 +75,7 @@ jobs:
           toolchain: stable
 
       - name: Setup | Cache
-        uses: Swatinem/rust-cache@359a70e43a0bb8a13953b04a90f76428b4959bb6 # v2.2.0
+        uses: Swatinem/rust-cache@6fd3edff6979b79f87531400ad694fb7f2c84b1f # v2.2.1
         with:
           shared-key: ${{ matrix.target }}-${{ matrix.os }}-debug-build
 
