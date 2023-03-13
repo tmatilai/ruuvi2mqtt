@@ -1,5 +1,7 @@
-# 1.3.1 / _Not released yet_
+# 1.3.1 / 2023-03-13
 
+- Update the dependencies
+- New release for trying to get the container images to be built, too.
 
 # 1.3.0 / 2023-02-05
 
