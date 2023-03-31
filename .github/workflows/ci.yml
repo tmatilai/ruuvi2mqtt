@@ -11,7 +11,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Setup | Checkout
-        uses: actions/checkout@v3.4.0
+        uses: actions/checkout@v3.5.0
 
       - name: Setup | Rust
         uses: dtolnay/rust-toolchain@fc3253060d0c959bea12a59f10f8391454a0b02d
@@ -27,7 +27,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Setup | Checkout
-        uses: actions/checkout@v3.4.0
+        uses: actions/checkout@v3.5.0
 
       - name: Setup | Rust
         uses: dtolnay/rust-toolchain@fc3253060d0c959bea12a59f10f8391454a0b02d
@@ -67,7 +67,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - name: Setup | Checkout
-        uses: actions/checkout@v3.4.0
+        uses: actions/checkout@v3.5.0
 
       - name: Setup | Rust
         uses: dtolnay/rust-toolchain@fc3253060d0c959bea12a59f10f8391454a0b02d
