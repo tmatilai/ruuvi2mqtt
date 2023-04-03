@@ -22,7 +22,7 @@ btleplug = "0.10.2"
 clap = { version = "4.0.23", features = ["derive", "env", "wrap_help"] }
 derivative = "2.2.0"
 env_logger = "0.10.0"
-futures = "0.3.19"
+futures = "0.3.28"
 log = "0.4.17"
 rand = "0.8.4"
 rumqttc = "0.20.0"
