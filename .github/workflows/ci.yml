@@ -96,7 +96,7 @@ jobs:
 
       - name: Setup | Log in to the Container registry
         if: env.USE_CROSS == 'true'
-        uses: docker/login-action@v2.1.0
+        uses: docker/login-action@v2.2.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
