@@ -23,7 +23,7 @@ clap = { version = "4.0.23", features = ["derive", "env", "wrap_help"] }
 derivative = "2.2.0"
 env_logger = "0.10.0"
 futures = "0.3.19"
-log = "0.4.17"
+log = "0.4.20"
 rand = "0.8.4"
 rumqttc = "0.21.0"
 ruuvi-sensor-protocol = "0.6.1"
