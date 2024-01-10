@@ -6,7 +6,7 @@ use derivative::Derivative;
 use rand::Rng;
 use serde::Deserialize;
 use serde_with::{formats::Flexible, serde_as, DisplayFromStr, DurationSeconds};
-use sysinfo::{System, SystemExt};
+use sysinfo::System;
 
 use crate::ruuvi::BDAddr;
 
@@ -83,7 +83,7 @@ fn default_mqtt_throttle() -> Duration {
 }
 
 fn default_mqtt_client_id() -> String {
-    let suffix = System::new().host_name().unwrap_or_else(|| {
+    let suffix = System::host_name().unwrap_or_else(|| {
         log::warn!("Failed to read hostname. Generating random suffix for the client_id.");
         format!("{:03}", rand::thread_rng().gen::<u8>())
     });

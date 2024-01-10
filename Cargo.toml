@@ -6,7 +6,7 @@ license = "MIT"
 homepage = "https://github.com/tmatilai/ruuvi2mqtt"
 repository = "https://github.com/tmatilai/ruuvi2mqtt"
 edition = "2021"
-rust-version = "1.60"
+rust-version = "1.69"
 
 [features]
 default = ["vendored"]
