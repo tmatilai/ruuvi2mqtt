@@ -6,7 +6,7 @@ license = "MIT"
 homepage = "https://github.com/tmatilai/ruuvi2mqtt"
 repository = "https://github.com/tmatilai/ruuvi2mqtt"
 edition = "2021"
-rust-version = "1.60"
+rust-version = "1.69"
 
 [features]
 default = ["vendored"]
@@ -31,7 +31,7 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0.81"
 serde_with = "3.0.0"
 serde_yaml = "0.9.14"
-sysinfo = "0.29.0"
+sysinfo = "0.30.5"
 tokio = { version = "1.18.2", features = ["macros", "rt-multi-thread"] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
