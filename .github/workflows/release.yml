@@ -64,7 +64,7 @@ jobs:
 
       - name: Setup | Log in to the Container registry
         if: env.USE_CROSS == 'true'
-        uses: docker/login-action@v3.0.0
+        uses: docker/login-action@v3.1.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -119,7 +119,7 @@ jobs:
           ln -s ../../x86_64-unknown-linux-musl/ruuvi2mqtt binaries/linux/amd64/
 
       - name: Setup | Log in to the Container registry
-        uses: docker/login-action@v3.0.0
+        uses: docker/login-action@v3.1.0
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
