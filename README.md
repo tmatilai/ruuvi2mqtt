@@ -30,6 +30,6 @@ Example command to run in a Docker container:
 docker run --name ruuvi2mqtt --rm \
     -v /run/dbus/system_bus_socket:/run/dbus/system_bus_socket \
     -v "$PWD/ruuvi2mqtt.yaml:/ruuvi2mqtt.yaml" \
-    ghcr.io/tmatilai/ruuvi2mqtt:v1.3.2 \
+    ghcr.io/tmatilai/ruuvi2mqtt:v1.3.3 \
     --log-level=DEBUG
 ```
