@@ -49,6 +49,7 @@ impl Mqtt {
             let password = config
                 .password
                 .as_ref()
+                .map(|secret| secret.expose_secret())
                 .context("MQTT password not specified")?;
             options.set_credentials(user, password);
         }

@@ -2,8 +2,8 @@ use std::{collections::HashMap, fmt, fs, path::PathBuf, time::Duration};
 
 use anyhow::{Context, Result};
 use clap::{CommandFactory, Parser};
-use derivative::Derivative;
 use rand::Rng;
+use redact::Secret;
 use serde::Deserialize;
 use serde_with::{formats::Flexible, serde_as, DisplayFromStr, DurationSeconds};
 use sysinfo::System;
@@ -19,15 +19,13 @@ pub struct Config {
 }
 
 #[serde_as]
-#[derive(Derivative, Deserialize)]
-#[derivative(Debug)]
+#[derive(Debug, Deserialize)]
 pub struct Mqtt {
     pub server: String,
     #[serde(default = "default_mqtt_port")]
     pub port: u16,
     pub user: Option<String>,
-    #[derivative(Debug(format_with = "fmt_secret"))]
-    pub password: Option<String>,
+    pub password: Option<Secret<String>>,
     #[serde(default = "default_mqtt_client_id")]
     pub client_id: String,
     #[serde_as(as = "DurationSeconds<u32, Flexible>")]
