@@ -1,9 +1,9 @@
-use std::{collections::HashMap, fmt, fs, path::PathBuf, time::Duration};
+use std::{collections::HashMap, fs, path::PathBuf, time::Duration};
 
 use anyhow::{Context, Result};
 use clap::{CommandFactory, Parser};
+use derive_more::Debug;
 use rand::Rng;
-use redact::Secret;
 use serde::Deserialize;
 use serde_with::{formats::Flexible, serde_as, DisplayFromStr, DurationSeconds};
 use sysinfo::System;
@@ -25,7 +25,8 @@ pub struct Mqtt {
     #[serde(default = "default_mqtt_port")]
     pub port: u16,
     pub user: Option<String>,
-    pub password: Option<Secret<String>>,
+    #[debug("{}", fmt_secret(password))]
+    pub password: Option<String>,
     #[serde(default = "default_mqtt_client_id")]
     pub client_id: String,
     #[serde_as(as = "DurationSeconds<u32, Flexible>")]
@@ -92,10 +93,10 @@ fn default_mqtt_base_topic() -> String {
     String::from("ruuvi2mqtt")
 }
 
-fn fmt_secret(value: &Option<String>, formatter: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+fn fmt_secret(value: &Option<String>) -> &str {
     match value {
-        None => formatter.write_str("None"),
-        Some(_) => formatter.write_str("Some(<REDACTED>)"),
+        None => "None",
+        Some(_) => "Some(<REDACTED>)",
     }
 }
 
