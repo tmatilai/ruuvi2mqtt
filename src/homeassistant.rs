@@ -117,7 +117,7 @@ impl SensorData {
     }
 }
 
-impl<'a> DeviceInfo<'a> {
+impl DeviceInfo<'_> {
     pub fn new(name: String, bdaddr: BDAddr) -> Self {
         Self {
             name,
