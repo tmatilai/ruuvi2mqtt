@@ -58,7 +58,7 @@ impl Mqtt {
         Ok(options)
     }
 
-    pub async fn publish_device<'a>(&mut self, device: Device<'static>) {
+    pub fn publish_device(&mut self, device: Device<'static>) {
         let client = self.client.clone();
         tokio::spawn(async move {
             log::debug!("Publishing: {} -> {:?}", device.topic, device);
@@ -73,7 +73,7 @@ impl Mqtt {
         });
     }
 
-    pub async fn publish_sensor_data(&mut self, data: SensorData) {
+    pub fn publish_sensor_data(&mut self, data: SensorData) {
         let client = self.client.clone();
         tokio::spawn(async move {
             log::debug!("Publishing: {} -> {:?}", data.topic, data);

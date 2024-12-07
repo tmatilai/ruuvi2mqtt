@@ -36,14 +36,9 @@ impl SensorData {
     }
 
     pub fn battery_low(&self) -> Option<bool> {
-        let battery = match self.battery() {
-            Some(value) => value,
-            None => return None,
-        };
-        let temperature = match self.temperature() {
-            Some(value) => value,
-            None => return None,
-        };
+        let battery = self.battery()?;
+        let temperature = self.temperature()?;
+
         // Logic copied from https://github.com/ruuvi/com.ruuvi.station/
         Some(
             (temperature <= -20.0 && battery < 2.0)

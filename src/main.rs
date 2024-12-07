@@ -54,7 +54,7 @@ async fn main() -> Result<()> {
             MqttConnect => {
                 log::info!("Connected to Mqtt. Publishing devices.");
                 for device in homeassistant::Device::all(&config) {
-                    mqtt.publish_device(device).await;
+                    mqtt.publish_device(device);
                 }
             }
             MqttDeviceUpdate(bdaddr) => {
@@ -72,7 +72,7 @@ async fn main() -> Result<()> {
                 TryUpdate::Update(device) => {
                     log::info!("Updating: '{}' [{}]", device.name, sensor.bdaddr);
                     let data = SensorData::new(device.name, &sensor, &config.mqtt.base_topic);
-                    mqtt.publish_sensor_data(data).await;
+                    mqtt.publish_sensor_data(data);
                 }
             },
         }

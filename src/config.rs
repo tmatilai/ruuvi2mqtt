@@ -25,7 +25,7 @@ pub struct Mqtt {
     #[serde(default = "default_mqtt_port")]
     pub port: u16,
     pub user: Option<String>,
-    #[debug("{}", fmt_secret(password))]
+    #[debug("{}", fmt_secret(password.as_ref()))]
     pub password: Option<String>,
     #[serde(default = "default_mqtt_client_id")]
     pub client_id: String,
@@ -93,7 +93,7 @@ fn default_mqtt_base_topic() -> String {
     String::from("ruuvi2mqtt")
 }
 
-fn fmt_secret(value: &Option<String>) -> &str {
+fn fmt_secret(value: Option<&String>) -> &str {
     match value {
         None => "None",
         Some(_) => "Some(<REDACTED>)",
