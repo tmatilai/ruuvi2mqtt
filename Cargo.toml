@@ -20,7 +20,7 @@ strip = true
 anyhow = "1.0"
 btleplug = "0.11.7"
 clap = { version = "4.5.31", features = ["derive", "env", "wrap_help"] }
-derive_more = { version = "1.0.0", features = ["debug"] }
+derive_more = { version = "2.0.1", features = ["debug"] }
 env_logger = "0.11.6"
 futures = "0.3.19"
 log = "0.4.26"
