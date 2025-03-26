@@ -23,7 +23,7 @@ clap = { version = "4.5.32", features = ["derive", "env", "wrap_help"] }
 derive_more = { version = "2.0.1", features = ["debug"] }
 env_logger = "0.11.6"
 futures = "0.3.19"
-log = "0.4.26"
+log = "0.4.27"
 rand = "0.9.0"
 rumqttc = "0.24.0"
 ruuvi-sensor-protocol = "0.6.1"
