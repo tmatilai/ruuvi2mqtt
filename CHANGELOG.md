@@ -1,3 +1,6 @@
+## _Not released yet_
+
+
 ## 1.3.4 / 2025-04-18
 
 - Also build the x86_64 binaries with Cross, to ensure backwards compatibility with older Linux distributions, as the 20.04 Ubuntu GitHub runners are not available anymore.
