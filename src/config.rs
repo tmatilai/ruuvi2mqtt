@@ -77,14 +77,14 @@ const fn default_mqtt_port() -> u16 {
 }
 
 fn default_mqtt_throttle() -> Duration {
-    let throttle = rand::thread_rng().gen_range(50..70);
+    let throttle = rand::rng().random_range(50..70);
     Duration::new(throttle, 0)
 }
 
 fn default_mqtt_client_id() -> String {
     let suffix = System::host_name().unwrap_or_else(|| {
         log::warn!("Failed to read hostname. Generating random suffix for the client_id.");
-        format!("{:03}", rand::thread_rng().gen::<u8>())
+        format!("{:03}", rand::rng().random::<u8>())
     });
     format!("ruuvi2mqtt_{suffix}")
 }

@@ -29,7 +29,7 @@ impl RuuviListener {
             .context("No Bluetooth adapters found")?;
 
         let sleep = if sleep.is_zero() {
-            Duration::from_millis(rand::thread_rng().gen_range(0..500))
+            Duration::from_millis(rand::rng().random_range(0..500))
         } else {
             sleep
         };
