@@ -54,12 +54,9 @@ jobs:
           - aarch64-unknown-linux-musl
           - armv7-unknown-linux-gnueabihf
           - armv7-unknown-linux-musleabihf
+          - x86_64-unknown-linux-gnu
           - x86_64-unknown-linux-musl
         os: [ubuntu-latest]
-        include:
-          # Use an older Ubuntu version for glibc compatibility with Debian v11 Buster
-          - target: x86_64-unknown-linux-gnu
-            os: ubuntu-20.04
     env:
       USE_CROSS: "${{ !startsWith(matrix.target, 'x86_64-unknown-linux-') }}"
       MUSL: ${{ contains(matrix.target, '-unknown-linux-musl') }}
