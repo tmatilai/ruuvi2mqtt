@@ -5,8 +5,7 @@ authors = ["Teemu Matilainen <teemu.matilainen@iki.fi>"]
 license = "MIT"
 homepage = "https://github.com/tmatilai/ruuvi2mqtt"
 repository = "https://github.com/tmatilai/ruuvi2mqtt"
-edition = "2021"
-rust-version = "1.69"
+edition = "2024"
 
 [features]
 default = ["vendored"]

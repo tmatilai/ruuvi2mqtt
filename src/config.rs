@@ -5,7 +5,7 @@ use clap::{CommandFactory, Parser};
 use derive_more::Debug;
 use rand::Rng;
 use serde::Deserialize;
-use serde_with::{formats::Flexible, serde_as, DisplayFromStr, DurationSeconds};
+use serde_with::{DisplayFromStr, DurationSeconds, formats::Flexible, serde_as};
 use sysinfo::System;
 
 use crate::ruuvi::BDAddr;

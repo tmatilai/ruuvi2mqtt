@@ -7,11 +7,11 @@ use rumqttc::{
 };
 use tokio::time::sleep;
 
+use crate::Event::{self, MqttConnect, MqttDeviceUpdate};
+use crate::EventSender;
 use crate::config;
 use crate::homeassistant::{Device, SensorData};
 use crate::ruuvi::BDAddr;
-use crate::Event::{self, MqttConnect, MqttDeviceUpdate};
-use crate::EventSender;
 
 pub struct Mqtt {
     client: AsyncClient,

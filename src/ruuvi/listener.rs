@@ -4,11 +4,11 @@ use btleplug::platform::{Adapter, Manager, Peripheral, PeripheralId};
 use futures::stream::StreamExt;
 use rand::Rng;
 use ruuvi_sensor_protocol::{MacAddress, SensorValues};
-use tokio::time::{sleep, Duration};
+use tokio::time::{Duration, sleep};
 
-use crate::ruuvi::SensorData;
 use crate::Event::RuuviUpdate;
 use crate::EventSender;
+use crate::ruuvi::SensorData;
 
 #[derive(Clone)]
 pub struct RuuviListener {
