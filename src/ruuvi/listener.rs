@@ -50,9 +50,9 @@ impl RuuviListener {
             while let Some(event) = events.next().await {
                 let ruuvi = self.clone();
                 tokio::spawn(async move {
-                    log::trace!("BLE event: {:?}", event);
+                    log::trace!("BLE event: {event:?}");
                     if let Err(err) = ruuvi.on_event(event).await {
-                        log::error!("Failed to handle BLE event: {:?}", err);
+                        log::error!("Failed to handle BLE event: {err:?}");
                     }
                 });
             }
@@ -65,9 +65,9 @@ impl RuuviListener {
         match event {
             CentralEvent::DeviceDiscovered(id) | CentralEvent::DeviceUpdated(id) => {
                 let peripheral = self.find_peripheral(&id).await?;
-                log::trace!("BLE Peripheral: {:?}", peripheral);
+                log::trace!("BLE Peripheral: {peripheral:?}");
                 if let Some(values) = Self::parse_data(&peripheral).await? {
-                    log::trace!("Ruuvi event: {:?}", values);
+                    log::trace!("Ruuvi event: {values:?}");
                     let address = values
                         .mac_address()
                         .context(format!("BDAddr not found: {peripheral:?}"))?;

@@ -32,10 +32,10 @@ async fn main() -> Result<()> {
     init_logger(options.log_level);
 
     log::info!("{}", config::version_info().trim_end());
-    log::debug!("{:?}", options);
+    log::debug!("{options:?}");
 
     let config = Config::load(&options)?;
-    log::debug!("{:?}", config);
+    log::debug!("{config:?}");
 
     let mut devices = Devices::new(&config.devices, config.mqtt.throttle);
 
@@ -49,7 +49,7 @@ async fn main() -> Result<()> {
     while let Some(event) = rx.recv().await {
         use Event::{MqttConnect, MqttDeviceUpdate, RuuviUpdate};
 
-        log::trace!("Received event: {:?}", event);
+        log::trace!("Received event: {event:?}");
         match event {
             MqttConnect => {
                 log::info!("Connected to Mqtt. Publishing devices.");

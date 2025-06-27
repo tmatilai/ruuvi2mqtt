@@ -33,7 +33,7 @@ impl Mqtt {
         });
 
         let state_topic = format!("{}/#", config.base_topic);
-        log::debug!("Subscribing to: {}", state_topic);
+        log::debug!("Subscribing to: {state_topic}");
         client
             .subscribe(state_topic, QoS::AtMostOnce)
             .await
@@ -68,7 +68,7 @@ impl Mqtt {
                 .await
             {
                 Ok(()) => log::trace!("OK!"),
-                Err(err) => log::error!("Failed to publish: {}", err),
+                Err(err) => log::error!("Failed to publish: {err}"),
             }
         });
     }
@@ -83,7 +83,7 @@ impl Mqtt {
                 .await
             {
                 Ok(()) => log::trace!("OK!"),
-                Err(err) => log::error!("Failed to publish: {}", err),
+                Err(err) => log::error!("Failed to publish: {err}"),
             }
         });
     }
@@ -104,12 +104,12 @@ impl EventLoop {
                 Ok(event) => {
                     let e = self.clone();
                     tokio::spawn(async move {
-                        log::trace!("Event: {:?}", event);
+                        log::trace!("Event: {event:?}");
                         e.on_event(event).await;
                     });
                 }
                 Err(err) => {
-                    log::error!("Eventloop error: {}", err);
+                    log::error!("Eventloop error: {err}");
                     sleep(Duration::from_secs(10)).await;
                 }
             }
