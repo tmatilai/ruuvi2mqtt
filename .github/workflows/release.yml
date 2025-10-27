@@ -90,7 +90,7 @@ jobs:
         uses: actions/checkout@v4.2.2
 
       - name: Setup | Download artifacts
-        uses: actions/download-artifact@v4.3.0
+        uses: actions/download-artifact@v6.0.0
         with:
           pattern: binaries-*
           path: binaries
@@ -141,7 +141,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Setup | Download artifacts
-        uses: actions/download-artifact@v4.3.0
+        uses: actions/download-artifact@v6.0.0
         with:
           pattern: binaries-*
           path: binaries
