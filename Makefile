@@ -25,7 +25,7 @@ test: lint ## Lint and test
 .PHONY: lint
 lint: ## Format and lint
 	cargo fmt --all
-	cargo clippy --all --all-features
+	cargo clippy --tests --all-targets --all-features -- -D clippy::all -W clippy::pedantic
 
 .PHONY: cross
 cross: $(ARCHS) ## Build all non-local architectures
