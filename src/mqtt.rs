@@ -124,10 +124,10 @@ impl EventLoop {
                 }
             }
             MqttEvent::Incoming(Incoming::Publish(msg)) => {
-                if let Some(suffix) = msg.topic.strip_prefix(&self.state_topic_prefix) {
-                    if let Ok(bdaddr) = BDAddr::from_str_no_delim(suffix) {
-                        self.send_event(MqttDeviceUpdate(bdaddr)).await;
-                    }
+                if let Some(suffix) = msg.topic.strip_prefix(&self.state_topic_prefix)
+                    && let Ok(bdaddr) = BDAddr::from_str_no_delim(suffix)
+                {
+                    self.send_event(MqttDeviceUpdate(bdaddr)).await;
                 }
             }
             _ => {}
