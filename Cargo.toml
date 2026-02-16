@@ -18,10 +18,10 @@ strip = true
 [dependencies]
 anyhow = "1.0"
 btleplug = "0.11.8"
-clap = { version = "4.5.57", features = ["derive", "env", "wrap_help"] }
+clap = { version = "4.5.58", features = ["derive", "env", "wrap_help"] }
 derive_more = { version = "2.1.1", features = ["debug"] }
-env_logger = "0.11.6"
-futures = "0.3.19"
+env_logger = "0.11.9"
+futures = "0.3.32"
 log = "0.4.29"
 rand = "0.9.0"
 rumqttc = "0.25.1"
@@ -30,7 +30,7 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0.149"
 serde_with = "3.16.1"
 serde_yaml = "0.9.14"
-sysinfo = "0.38.0"
+sysinfo = "0.38.2"
 tokio = { version = "1.49.0", features = ["macros", "rt-multi-thread"] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
