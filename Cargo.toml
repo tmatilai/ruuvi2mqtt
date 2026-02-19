@@ -37,4 +37,4 @@ tokio = { version = "1.49.0", features = ["macros", "rt-multi-thread"] }
 dbus = { version = "0.9.10", optional = true }
 
 [dev-dependencies]
-trycmd = "0.15.10"
+trycmd = "1.0.0"
