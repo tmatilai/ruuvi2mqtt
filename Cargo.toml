@@ -30,11 +30,11 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0.149"
 serde_with = "3.17.0"
 serde_yaml = "0.9.14"
-sysinfo = "0.38.3"
-tokio = { version = "1.49.0", features = ["macros", "rt-multi-thread"] }
+sysinfo = "0.38.4"
+tokio = { version = "1.50.0", features = ["macros", "rt-multi-thread"] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 dbus = { version = "0.9.10", optional = true }
 
 [dev-dependencies]
-trycmd = "1.0.0"
+trycmd = "1.0.1"
