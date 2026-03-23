@@ -20,7 +20,7 @@ anyhow = "1.0"
 btleplug = "0.12.0"
 clap = { version = "4.6.0", features = ["derive", "env", "wrap_help"] }
 derive_more = { version = "2.1.1", features = ["debug"] }
-env_logger = "0.11.9"
+env_logger = "0.11.10"
 futures = "0.3.32"
 log = "0.4.29"
 rand = "0.10.0"
@@ -37,4 +37,4 @@ tokio = { version = "1.50.0", features = ["macros", "rt-multi-thread"] }
 dbus = { version = "0.9.10", optional = true }
 
 [dev-dependencies]
-trycmd = "1.1.1"
+trycmd = "1.2.0"
