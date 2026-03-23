@@ -2,7 +2,7 @@ use anyhow::{Context, Result};
 use btleplug::api::{Central, CentralEvent, Manager as _, Peripheral as _, ScanFilter};
 use btleplug::platform::{Adapter, Manager, Peripheral, PeripheralId};
 use futures::stream::StreamExt;
-use rand::Rng;
+use rand::RngExt;
 use ruuvi_sensor_protocol::{MacAddress, SensorValues};
 use tokio::time::{Duration, sleep};
 

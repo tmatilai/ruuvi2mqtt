@@ -3,7 +3,7 @@ use std::{collections::HashMap, fs, path::PathBuf, time::Duration};
 use anyhow::{Context, Result};
 use clap::{CommandFactory, Parser};
 use derive_more::Debug;
-use rand::Rng;
+use rand::RngExt;
 use serde::Deserialize;
 use serde_with::{DisplayFromStr, DurationSeconds, formats::Flexible, serde_as};
 use sysinfo::System;
