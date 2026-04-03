@@ -1,5 +1,6 @@
-## _Not released yet_
+## 1.3.5 / 2026-04-03
 
+- Update the dependencies
 
 ## 1.3.4 / 2025-04-18
 
