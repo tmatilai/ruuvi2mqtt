@@ -1,5 +1,6 @@
 ## _Not released yet_
 
+- Fix BLE update handling after `btleplug` upgrade to 0.12.0.
 
 ## 1.3.5 / 2026-04-03
 
