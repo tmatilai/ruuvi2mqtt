@@ -63,7 +63,9 @@ impl RuuviListener {
 
     async fn on_event(self, event: CentralEvent) -> Result<()> {
         match event {
-            CentralEvent::DeviceDiscovered(id) | CentralEvent::DeviceUpdated(id) => {
+            CentralEvent::DeviceDiscovered(id)
+            | CentralEvent::DeviceUpdated(id)
+            | CentralEvent::RssiUpdate { id, .. } => {
                 let peripheral = self.find_peripheral(&id).await?;
                 log::trace!("BLE Peripheral: {peripheral:?}");
                 if let Some(values) = Self::parse_data(&peripheral).await? {
