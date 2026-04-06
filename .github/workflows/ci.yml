@@ -25,6 +25,9 @@ jobs:
       - name: Run fmt
         run: cargo fmt --all -- --check
 
+      - name: Run fmt (esp32)
+        run: cargo fmt --manifest-path ruuvi2mqtt-esp32/Cargo.toml -- --check
+
   clippy:
     name: Clippy
     runs-on: ubuntu-latest
@@ -43,6 +46,81 @@ jobs:
 
       - name: Run clippy
         run: cargo clippy --locked --tests --all-targets --all-features -- -D clippy::all -W clippy::pedantic
+
+  clippy-esp32:
+    name: Clippy (ESP32-C6)
+    runs-on: ubuntu-latest
+    env:
+      WIFI_SSID: dummy
+      WIFI_PASS: dummy
+      MQTT_SERVER: dummy
+    steps:
+      - name: Setup | Checkout
+        uses: actions/checkout@v6.0.2
+
+      - name: Setup | Rust
+        uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9
+        with:
+          toolchain: nightly
+          components: clippy, rust-src
+
+      - name: Setup | ldproxy
+        run: cargo install ldproxy
+
+      - name: Setup | Cache
+        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
+        with:
+          workspaces: ruuvi2mqtt-esp32 -> target
+          cache-directories: ~/.espressif
+          shared-key: esp32c6-riscv
+
+      - name: Run clippy (ESP32-C6)
+        run: cd ruuvi2mqtt-esp32 && cargo clippy --locked -- -D clippy::all -W clippy::pedantic
+
+  test-esp32:
+    name: Test (ESP32)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Setup | Checkout
+        uses: actions/checkout@v6.0.2
+
+      - name: Setup | Rust
+        uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9
+        with:
+          toolchain: stable
+
+      - name: Run tests
+        run: make -C ruuvi2mqtt-esp32 test
+
+  build-esp32:
+    name: Build (ESP32-C6)
+    runs-on: ubuntu-latest
+    env:
+      WIFI_SSID: dummy
+      WIFI_PASS: dummy
+      MQTT_SERVER: dummy
+    steps:
+      - name: Setup | Checkout
+        uses: actions/checkout@v6.0.2
+
+      - name: Setup | Rust
+        uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9
+        with:
+          toolchain: nightly
+          components: rust-src
+
+      - name: Setup | ldproxy
+        run: cargo install ldproxy
+
+      - name: Setup | Cache
+        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
+        with:
+          workspaces: ruuvi2mqtt-esp32 -> target
+          cache-directories: ~/.espressif
+          shared-key: esp32c6-riscv
+
+      - name: Build firmware
+        run: cd ruuvi2mqtt-esp32 && cargo build --release --locked
 
   test:
     name: Test

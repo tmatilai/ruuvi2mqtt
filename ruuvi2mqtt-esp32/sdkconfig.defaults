@@ -1,0 +1,25 @@
+# Bluetooth — NimBLE stack (required by esp32-nimble)
+CONFIG_BT_ENABLED=y
+# Dual-mode controller BLE-only — applies to ESP32 (Xtensa); silently ignored
+# on RISC-V chips (ESP32-C6, ESP32-C3) that only support BLE.
+CONFIG_BTDM_CTRL_MODE_BLE_ONLY=y
+CONFIG_BT_NIMBLE_ENABLED=y
+
+# Wi-Fi
+CONFIG_ESP_WIFI_ENABLED=y
+
+# Increase BLE scan window
+CONFIG_BT_NIMBLE_MAX_CONNECTIONS=3
+
+# Increase stack size for the main task (Wi-Fi + BLE + MQTT)
+CONFIG_ESP_MAIN_TASK_STACK_SIZE=8192
+
+# mbedTLS — needed for MQTT over TCP with certificate validation
+# Disable for plain TCP MQTT (no TLS), which saves ~40 KB of flash.
+# CONFIG_MBEDTLS_TLS_CLIENT_ONLY=y
+
+# Log level for the ESP-IDF C layer (Wi-Fi, BLE, MQTT internals).
+# Rust log level is controlled separately via the LOG_LEVEL env var.
+CONFIG_LOG_DEFAULT_LEVEL_INFO=y
+# For verbose C-layer debug output during development:
+# CONFIG_LOG_DEFAULT_LEVEL_DEBUG=y
