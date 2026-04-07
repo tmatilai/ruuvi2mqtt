@@ -68,8 +68,8 @@ impl<T: std::clone::Clone> DeviceData<T> {
         }
     }
 
-    pub const fn last_updated(&self) -> &Option<Instant> {
-        &self.last_updated
+    pub fn last_updated(&self) -> Option<&Instant> {
+        self.last_updated.as_ref()
     }
 
     pub fn update(&mut self) {

@@ -5,6 +5,7 @@ use crate::config;
 use crate::ruuvi::{self, BDAddr};
 
 #[derive(Debug, Serialize)]
+#[allow(clippy::struct_field_names)] // field names intentionally mirror the HA MQTT topic structure
 pub struct Device<'a> {
     name: String,
     unique_id: String,
@@ -17,8 +18,6 @@ pub struct Device<'a> {
     #[serde(flatten)]
     device_type: DeviceType<'a>,
     device: DeviceInfo<'a>,
-    #[serde(skip)]
-    bdaddr: BDAddr,
     #[serde(skip)]
     pub topic: String,
 }
@@ -48,8 +47,6 @@ pub struct DeviceType<'a> {
 
 #[derive(Debug, Serialize)]
 pub struct SensorData {
-    #[serde(skip)]
-    pub name: String,
     #[serde(skip)]
     pub topic: String,
     humidity: Option<f32>,
@@ -86,7 +83,6 @@ impl<'a> Device<'a> {
                     payload_info: PayloadInfo::from(device_type),
                     device_type: *device_type,
                     device: DeviceInfo::new(device.name.clone(), *bdaddr),
-                    bdaddr: *bdaddr,
                     topic: format!(
                         "homeassistant/{}/ruuvi_{}/{}/config",
                         device_type.component, id, snake_name
@@ -96,16 +92,11 @@ impl<'a> Device<'a> {
         }
         devices
     }
-
-    pub fn topic(&self) -> String {
-        self.topic.clone()
-    }
 }
 
 impl SensorData {
-    pub fn new(name: String, data: &ruuvi::SensorData, base_topic: &str) -> Self {
+    pub fn new(data: &ruuvi::SensorData, base_topic: &str) -> Self {
         Self {
-            name,
             topic: format!("{}/{}", base_topic, data.bdaddr.to_string_no_delim()),
             humidity: data.humidity(),
             pressure: data.pressure(),

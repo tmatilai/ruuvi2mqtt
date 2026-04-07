@@ -1,6 +1,3 @@
-#![allow(dead_code)]
-#![allow(unused_variables)]
-
 mod config;
 mod devices;
 mod homeassistant;
@@ -71,7 +68,7 @@ async fn main() -> Result<()> {
                 }
                 TryUpdate::Update(device) => {
                     log::info!("Updating: '{}' [{}]", device.name, sensor.bdaddr);
-                    let data = SensorData::new(device.name, &sensor, &config.mqtt.base_topic);
+                    let data = SensorData::new(&sensor, &config.mqtt.base_topic);
                     mqtt.publish_sensor_data(data);
                 }
             },

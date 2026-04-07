@@ -93,6 +93,7 @@ fn default_mqtt_base_topic() -> String {
     String::from("ruuvi2mqtt")
 }
 
+#[allow(dead_code)] // used via derive_more #[debug(...)] attribute
 fn fmt_secret(value: Option<&String>) -> &str {
     match value {
         None => "None",
