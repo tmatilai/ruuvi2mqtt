@@ -1,5 +1,6 @@
 ## _Not released yet_
 
+- Fix MQTT topic subscription not being restored after reconnecting to the broker.
 
 ## 1.3.6 / 2026-04-06
 

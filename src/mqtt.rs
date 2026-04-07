@@ -20,24 +20,21 @@ pub struct Mqtt {
 #[derive(Clone)]
 pub struct EventLoop {
     tx: EventSender,
+    client: AsyncClient,
     state_topic_prefix: String,
 }
 
 impl Mqtt {
-    pub async fn init(tx: EventSender, config: &config::Mqtt) -> Result<Self> {
+    pub fn init(tx: EventSender, config: &config::Mqtt) -> Result<Self> {
         let (client, eventloop) = AsyncClient::new(Self::options(config)?, 10);
 
         let state_topic_prefix = format!("{}/", config.base_topic);
+        let event_loop_client = client.clone();
         tokio::spawn(async move {
-            EventLoop::new(tx, state_topic_prefix).run(eventloop).await;
+            EventLoop::new(tx, event_loop_client, state_topic_prefix)
+                .run(eventloop)
+                .await;
         });
-
-        let state_topic = format!("{}/#", config.base_topic);
-        log::debug!("Subscribing to: {state_topic}");
-        client
-            .subscribe(state_topic, QoS::AtMostOnce)
-            .await
-            .context("Failed to subscribe")?;
 
         Ok(Self { client })
     }
@@ -90,9 +87,10 @@ impl Mqtt {
 }
 
 impl EventLoop {
-    pub const fn new(tx: EventSender, state_topic_prefix: String) -> Self {
+    pub fn new(tx: EventSender, client: AsyncClient, state_topic_prefix: String) -> Self {
         Self {
             tx,
+            client,
             state_topic_prefix,
         }
     }
@@ -120,6 +118,11 @@ impl EventLoop {
         match event {
             MqttEvent::Incoming(Incoming::ConnAck(conn)) => {
                 if conn.code == ConnectReturnCode::Success {
+                    let topic = format!("{}#", self.state_topic_prefix);
+                    log::debug!("Subscribing to: {topic}");
+                    if let Err(err) = self.client.subscribe(&topic, QoS::AtMostOnce).await {
+                        log::error!("Failed to subscribe: {err}");
+                    }
                     self.send_event(MqttConnect).await;
                 }
             }
