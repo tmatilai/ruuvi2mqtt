@@ -22,18 +22,29 @@ pub struct Config {
 #[derive(Debug, Deserialize)]
 pub struct Mqtt {
     pub server: String,
-    #[serde(default = "default_mqtt_port")]
-    pub port: u16,
+    #[serde(default)]
+    pub port: Option<u16>,
+    #[serde(default)]
+    pub tls: bool,
+    #[serde(default)]
+    pub tls_insecure: bool,
+    pub ca_file: Option<PathBuf>,
     pub user: Option<String>,
     #[debug("{}", fmt_secret(password.as_ref()))]
     pub password: Option<String>,
     #[serde(default = "default_mqtt_client_id")]
     pub client_id: String,
+    #[serde(default = "default_mqtt_base_topic")]
+    pub base_topic: String,
     #[serde_as(as = "DurationSeconds<u32, Flexible>")]
     #[serde(default = "default_mqtt_throttle")]
     pub throttle: Duration,
-    #[serde(default = "default_mqtt_base_topic")]
-    pub base_topic: String,
+}
+
+impl Mqtt {
+    pub fn port(&self) -> u16 {
+        self.port.unwrap_or(if self.tls { 8883 } else { 1883 })
+    }
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -72,10 +83,6 @@ pub fn version_info() -> String {
     CliOptions::command().render_long_version()
 }
 
-const fn default_mqtt_port() -> u16 {
-    1883
-}
-
 fn default_mqtt_throttle() -> Duration {
     let throttle = rand::rng().random_range(50..70);
     Duration::new(throttle, 0)
@@ -101,8 +108,64 @@ fn fmt_secret(value: Option<&String>) -> &str {
     }
 }
 
-#[test]
-fn verify_cli() {
-    use clap::CommandFactory;
-    CliOptions::command().debug_assert();
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn verify_cli() {
+        use clap::CommandFactory;
+        CliOptions::command().debug_assert();
+    }
+
+    #[test]
+    fn mqtt_port_defaults_without_tls() {
+        let mqtt = Mqtt {
+            server: "localhost".into(),
+            port: None,
+            tls: false,
+            tls_insecure: false,
+            ca_file: None,
+            user: None,
+            password: None,
+            client_id: "test".into(),
+            base_topic: "test".into(),
+            throttle: Duration::from_secs(60),
+        };
+        assert_eq!(mqtt.port(), 1883);
+    }
+
+    #[test]
+    fn mqtt_port_defaults_with_tls() {
+        let mqtt = Mqtt {
+            server: "localhost".into(),
+            port: None,
+            tls: true,
+            tls_insecure: false,
+            ca_file: None,
+            user: None,
+            password: None,
+            client_id: "test".into(),
+            base_topic: "test".into(),
+            throttle: Duration::from_secs(60),
+        };
+        assert_eq!(mqtt.port(), 8883);
+    }
+
+    #[test]
+    fn mqtt_port_explicit_override() {
+        let mqtt = Mqtt {
+            server: "localhost".into(),
+            port: Some(9999),
+            tls: true,
+            tls_insecure: false,
+            ca_file: None,
+            user: None,
+            password: None,
+            client_id: "test".into(),
+            base_topic: "test".into(),
+            throttle: Duration::from_secs(60),
+        };
+        assert_eq!(mqtt.port(), 9999);
+    }
 }
