@@ -80,3 +80,98 @@ impl<T: std::clone::Clone> DeviceData<T> {
         self.data.clone()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn make_devices(keys: &[u32], throttle: Duration) -> Devices<u32, String> {
+        let map: HashMap<u32, String> = keys.iter().map(|k| (*k, format!("data-{k}"))).collect();
+        Devices::new(&map, throttle)
+    }
+
+    #[test]
+    fn unknown_device_returns_unknown() {
+        let mut devs = make_devices(&[1], Duration::from_secs(60));
+        assert!(matches!(devs.try_update(&2), TryUpdate::UnknownDevice));
+    }
+
+    #[test]
+    fn first_try_update_returns_update() {
+        let mut devs = make_devices(&[1], Duration::from_secs(60));
+        let result = devs.try_update(&1);
+        assert!(matches!(result, TryUpdate::Update(ref v) if v == "data-1"));
+    }
+
+    #[test]
+    fn try_update_without_timestamp_always_returns_update() {
+        let mut devs = make_devices(&[1], Duration::from_secs(60));
+        // try_update doesn't set the timestamp, so repeated calls still return Update
+        assert!(matches!(devs.try_update(&1), TryUpdate::Update(_)));
+        assert!(matches!(devs.try_update(&1), TryUpdate::Update(_)));
+    }
+
+    #[test]
+    fn update_sets_timestamp_and_try_update_throttles() {
+        let mut devs = make_devices(&[1], Duration::from_secs(60));
+        // Simulate MQTT feedback: update() sets the timestamp
+        devs.update(&1);
+        // Now try_update should throttle
+        assert!(matches!(devs.try_update(&1), TryUpdate::Throttle(_)));
+    }
+
+    #[test]
+    fn throttle_expires_after_duration() {
+        let mut devs = make_devices(&[1], Duration::from_millis(10));
+        devs.update(&1);
+        assert!(matches!(devs.try_update(&1), TryUpdate::Throttle(_)));
+
+        std::thread::sleep(Duration::from_millis(15));
+        assert!(matches!(devs.try_update(&1), TryUpdate::Update(_)));
+    }
+
+    #[test]
+    fn zero_throttle_always_returns_update() {
+        let mut devs = make_devices(&[1], Duration::ZERO);
+        // With zero throttle, try_update always returns Update
+        assert!(matches!(devs.try_update(&1), TryUpdate::Update(_)));
+        assert!(matches!(devs.try_update(&1), TryUpdate::Update(_)));
+    }
+
+    #[test]
+    fn zero_throttle_update_is_noop() {
+        let mut devs = make_devices(&[1], Duration::ZERO);
+        // update() with zero throttle doesn't set timestamp
+        assert!(devs.update(&1).is_none());
+        // Still returns Update
+        assert!(matches!(devs.try_update(&1), TryUpdate::Update(_)));
+    }
+
+    #[test]
+    fn update_unknown_device_returns_none() {
+        let mut devs = make_devices(&[1], Duration::from_secs(60));
+        assert!(devs.update(&2).is_none());
+    }
+
+    #[test]
+    fn update_returns_device_data() {
+        let mut devs = make_devices(&[1], Duration::from_secs(60));
+        let result = devs.update(&1);
+        assert_eq!(result.as_deref(), Some("data-1"));
+    }
+
+    #[test]
+    fn cross_instance_throttle_flow() {
+        // Simulates: BLE scan → try_update(Update) → publish → MQTT arrives → update() → BLE scan → try_update(Throttle)
+        let mut devs = make_devices(&[1], Duration::from_secs(60));
+
+        // First BLE reading passes through
+        assert!(matches!(devs.try_update(&1), TryUpdate::Update(_)));
+
+        // MQTT message arrives (from self or another instance), setting the timestamp
+        devs.update(&1);
+
+        // Next BLE reading is throttled
+        assert!(matches!(devs.try_update(&1), TryUpdate::Throttle(_)));
+    }
+}

@@ -106,7 +106,10 @@ jobs:
         run: ${{ env.CARGO }} check --target ${{ matrix.target }}
 
       - name: Run tests
-        # Disable on cross until find a way to use trycmd with it:
-        # https://github.com/assert-rs/trycmd/issues/51
+        run: ${{ env.CARGO }} test --verbose --target ${{ matrix.target }} --bin ruuvi2mqtt
+
+      - name: Run CLI tests
+        # trycmd doesn't support cross runners yet:
+        # https://github.com/assert-rs/snapbox/issues/51
         if: env.USE_CROSS == 'false'
-        run: ${{ env.CARGO }} test --verbose --target ${{ matrix.target }}
+        run: ${{ env.CARGO }} test --verbose --target ${{ matrix.target }} --test cli_tests
