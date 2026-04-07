@@ -37,7 +37,7 @@ async fn main() -> Result<()> {
     let mut devices = Devices::new(&config.devices, config.mqtt.throttle);
 
     let (tx, mut rx) = mpsc::channel(32);
-    let mut mqtt = Mqtt::init(tx.clone(), &config.mqtt).await?;
+    let mut mqtt = Mqtt::init(tx.clone(), &config.mqtt)?;
     RuuviListener::new(tx, config.mqtt.throttle / 100)
         .await?
         .start()
