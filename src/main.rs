@@ -8,7 +8,7 @@ use anyhow::Result;
 use tokio::sync::mpsc;
 
 use crate::config::{CliOptions, Config};
-use crate::devices::{Devices, TryUpdate};
+use crate::devices::{Devices, ThrottleResult};
 use crate::homeassistant::SensorData;
 use crate::mqtt::Mqtt;
 use crate::ruuvi::{BDAddr, RuuviListener};
@@ -55,23 +55,34 @@ async fn main() -> Result<()> {
                 }
             }
             MqttDeviceUpdate(bdaddr) => {
-                if let Some(device) = devices.update(&bdaddr) {
+                if let Some(device) = devices.mark_published(&bdaddr) {
                     log::debug!("Updated from Mqtt: '{}' [{}]", device.name, bdaddr);
                 }
             }
-            RuuviUpdate(sensor) => match devices.try_update(&sensor.bdaddr) {
-                TryUpdate::UnknownDevice => {
-                    log::debug!("Unknown device: [{}]", sensor.bdaddr);
+            RuuviUpdate(sensor) => {
+                let device_name = devices.get(&sensor.bdaddr).map(|d| d.name.as_str());
+                match devices.should_publish(&sensor.bdaddr) {
+                    ThrottleResult::UnknownDevice => {
+                        log::debug!("Unknown device: [{}]", sensor.bdaddr);
+                    }
+                    ThrottleResult::Throttle => {
+                        log::debug!(
+                            "Throttled: '{}' [{}]",
+                            device_name.unwrap_or("?"),
+                            sensor.bdaddr,
+                        );
+                    }
+                    ThrottleResult::Update => {
+                        log::info!(
+                            "Updating: '{}' [{}]",
+                            device_name.unwrap_or("?"),
+                            sensor.bdaddr,
+                        );
+                        let data = SensorData::new(&sensor, &config.mqtt.base_topic);
+                        mqtt.publish_sensor_data(data);
+                    }
                 }
-                TryUpdate::Throttle(device) => {
-                    log::debug!("Throttled: '{}' [{}]", device.name, sensor.bdaddr);
-                }
-                TryUpdate::Update(device) => {
-                    log::info!("Updating: '{}' [{}]", device.name, sensor.bdaddr);
-                    let data = SensorData::new(&sensor, &config.mqtt.base_topic);
-                    mqtt.publish_sensor_data(data);
-                }
-            },
+            }
         }
     }
     Ok(())
