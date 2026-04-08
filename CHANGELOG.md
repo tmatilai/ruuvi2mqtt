@@ -1,5 +1,6 @@
 ## _Not released yet_
 
+- Add TLS support for MQTT connections (`tls`, `ca_file`, and `tls_insecure` config options).
 - Refactor device throttling methods.
 - Fix MQTT topic subscription not being restored after reconnecting to the broker.
 

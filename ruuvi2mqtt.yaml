@@ -1,7 +1,19 @@
 mqtt:
   server: "homeassistant.local"
+  #port: 1883  # Default: 1883 (non-TLS) or 8883 (TLS)
+  # Enable TLS/SSL connection (default: false)
+  # When enabled without ca_file, uses OS certificate store
+  #tls: true
+  # Optional: Path to custom CA certificate bundle (PEM format)
+  # Use this for self-signed certificates or custom CAs
+  #ca_file: /path/to/ca-bundle.pem
+  # Skip TLS certificate verification (default: false)
+  # WARNING: Only use for testing — disables all certificate checks
+  #tls_insecure: false
   user: "ruuvi2mqtt"
   password: "changeme"
+  #client_id: "ruuvi2mqtt_<hostname>"
+  #base_topic: "ruuvi2mqtt"
   throttle: 60
 
 devices:
