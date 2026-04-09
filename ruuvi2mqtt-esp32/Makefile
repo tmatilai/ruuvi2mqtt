@@ -8,10 +8,15 @@
 DEVICE_TARGETS := all lint build flash monitor
 
 ifneq ($(filter $(DEVICE_TARGETS),$(MAKECMDGOALS)),)
-  ifndef DEVICE
+  ifeq ($(origin DEVICE),undefined)
     ifneq ($(wildcard devices/devices.conf),)
-      DEVICE := $(shell mac=$$(espflash board-info 2>&1 | sed -n 's/.*MAC address: *//p'); \
-        [ -n "$$mac" ] && awk -v m="$$mac" '!/^[[:space:]]*\#/ && NF>=2 && $$1==m {print $$2; exit}' devices/devices.conf)
+      ifeq ($(shell command -v espflash 2>/dev/null),)
+        $(warning espflash not found — cannot auto-detect device. Run 'make setup' first or set DEVICE explicitly.)
+      else
+        $(info Auto-detecting device from connected board...)
+        DEVICE := $(shell mac=$$(espflash board-info 2>&1 | sed -n 's/.*MAC address: *//p'); \
+          [ -n "$$mac" ] && awk -v m="$$mac" '!/^[[:space:]]*\#/ && NF>=2 && $$1==m {print $$2; exit}' devices/devices.conf)
+      endif
     endif
   endif
 endif
@@ -57,16 +62,24 @@ help: ## Show this help
 	@grep -hE '^[a-zA-Z-][a-zA-Z0-9_\.-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
 	@echo ''
 	@echo 'Override target chip: make <target> CHIP=esp32  (default: esp32c6)'
-	@echo 'Xtensa chips (esp32, esp32s3) require the "esp" toolchain (espup install).'
 	@echo ''
 	@echo 'Device config: auto-detected from connected board MAC (see devices/),'
-	@echo '               or override: make <target> DEVICE=myboard-kitchen'
+	@echo '               or override: make <target> DEVICE=kitchen'
+	@echo '               or skip:     make <target> DEVICE='
+
+# --- Toolchain setup -------------------------------------------------------
+.PHONY: setup
+setup: ## Install required toolchain and tools
+	@command -v ldproxy >/dev/null 2>&1 || { echo "Installing ldproxy..."; cargo install ldproxy; }
+	@command -v espflash >/dev/null 2>&1 || { echo "Installing espflash..."; cargo install espflash; }
+	@command -v espup >/dev/null 2>&1 || { echo "Installing espup..."; cargo install espup; }
+	@rustup toolchain list | grep -q esp || { echo "Installing Xtensa toolchain..."; espup install; }
 
 .PHONY: all
 all: lint test build ## Lint, test, and build
 
 .PHONY: lint
-lint: ## Format and lint
+lint: setup ## Format and lint
 	$(CARGO) fmt
 	$(CARGO) clippy --target $(TARGET) -- -D clippy::all -W clippy::pedantic
 
@@ -80,11 +93,11 @@ test: ## Run host-side unit tests (pure-Rust modules only)
 	done
 
 .PHONY: build
-build: ## Build the firmware (release)
+build: setup ## Build the firmware (release)
 	$(CARGO) build --release --target $(TARGET)
 
 .PHONY: flash
-flash: ## Build and flash the firmware, then open the serial monitor
+flash: setup ## Build and flash the firmware, then open the serial monitor
 	$(CARGO) run --release --target $(TARGET)
 
 .PHONY: monitor
@@ -92,9 +105,9 @@ monitor: ## Open the serial monitor (no build/flash)
 	espflash monitor
 
 .PHONY: register
-register: ## Register the connected board as DEVICE (e.g. make register DEVICE=myboard-kitchen)
+register: ## Register the connected board as DEVICE (e.g. make register DEVICE=kitchen)
 ifndef DEVICE
-	$(error DEVICE is required. Usage: make register DEVICE=myboard-kitchen)
+	$(error DEVICE is required. Usage: make register DEVICE=kitchen)
 endif
 	@mac=$$(espflash board-info 2>&1 | sed -n 's/.*MAC address: *//p'); \
 	if [ -z "$$mac" ]; then \

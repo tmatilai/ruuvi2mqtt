@@ -26,31 +26,38 @@ be running and connected to the same broker for HA to recognise the sensors.
 The ESP32 only publishes sensor readings; the Linux app advertises the device
 definitions (names, units, entity types) and keeps them retained.
 
-The default target is **ESP32-C6** (RISC-V). Other chips (ESP32, ESP32-S3,
-ESP32-C3) are supported via the `CHIP` Makefile variable — see
-[Building for other chips](#building-for-other-chips).
+---
+
+## Supported chips
+
+The default target is **ESP32-C6**. Other chips are supported via the `CHIP`
+Makefile variable:
+
+| Chip | Architecture | `CHIP` value |
+|------|-------------|--------------|
+| ESP32-C6 | RISC-V | `esp32c6` (default) |
+| ESP32-C3 | RISC-V | `esp32c3` |
+| ESP32 | Xtensa | `esp32` |
+| ESP32-S3 | Xtensa | `esp32s3` |
 
 ---
 
-## Prerequisites
+## Setup
 
-Install the required host tools. Run these from **outside** this directory
-(the `rust-toolchain.toml` here pins a specific channel):
+Install all required toolchains and tools:
 
 ```sh
-cd ~
-cargo install ldproxy espflash
+make setup
 ```
 
-> The first `cargo build` downloads and compiles ESP-IDF from source — expect
-> 10–20 minutes. Subsequent builds are incremental.
+This installs `ldproxy`, `espflash`, `espup`, and the Xtensa Rust toolchain
+(if not already present).
 
 ---
 
 ## Configuration
 
-All settings are baked in at compile-time via environment variables (typically
-set in `.envrc` with direnv).
+All settings are baked in at compile-time via environment variables.
 
 ### Required
 
@@ -81,72 +88,63 @@ set in `.envrc` with direnv).
 | `BLE_SLEEP_DURATION` | — | `60` | Deep sleep between cycles (seconds) |
 | `LOG_LEVEL` | — | `info` | Log level for app code (library code stays at info) |
 
+These can be set in the environment, in `.envrc` (with direnv), or in
+per-device configuration files (see below).
+
+---
+
+## Device configuration
+
+For a single board, set the required variables in the environment (e.g. in
+`.envrc` with direnv) and run `make flash`. No device registration is needed —
+auto-detection is only active when `devices/devices.conf` exists. To target a
+non-default chip:
+
+```sh
+make flash CHIP=esp32
+```
+
+### Managing multiple devices
+
+When managing multiple boards, each device can have its own configuration file
+and be auto-detected by MAC address.
+
+**Register a device** by connecting it and running:
+
+```sh
+make register DEVICE=kitchen
+```
+
+This records the board's MAC address in `devices/devices.conf` and creates a
+`devices/kitchen.mk` file from the template. Edit the `.mk` file to
+set device-specific overrides (static IP, hostname, chip type, etc.).
+
+**Auto-detection:** when you run `make flash` (or `build`, `lint`, `monitor`)
+without specifying `DEVICE`, the Makefile queries the connected board's MAC
+address via `espflash board-info` and looks it up in `devices/devices.conf`.
+If found, the matching `.mk` file is loaded automatically.
+
+To target a registered device explicitly, or to skip auto-detection:
+
+```sh
+make flash DEVICE=kitchen   # use a specific device config
+make flash DEVICE=           # skip auto-detection, use env vars only
+```
+
+> Device config files are git-ignored — only the examples are committed.
+
 ---
 
 ## Build & flash
 
 ```sh
-WIFI_SSID=MyNetwork \
-WIFI_PASS=secret \
-DEVICE_HOSTNAME=ruuvi-kitchen \
-MQTT_SERVER=192.168.1.10 \
-MQTT_USER=myuser \
-MQTT_PASSWORD=mypassword \
-cargo run --release   # builds, flashes, and opens serial monitor
+make flash               # build, flash, and open serial monitor (first build is slow — ESP-IDF is compiled from source)
+make build               # build only
+make monitor             # open serial monitor (no build/flash)
 ```
 
-Or via Make:
+All available targets:
 
 ```sh
-make flash
+make help
 ```
-
-To flash a pre-built binary or just monitor:
-
-```sh
-espflash flash --monitor target/riscv32imac-esp-espidf/release/ruuvi2mqtt-esp32
-espflash monitor
-```
-
----
-
-## Building for other chips
-
-The Makefile accepts a `CHIP` variable to target a different ESP32 variant:
-
-```sh
-make build CHIP=esp32       # original ESP32 (Xtensa)
-make flash CHIP=esp32s3     # ESP32-S3 (Xtensa)
-make build CHIP=esp32c3     # ESP32-C3 (RISC-V)
-```
-
-Xtensa chips (ESP32, ESP32-S3) require the Espressif Rust fork. Install it
-with:
-
-```sh
-cargo install espup
-espup install        # downloads the 'esp' toolchain + Xtensa LLVM
-```
-
-Then load the toolchain environment (or let direnv handle it via `.envrc`):
-
-```sh
-source "$HOME/export-esp.sh"
-```
-
----
-
-## MQTT topics
-
-```
-ruuvi2mqtt/<macaddress>
-```
-
-Example payload:
-
-```json
-{"temperature":22.50,"humidity":45.20,"pressure":1013.25,"battery":2.950,"battery_low":false,"tx_power":4}
-```
-
-The topic and payload format are identical to the Linux `ruuvi2mqtt` app, so
-both can publish to the same broker simultaneously.

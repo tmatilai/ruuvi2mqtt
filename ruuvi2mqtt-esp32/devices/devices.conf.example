@@ -9,5 +9,5 @@
 # Tip: run `espflash board-info` to find the MAC of the connected board,
 # then add a line here and create the corresponding .mk file.
 
-# aa:bb:cc:dd:ee:f0  myboard-kitchen
-# aa:bb:cc:dd:ee:f1  myboard-garage
+# aa:bb:cc:dd:ee:f0  kitchen
+# aa:bb:cc:dd:ee:f1  garage

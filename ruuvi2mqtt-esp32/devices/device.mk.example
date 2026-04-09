@@ -13,4 +13,4 @@
 # export WIFI_GATEWAY = 192.168.1.1
 
 # Device hostname (used as MQTT client ID and DHCP hostname)
-# export DEVICE_HOSTNAME = ruuvi2mqtt-mydevice
+# export DEVICE_HOSTNAME = ruuvi2mqtt-kitchen
