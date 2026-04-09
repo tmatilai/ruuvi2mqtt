@@ -86,10 +86,22 @@ All settings are baked in at compile-time via environment variables.
 | `MQTT_BASE_TOPIC` | `mqtt.base_topic` | `ruuvi2mqtt` | Topic prefix |
 | `BLE_SCAN_DURATION` | — | `5` | BLE scan duration (seconds). Set close to your Wi-Fi + MQTT connect time (see boot log), min 3s |
 | `BLE_SLEEP_DURATION` | — | `60` | Deep sleep between cycles (seconds) |
+| `LED_MODE` | — | *(unset)* | `on` to light while awake, `off` to turn off at boot, or unset to do nothing |
+| `LED_TYPE` | — | `ws2812` | `ws2812` or `gpio` |
+| `LED_GPIO` | — | `15` | LED pin number |
 | `LOG_LEVEL` | — | `info` | Log level for app code (library code stays at info) |
 
 These can be set in the environment, in `.envrc` (with direnv), or in
 per-device configuration files (see below).
+
+#### Known board LED configurations
+
+| Board | `LED_TYPE` | `LED_GPIO` |
+|---|---|---|
+| Seeed XIAO-ESP32-C6 | `ws2812` | `15` |
+| Beetle ESP32 C6 Mini (DFRobot DFR1117) | `gpio` | `15` |
+| ESP32-S3 AI Camera (DFRobot DFR1154) | `gpio` | `3` |
+| ESP32-CAM | `ws2812` | `33` |
 
 ---
 

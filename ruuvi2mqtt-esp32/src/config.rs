@@ -149,6 +149,29 @@ pub const BLE_SLEEP_DURATION: i32 = match option_env_non_empty!("BLE_SLEEP_DURAT
 pub const RUUVI_MANUFACTURER_ID: u16 = 0x0499;
 
 // ---------------------------------------------------------------------------
+// LED
+// ---------------------------------------------------------------------------
+
+/// LED operating mode.
+///
+/// - Unset (default): do nothing — LED GPIO is not touched.
+/// - `on`: turn on while awake, off before deep sleep.
+/// - `off`: explicitly turn the LED off at boot.
+pub const LED_MODE: Option<&str> = option_env_non_empty!("LED_MODE");
+
+/// LED hardware type: `ws2812` or `gpio`. Default: `ws2812`.
+pub const LED_TYPE: &str = match option_env_non_empty!("LED_TYPE") {
+    Some(v) => v,
+    None => "ws2812",
+};
+
+/// GPIO pin number for the LED. Default: `15`.
+pub const LED_GPIO: u32 = match option_env_non_empty!("LED_GPIO") {
+    Some(v) => konst::unwrap_ctx!(konst::primitive::parse_u32(v)),
+    None => 15,
+};
+
+// ---------------------------------------------------------------------------
 // Logging
 // ---------------------------------------------------------------------------
 

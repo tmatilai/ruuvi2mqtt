@@ -14,3 +14,9 @@
 
 # Device hostname (used as MQTT client ID and DHCP hostname)
 # export DEVICE_HOSTNAME = ruuvi2mqtt-kitchen
+
+# LED mode: unset = do nothing, "off" = turn off, "on" = light while awake
+# See README for known board LED configurations.
+# export LED_MODE = off
+# export LED_TYPE = gpio
+# export LED_GPIO = 15

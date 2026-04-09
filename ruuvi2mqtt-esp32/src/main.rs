@@ -8,6 +8,7 @@ use log::{error, info};
 
 mod ble;
 mod config;
+mod led;
 mod mac;
 mod mqtt;
 mod wifi;
@@ -46,6 +47,10 @@ fn main() -> anyhow::Result<()> {
     let sysloop = EspSystemEventLoop::take()?;
     let nvs = EspDefaultNvsPartition::take()?;
 
+    // ── LED ──────────────────────────────────────────────────────────────────
+    let mut led = led::Led::new()?;
+    led.apply_mode();
+
     // ── BLE scan + Wi-Fi connect in parallel ─────────────────────────────────
     // BLE and Wi-Fi use independent radios, so scan while connecting to save
     // a few seconds of active time per cycle.
@@ -80,6 +85,7 @@ fn main() -> anyhow::Result<()> {
     // and MQTT each cycle. Deep sleep draws ~5-10µA vs >100mA active.
     thread::sleep(Duration::from_millis(500));
 
+    led.off();
     info!("Entering deep sleep for {}s", config::BLE_SLEEP_DURATION);
     unsafe {
         esp_idf_svc::sys::esp_deep_sleep(config::BLE_SLEEP_DURATION as u64 * 1_000_000);
