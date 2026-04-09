@@ -1,29 +1,37 @@
-# --- Device auto-detection -------------------------------------------------
-# Set DEVICE explicitly (e.g. `make flash DEVICE=xiao-office`) or let Make
+# --- Device configuration --------------------------------------------------
+# Set DEVICE explicitly (e.g. `make flash DEVICE=kitchen`) or let Make
 # auto-detect from the connected board's MAC address via devices/devices.conf.
+# Set DEVICE to empty to skip auto-detection (e.g. `make flash DEVICE=`).
 #
-# Auto-detection runs `espflash board-info` only for targets that need it.
-# When no board is connected or devices.conf is absent, it silently falls
-# back to environment variables (e.g. from .envrc).
+# Auto-detection runs `espflash board-info` only for targets that need it
+# and only when devices/devices.conf exists.
 DEVICE_TARGETS := all lint build flash monitor
 
 ifneq ($(filter $(DEVICE_TARGETS),$(MAKECMDGOALS)),)
+  # Auto-detect device when DEVICE is not set at all
   ifeq ($(origin DEVICE),undefined)
     ifneq ($(wildcard devices/devices.conf),)
       ifeq ($(shell command -v espflash 2>/dev/null),)
-        $(warning espflash not found — cannot auto-detect device. Run 'make setup' first or set DEVICE explicitly.)
+        $(error espflash not found — cannot auto-detect device. Run 'make setup' first, set DEVICE, or set DEVICE= to skip.)
       else
         $(info Auto-detecting device from connected board...)
         DEVICE := $(shell mac=$$(espflash board-info 2>&1 | sed -n 's/.*MAC address: *//p'); \
           [ -n "$$mac" ] && awk -v m="$$mac" '!/^[[:space:]]*\#/ && NF>=2 && $$1==m {print $$2; exit}' devices/devices.conf)
+        ifeq ($(DEVICE),)
+          $(error Device not recognised. Register it with 'make register DEVICE=<name>', set DEVICE, or set DEVICE= to skip.)
+        endif
       endif
     endif
   endif
-endif
 
-ifneq ($(DEVICE),)
-  -include devices/$(DEVICE).mk
-  $(info Using device: $(DEVICE))
+  # Load device config
+  ifneq ($(DEVICE),)
+    $(info Using device: $(DEVICE))
+    ifeq ($(wildcard devices/$(DEVICE).mk),)
+      $(error Device config 'devices/$(DEVICE).mk' not found. Register with 'make register DEVICE=$(DEVICE)' first.)
+    endif
+    include devices/$(DEVICE).mk
+  endif
 endif
 
 # Target chip (default: esp32c6).
@@ -101,14 +109,15 @@ flash: setup ## Build and flash the firmware, then open the serial monitor
 	$(CARGO) run --release --target $(TARGET)
 
 .PHONY: monitor
-monitor: ## Open the serial monitor (no build/flash)
+monitor: setup ## Open the serial monitor (no build/flash)
 	espflash monitor
 
 .PHONY: register
-register: ## Register the connected board as DEVICE (e.g. make register DEVICE=kitchen)
+register: setup ## Register the connected board as DEVICE (e.g. make register DEVICE=kitchen)
 ifndef DEVICE
 	$(error DEVICE is required. Usage: make register DEVICE=kitchen)
 endif
+	@echo "Reading board info from connected device..."
 	@mac=$$(espflash board-info 2>&1 | sed -n 's/.*MAC address: *//p'); \
 	if [ -z "$$mac" ]; then \
 		echo "Error: could not detect MAC address. Is a board connected?" >&2; \
