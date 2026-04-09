@@ -1,0 +1,16 @@
+# Per-device configuration.
+#
+# Copy this file to <device-name>.mk and adjust the values.
+# Variables exported here override environment variables (e.g. from .envrc).
+#
+# The device name should match the entry in devices.conf for auto-detection.
+
+# Override chip type (default: esp32c6).
+# CHIP = esp32
+
+# Static IP configuration
+# export WIFI_IP = 192.168.1.50
+# export WIFI_GATEWAY = 192.168.1.1
+
+# Device hostname (used as MQTT client ID and DHCP hostname)
+# export DEVICE_HOSTNAME = ruuvi2mqtt-mydevice
