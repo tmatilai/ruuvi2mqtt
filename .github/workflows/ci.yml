@@ -67,12 +67,16 @@ jobs:
       - name: Setup | ldproxy
         run: cargo install ldproxy
 
+      - name: Setup | ESP-IDF version
+        id: esp-idf
+        run: echo "version=$(grep -oP 'ESP_IDF_VERSION\s*=\s*"\K[^"]+' ruuvi2mqtt-esp32/.cargo/config.toml)" >> "$GITHUB_OUTPUT"
+
       - name: Setup | Cache
         uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
         with:
           workspaces: ruuvi2mqtt-esp32 -> target
           cache-directories: ~/.espressif
-          shared-key: esp32c6-riscv
+          shared-key: esp32c6-riscv-${{ steps.esp-idf.outputs.version }}
 
       - name: Run clippy (ESP32-C6)
         run: cd ruuvi2mqtt-esp32 && cargo clippy --locked -- -D clippy::all -W clippy::pedantic
@@ -112,12 +116,16 @@ jobs:
       - name: Setup | ldproxy
         run: cargo install ldproxy
 
+      - name: Setup | ESP-IDF version
+        id: esp-idf
+        run: echo "version=$(grep -oP 'ESP_IDF_VERSION\s*=\s*"\K[^"]+' ruuvi2mqtt-esp32/.cargo/config.toml)" >> "$GITHUB_OUTPUT"
+
       - name: Setup | Cache
         uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
         with:
           workspaces: ruuvi2mqtt-esp32 -> target
           cache-directories: ~/.espressif
-          shared-key: esp32c6-riscv
+          shared-key: esp32c6-riscv-${{ steps.esp-idf.outputs.version }}
 
       - name: Build firmware
         run: cd ruuvi2mqtt-esp32 && cargo build --release --locked
