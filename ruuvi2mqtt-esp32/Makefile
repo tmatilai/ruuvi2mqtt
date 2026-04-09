@@ -118,11 +118,13 @@ ifndef DEVICE
 	$(error DEVICE is required. Usage: make register DEVICE=kitchen)
 endif
 	@echo "Reading board info from connected device..."
-	@mac=$$(espflash board-info 2>&1 | sed -n 's/.*MAC address: *//p'); \
+	@info=$$(espflash board-info 2>&1); \
+	mac=$$(echo "$$info" | sed -n 's/.*MAC address: *//p'); \
 	if [ -z "$$mac" ]; then \
 		echo "Error: could not detect MAC address. Is a board connected?" >&2; \
 		exit 1; \
 	fi; \
+	chip=$$(echo "$$info" | sed -n 's/.*Chip type: *\([^ ]*\).*/\1/p'); \
 	if [ ! -f devices/devices.conf ]; then \
 		printf '# MAC-to-device-name mapping for auto-detection.\n# Format: MAC_ADDRESS  device-name\n\n' > devices/devices.conf; \
 	fi; \
@@ -134,7 +136,10 @@ endif
 	fi; \
 	if [ ! -f devices/$(DEVICE).mk ]; then \
 		cp devices/device.mk.example devices/$(DEVICE).mk; \
-		echo "Created devices/$(DEVICE).mk from template — edit it to set IP, hostname, etc."; \
+		if [ -n "$$chip" ] && [ "$$chip" != "esp32c6" ]; then \
+			sed -i '' "s/^# CHIP = .*/CHIP = $$chip/" devices/$(DEVICE).mk; \
+		fi; \
+		echo "Created devices/$(DEVICE).mk from template (chip: $${chip:-unknown}) — edit it to set IP, hostname, etc."; \
 	else \
 		echo "devices/$(DEVICE).mk already exists"; \
 	fi
