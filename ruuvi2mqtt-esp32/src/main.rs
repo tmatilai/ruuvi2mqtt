@@ -22,15 +22,6 @@ fn main() -> anyhow::Result<()> {
     log::set_max_level(APP_LEVEL);
     log::set_logger(&AppLogger).unwrap();
 
-    // Suppress NimBLE's per-scan GAP procedure INFO messages ("GAP procedure
-    // initiated: discovery; ...") which fire every BLE scan cycle.
-    unsafe {
-        esp_idf_svc::sys::esp_log_level_set(
-            c"NimBLE".as_ptr(),
-            esp_idf_svc::sys::esp_log_level_t_ESP_LOG_WARN,
-        );
-    }
-
     info!(
         "{} {} starting",
         env!("CARGO_PKG_NAME"),
