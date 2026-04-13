@@ -13,7 +13,7 @@ mod mac;
 mod mqtt;
 mod wifi;
 
-fn main() -> anyhow::Result<()> {
+fn main() {
     // Required by esp-idf-svc: links esp-idf glue patches.
     esp_idf_svc::sys::link_patches();
 
@@ -34,6 +34,24 @@ fn main() -> anyhow::Result<()> {
         config::BLE_SLEEP_DURATION
     );
 
+    if let Err(e) = run() {
+        error!("Cycle failed: {e:#}");
+    }
+
+    deep_sleep();
+}
+
+/// Enter deep sleep. On wake the chip reboots (main() runs fresh).
+/// Deep sleep draws ~5-10µA vs >100mA active.
+fn deep_sleep() -> ! {
+    info!("Entering deep sleep for {}s", config::BLE_SLEEP_DURATION);
+    unsafe {
+        esp_idf_svc::sys::esp_deep_sleep(config::BLE_SLEEP_DURATION as u64 * 1_000_000);
+    }
+}
+
+/// One scan-connect-publish cycle.
+fn run() -> anyhow::Result<()> {
     let peripherals = Peripherals::take()?;
     let sysloop = EspSystemEventLoop::take()?;
     let nvs = EspDefaultNvsPartition::take()?;
@@ -70,17 +88,11 @@ fn main() -> anyhow::Result<()> {
         }
     }
 
-    // ── Deep sleep ───────────────────────────────────────────────────────────
-    // Brief delay to let QoS 1 publishes get acknowledged, then enter deep
-    // sleep. On wake the chip reboots (main() runs fresh), reconnecting Wi-Fi
-    // and MQTT each cycle. Deep sleep draws ~5-10µA vs >100mA active.
+    // Brief delay to let QoS 1 publishes get acknowledged.
     thread::sleep(Duration::from_millis(500));
 
     led.off();
-    info!("Entering deep sleep for {}s", config::BLE_SLEEP_DURATION);
-    unsafe {
-        esp_idf_svc::sys::esp_deep_sleep(config::BLE_SLEEP_DURATION as u64 * 1_000_000);
-    }
+    Ok(())
 }
 
 /// Thin logger wrapper that applies `LOG_LEVEL` only to this crate's modules

@@ -18,6 +18,11 @@ CONFIG_ESP_MAIN_TASK_STACK_SIZE=8192
 # Disable for plain TCP MQTT (no TLS), which saves ~40 KB of flash.
 # CONFIG_MBEDTLS_TLS_CLIENT_ONLY=y
 
+# Task watchdog — reboots when any task is stuck for >15s.
+# Catches wifi.connect() hangs that would otherwise block forever.
+CONFIG_ESP_TASK_WDT_EN=y
+CONFIG_ESP_TASK_WDT_TIMEOUT_S=15
+
 # Log level for the ESP-IDF C layer (Wi-Fi, BLE, MQTT internals).
 # Rust log level is controlled separately via the LOG_LEVEL env var.
 CONFIG_LOG_DEFAULT_LEVEL_INFO=y
