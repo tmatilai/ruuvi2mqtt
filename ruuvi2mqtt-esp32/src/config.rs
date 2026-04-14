@@ -85,7 +85,7 @@ pub const MQTT_TLS_INSECURE: bool = konst::eq_str(
 /// MQTT broker port (matches Linux `mqtt.port`).
 /// Default: 8883 when TLS is enabled, 1883 otherwise.
 pub const MQTT_PORT: u16 = match option_env_non_empty!("MQTT_PORT") {
-    Some(v) => konst::unwrap_ctx!(konst::primitive::parse_u16(v)),
+    Some(v) => konst::result::unwrap!(u16::from_str_radix(v, 10)),
     None => {
         if MQTT_TLS {
             8883
@@ -134,14 +134,14 @@ pub const MQTT_BASE_TOPIC: &str = match option_env_non_empty!("MQTT_BASE_TOPIC")
 /// to have the chance to catch all RuuviTags (~2.5s advertisement interval).
 #[allow(clippy::doc_markdown)] // RuuviTag is a product name, not a code identifier
 pub const BLE_SCAN_DURATION: i32 = match option_env_non_empty!("BLE_SCAN_DURATION") {
-    Some(v) => konst::unwrap_ctx!(konst::primitive::parse_i32(v)),
+    Some(v) => konst::result::unwrap!(i32::from_str_radix(v, 10)),
     None => 5,
 };
 
 /// Deep sleep duration (seconds) between scan-publish cycles. The chip fully
 /// powers off (CPU, RAM, radios) and reboots on wake.
 pub const BLE_SLEEP_DURATION: i32 = match option_env_non_empty!("BLE_SLEEP_DURATION") {
-    Some(v) => konst::unwrap_ctx!(konst::primitive::parse_i32(v)),
+    Some(v) => konst::result::unwrap!(i32::from_str_radix(v, 10)),
     None => 60,
 };
 
@@ -167,7 +167,7 @@ pub const LED_TYPE: &str = match option_env_non_empty!("LED_TYPE") {
 
 /// GPIO pin number for the LED. Default: `15`.
 pub const LED_GPIO: u32 = match option_env_non_empty!("LED_GPIO") {
-    Some(v) => konst::unwrap_ctx!(konst::primitive::parse_u32(v)),
+    Some(v) => konst::result::unwrap!(u32::from_str_radix(v, 10)),
     None => 15,
 };
 
