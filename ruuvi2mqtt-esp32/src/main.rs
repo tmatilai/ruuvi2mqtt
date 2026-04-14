@@ -41,7 +41,7 @@ fn main() {
     deep_sleep();
 }
 
-/// Enter deep sleep. On wake the chip reboots (main() runs fresh).
+/// Enter deep sleep. On wake the chip reboots (`main()` runs fresh).
 /// Deep sleep draws ~5-10µA vs >100mA active.
 fn deep_sleep() -> ! {
     info!("Entering deep sleep for {}s", config::BLE_SLEEP_DURATION);
