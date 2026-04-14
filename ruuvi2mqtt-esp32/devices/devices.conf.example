@@ -1,0 +1,13 @@
+# MAC-to-device-name mapping for auto-detection.
+#
+# When DEVICE is not set on the command line, Make queries the connected
+# board's MAC address via `espflash board-info` and looks it up here.
+#
+# Format: MAC_ADDRESS  device-name
+# The device-name must match a file in this directory: <device-name>.mk
+#
+# Tip: run `espflash board-info` to find the MAC of the connected board,
+# then add a line here and create the corresponding .mk file.
+
+# aa:bb:cc:dd:ee:f0  kitchen
+# aa:bb:cc:dd:ee:f1  garage

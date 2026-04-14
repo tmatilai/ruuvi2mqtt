@@ -1,8 +1,14 @@
 ## _Not released yet_
 
+### ruuvi2mqtt
+
 - Add TLS support for MQTT connections (`tls`, `ca_file`, and `tls_insecure` config options).
 - Refactor device throttling methods.
 - Fix MQTT topic subscription not being restored after reconnecting to the broker.
+
+### ruuvi2mqtt-esp32
+
+- Initial release: ESP32 firmware for a lightweight Ruuvi2MQTT gateway.
 
 ## 1.3.6 / 2026-04-06
 

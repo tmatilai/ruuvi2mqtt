@@ -14,18 +14,18 @@ help: ## Display this help
 .PHONY: all
 all: local $(ARCHS) ## Lint and build all architectures
 
-.PHONY: local
-local: test ## Test and build locally
-	cargo build
+.PHONY: lint
+lint: ## Format and lint
+	cargo fmt --all
+	cargo clippy --tests --all-targets --all-features -- -D clippy::all -W clippy::pedantic
 
 .PHONY: test
 test: lint ## Lint and test
 	cargo test
 
-.PHONY: lint
-lint: ## Format and lint
-	cargo fmt --all
-	cargo clippy --tests --all-targets --all-features -- -D clippy::all -W clippy::pedantic
+.PHONY: local
+local: test ## Test and build locally
+	cargo build
 
 .PHONY: cross
 cross: $(ARCHS) ## Build all non-local architectures

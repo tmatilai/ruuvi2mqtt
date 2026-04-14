@@ -1,0 +1,4 @@
+# Device-specific configs are local — only examples are committed.
+*
+!.gitignore
+!*.example

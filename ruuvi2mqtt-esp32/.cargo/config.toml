@@ -1,0 +1,36 @@
+[build]
+target = "riscv32imac-esp-espidf"
+
+# ESP32-C6 / ESP32-H2 (RISC-V)
+[target.riscv32imac-esp-espidf]
+linker = "ldproxy"
+runner = "espflash flash --monitor"
+rustflags = ["--cfg", "espidf_time64"]
+
+# ESP32-C3 (RISC-V)
+[target.riscv32imc-esp-espidf]
+linker = "ldproxy"
+runner = "espflash flash --monitor"
+rustflags = ["--cfg", "espidf_time64"]
+
+# ESP32 (Xtensa — requires `cargo +esp`, see Makefile)
+[target.xtensa-esp32-espidf]
+linker = "ldproxy"
+runner = "espflash flash --monitor"
+rustflags = ["--cfg", "espidf_time64"]
+
+# ESP32-S3 (Xtensa — requires `cargo +esp`, see Makefile)
+[target.xtensa-esp32s3-espidf]
+linker = "ldproxy"
+runner = "espflash flash --monitor"
+rustflags = ["--cfg", "espidf_time64"]
+
+[unstable]
+build-std = ["std", "panic_abort"]
+
+[env]
+MCU = "esp32c6"
+# ESP-IDF version to download automatically (via embuild).
+# Pin to a stable release; update intentionally.
+ESP_IDF_VERSION = "v5.5.1"
+ESP_IDF_TOOLS_INSTALL_DIR = "global"
