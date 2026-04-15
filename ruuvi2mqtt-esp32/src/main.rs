@@ -1,4 +1,5 @@
-use std::{thread, time::Duration};
+use std::thread;
+use std::time::{Duration, Instant};
 
 use esp_idf_svc::{
     eventloop::EspSystemEventLoop, hal::peripherals::Peripherals, log::EspIdfLogger,
@@ -8,6 +9,7 @@ use log::{error, info};
 
 mod ble;
 mod config;
+mod diagnostics;
 mod led;
 mod mac;
 mod mqtt;
@@ -34,7 +36,9 @@ fn main() {
         config::BLE_SLEEP_DURATION
     );
 
-    if let Err(e) = run() {
+    let start = Instant::now();
+
+    if let Err(e) = run(start) {
         error!("Cycle failed: {e:#}");
     }
 
@@ -51,7 +55,7 @@ fn deep_sleep() -> ! {
 }
 
 /// One scan-connect-publish cycle.
-fn run() -> anyhow::Result<()> {
+fn run(start: Instant) -> anyhow::Result<()> {
     let peripherals = Peripherals::take()?;
     let sysloop = EspSystemEventLoop::take()?;
     let nvs = EspDefaultNvsPartition::take()?;
@@ -80,13 +84,27 @@ fn run() -> anyhow::Result<()> {
 
     // ── Publish readings ─────────────────────────────────────────────────────
     let readings = ble_handle.join().expect("BLE scan thread panicked")?;
-    for reading in readings {
+    let tags: Vec<String> = readings.iter().map(|r| r.mac.to_topic_string()).collect();
+
+    for reading in &readings {
         let topic_mac = reading.mac.to_topic_string();
         match mqtt::publish(&mut mqtt_client, &topic_mac, &reading.payload) {
             Ok(()) => info!("Updating: [{}]", reading.mac),
             Err(e) => error!("Failed to publish [{}]: {e}", reading.mac),
         }
     }
+
+    // ── Diagnostics ──────────────────────────────────────────────────────────
+    let diag = diagnostics::Diagnostics {
+        firmware: concat!(env!("CARGO_PKG_NAME"), " ", env!("CARGO_PKG_VERSION")),
+        wifi_rssi: diagnostics::wifi_rssi(),
+        free_heap: diagnostics::free_heap(),
+        tags,
+        #[allow(clippy::cast_possible_truncation)] // cycle duration is always well within u64
+        cycle_ms: start.elapsed().as_millis() as u64,
+        error: None,
+    };
+    diag.publish(&mut mqtt_client);
 
     // Brief delay to let QoS 1 publishes get acknowledged.
     thread::sleep(Duration::from_millis(500));
