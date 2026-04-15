@@ -1,5 +1,8 @@
 ## _Not released yet_
 
+### ruuvi2mqtt-esp32
+
+- Publish diagnostic information to MQTT.
 
 ## 1.4.0 / 2026-04-15
 
