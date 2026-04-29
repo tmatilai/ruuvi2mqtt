@@ -215,15 +215,15 @@ impl EventLoop {
 
     async fn on_event(self, event: MqttEvent) {
         match event {
-            MqttEvent::Incoming(Incoming::ConnAck(conn)) => {
-                if conn.code == ConnectReturnCode::Success {
-                    let topic = format!("{}#", self.state_topic_prefix);
-                    log::debug!("Subscribing to: {topic}");
-                    if let Err(err) = self.client.subscribe(&topic, QoS::AtMostOnce).await {
-                        log::error!("Failed to subscribe: {err}");
-                    }
-                    self.send_event(MqttConnect).await;
+            MqttEvent::Incoming(Incoming::ConnAck(conn))
+                if conn.code == ConnectReturnCode::Success =>
+            {
+                let topic = format!("{}#", self.state_topic_prefix);
+                log::debug!("Subscribing to: {topic}");
+                if let Err(err) = self.client.subscribe(&topic, QoS::AtMostOnce).await {
+                    log::error!("Failed to subscribe: {err}");
                 }
+                self.send_event(MqttConnect).await;
             }
             MqttEvent::Incoming(Incoming::Publish(msg)) => {
                 if let Some(suffix) = msg.topic.strip_prefix(&self.state_topic_prefix)

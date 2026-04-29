@@ -130,7 +130,7 @@ mod tests {
             password: None,
             client_id: "test".into(),
             base_topic: "test".into(),
-            throttle: Duration::from_secs(60),
+            throttle: Duration::from_mins(1),
         };
         assert_eq!(mqtt.port(), 1883);
     }
@@ -147,7 +147,7 @@ mod tests {
             password: None,
             client_id: "test".into(),
             base_topic: "test".into(),
-            throttle: Duration::from_secs(60),
+            throttle: Duration::from_mins(1),
         };
         assert_eq!(mqtt.port(), 8883);
     }
@@ -164,7 +164,7 @@ mod tests {
             password: None,
             client_id: "test".into(),
             base_topic: "test".into(),
-            throttle: Duration::from_secs(60),
+            throttle: Duration::from_mins(1),
         };
         assert_eq!(mqtt.port(), 9999);
     }
