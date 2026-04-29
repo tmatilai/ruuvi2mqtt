@@ -93,31 +93,31 @@ mod tests {
 
     #[test]
     fn unknown_device_returns_unknown() {
-        let devs = make_devices(&[1], Duration::from_secs(60));
+        let devs = make_devices(&[1], Duration::from_mins(1));
         assert_eq!(devs.should_publish(&2), ThrottleResult::UnknownDevice);
     }
 
     #[test]
     fn get_returns_device_data() {
-        let devs = make_devices(&[1], Duration::from_secs(60));
+        let devs = make_devices(&[1], Duration::from_mins(1));
         assert_eq!(devs.get(&1).map(String::as_str), Some("data-1"));
     }
 
     #[test]
     fn get_unknown_device_returns_none() {
-        let devs = make_devices(&[1], Duration::from_secs(60));
+        let devs = make_devices(&[1], Duration::from_mins(1));
         assert_eq!(devs.get(&2), None);
     }
 
     #[test]
     fn first_should_publish_returns_update() {
-        let devs = make_devices(&[1], Duration::from_secs(60));
+        let devs = make_devices(&[1], Duration::from_mins(1));
         assert_eq!(devs.should_publish(&1), ThrottleResult::Update);
     }
 
     #[test]
     fn should_publish_without_timestamp_always_returns_update() {
-        let devs = make_devices(&[1], Duration::from_secs(60));
+        let devs = make_devices(&[1], Duration::from_mins(1));
         // should_publish doesn't set the timestamp, so repeated calls still return Update
         assert_eq!(devs.should_publish(&1), ThrottleResult::Update);
         assert_eq!(devs.should_publish(&1), ThrottleResult::Update);
@@ -125,7 +125,7 @@ mod tests {
 
     #[test]
     fn mark_published_sets_timestamp_and_should_publish_throttles() {
-        let mut devs = make_devices(&[1], Duration::from_secs(60));
+        let mut devs = make_devices(&[1], Duration::from_mins(1));
         // Simulate MQTT feedback: mark_published() sets the timestamp
         devs.mark_published(&1);
         // Now should_publish should throttle
@@ -161,13 +161,13 @@ mod tests {
 
     #[test]
     fn mark_published_unknown_device_returns_none() {
-        let mut devs = make_devices(&[1], Duration::from_secs(60));
+        let mut devs = make_devices(&[1], Duration::from_mins(1));
         assert!(devs.mark_published(&2).is_none());
     }
 
     #[test]
     fn mark_published_returns_device_data() {
-        let mut devs = make_devices(&[1], Duration::from_secs(60));
+        let mut devs = make_devices(&[1], Duration::from_mins(1));
         let result = devs.mark_published(&1);
         assert_eq!(result.as_deref(), Some("data-1"));
     }
@@ -175,7 +175,7 @@ mod tests {
     #[test]
     fn cross_instance_throttle_flow() {
         // Simulates: BLE scan → should_publish(Update) → publish → MQTT arrives → mark_published() → BLE scan → should_publish(Throttle)
-        let mut devs = make_devices(&[1], Duration::from_secs(60));
+        let mut devs = make_devices(&[1], Duration::from_mins(1));
 
         // First BLE reading passes through
         assert_eq!(devs.should_publish(&1), ThrottleResult::Update);
