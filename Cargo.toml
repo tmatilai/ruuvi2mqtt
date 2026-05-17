@@ -32,7 +32,7 @@ serde_json = "1.0.149"
 serde_with = "3.19.0"
 serde_yaml = "0.9.14"
 sysinfo = "0.38.4"
-tokio = { version = "1.52.1", features = ["macros", "rt-multi-thread"] }
+tokio = { version = "1.52.3", features = ["macros", "rt-multi-thread"] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 dbus = { version = "0.9.11", optional = true }
