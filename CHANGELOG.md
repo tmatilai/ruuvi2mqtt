@@ -1,5 +1,9 @@
 ## _Not released yet_
 
+### ruuvi2mqtt
+
+- Fix panicking in a background task if BLE peripheral properties are missing.
+
 ### ruuvi2mqtt-esp32
 
 - Publish diagnostic information to MQTT.
