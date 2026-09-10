@@ -15,26 +15,26 @@ lto = true
 strip = true
 
 [dependencies]
-anyhow = "1.0"
+anyhow = "1.0.104"
 btleplug = "0.12.0"
-clap = { version = "4.6.1", features = ["derive", "env", "wrap_help"] }
+clap = { version = "4.6.6", features = ["derive", "env", "wrap_help"] }
 derive_more = { version = "2.1.1", features = ["debug"] }
-env_logger = "0.11.10"
-futures = "0.3.32"
-log = "0.4.30"
-rand = "0.10.1"
+env_logger = "0.11.11"
+futures = "0.3.34"
+log = "0.4.34"
+rand = "0.10.2"
 rumqttc = "0.25.1"
-rustls-native-certs = "0.8.3"
+rustls-native-certs = "0.8.4"
 ruuvi-sensor-protocol = "0.6.1"
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0.150"
-serde_with = "3.20.0"
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.151"
+serde_with = "3.22.0"
 serde_norway = "0.9.42"
-sysinfo = "0.39.3"
-tokio = { version = "1.52.3", features = ["macros", "rt-multi-thread"] }
+sysinfo = "0.39.6"
+tokio = { version = "1.53.1", features = ["macros", "rt-multi-thread"] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
-dbus = { version = "0.9.11", optional = true }
+dbus = { version = "0.9.12", optional = true }
 
 [dev-dependencies]
-trycmd = "1.2.0"
+trycmd = "1.2.1"
