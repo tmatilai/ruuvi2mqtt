@@ -5,6 +5,7 @@
 - Fix panicking in a background task if BLE peripheral properties are missing.
 - Rename the example configuration to `ruuvi2mqtt.yaml.example` and git-ignore local `ruuvi2mqtt*.yaml` files.
 - Warn if the configuration file is readable by other users.
+- Exit with an error if the BLE event stream ends (e.g. BlueZ restart), instead of running idle.
 
 ### ruuvi2mqtt-esp32
 

@@ -6,7 +6,7 @@ use rand::RngExt;
 use ruuvi_sensor_protocol::{MacAddress, SensorValues};
 use tokio::time::{Duration, sleep};
 
-use crate::Event::RuuviUpdate;
+use crate::Event::{BleStopped, RuuviUpdate};
 use crate::EventSender;
 use crate::ruuvi::SensorData;
 
@@ -55,6 +55,11 @@ impl RuuviListener {
                         log::error!("Failed to handle BLE event: {err:?}");
                     }
                 });
+            }
+            // The stream ends e.g. when BlueZ restarts or the adapter goes away.
+            // Tell main() so the daemon exits instead of running idle.
+            if self.tx.send(BleStopped).await.is_err() {
+                log::error!("BLE event stream ended and main loop is gone");
             }
         });
 
