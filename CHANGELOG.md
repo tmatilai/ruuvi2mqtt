@@ -18,6 +18,7 @@
 - Publish diagnostic information to MQTT.
 - Deep sleep instead of boot looping after a panic or watchdog reset, which used to drain the battery.
 - Fix the build script not re-running when `MQTT_CA_FILE` is set or unset, which could embed a stale CA certificate.
+- Skip the cycle and sleep 4x longer after a brownout reset, instead of boot looping on a weak battery.
 
 ## 1.4.0 / 2026-04-15
 

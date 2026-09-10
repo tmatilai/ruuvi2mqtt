@@ -34,15 +34,19 @@ fn main() {
     // A panic or watchdog reset restarts main() immediately. Sleep instead, so
     // that a persistent failure costs one cycle per sleep period rather than a
     // continuous >100mA boot loop that drains the battery.
-    let reset_reason = unsafe { sys::esp_reset_reason() };
-    if matches!(
-        reset_reason,
+    match unsafe { sys::esp_reset_reason() } {
         sys::esp_reset_reason_t_ESP_RST_PANIC
-            | sys::esp_reset_reason_t_ESP_RST_INT_WDT
-            | sys::esp_reset_reason_t_ESP_RST_TASK_WDT
-    ) {
-        warn!("Previous cycle crashed (reset reason {reset_reason}), skipping this one");
-        deep_sleep();
+        | sys::esp_reset_reason_t_ESP_RST_INT_WDT
+        | sys::esp_reset_reason_t_ESP_RST_TASK_WDT => {
+            warn!("Previous cycle crashed, skipping this one");
+            deep_sleep(SLEEP_SECS);
+        }
+        // A weak battery browns out under Wi-Fi load. Give it time to recover.
+        sys::esp_reset_reason_t_ESP_RST_BROWNOUT => {
+            warn!("Previous cycle browned out (weak battery?), skipping this one");
+            deep_sleep(BROWNOUT_SLEEP_SECS);
+        }
+        _ => {}
     }
 
     info!(
@@ -57,16 +61,20 @@ fn main() {
         error!("Cycle failed: {e:#}");
     }
 
-    deep_sleep();
+    deep_sleep(SLEEP_SECS);
 }
+
+/// Normal deep sleep between cycles.
+const SLEEP_SECS: u64 = config::BLE_SLEEP_DURATION as u64;
+
+/// Deep sleep after a brownout reset.
+const BROWNOUT_SLEEP_SECS: u64 = 4 * SLEEP_SECS;
 
 /// Enter deep sleep. On wake the chip reboots (`main()` runs fresh).
 /// Deep sleep draws ~5-10µA vs >100mA active.
-fn deep_sleep() -> ! {
-    info!("Entering deep sleep for {}s", config::BLE_SLEEP_DURATION);
-    unsafe {
-        sys::esp_deep_sleep(config::BLE_SLEEP_DURATION as u64 * 1_000_000);
-    }
+fn deep_sleep(secs: u64) -> ! {
+    info!("Entering deep sleep for {secs}s");
+    unsafe { sys::esp_deep_sleep(secs * 1_000_000) }
 }
 
 /// One scan-connect-publish cycle.
