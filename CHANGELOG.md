@@ -5,6 +5,10 @@
 - Fix panicking in a background task if BLE peripheral properties are missing.
 - Rename the example configuration to `ruuvi2mqtt.yaml.example` and git-ignore local `ruuvi2mqtt*.yaml` files.
 - Warn if the configuration file is readable by other users.
+- Exit with an error if the BLE event stream ends (e.g. BlueZ restart), instead of running idle.
+- Fix data format 3 tags logging `BDAddr not found` on every advertisement; use the advertiser address when the payload has no MAC.
+- Drop sensor readings instead of queueing them when the broker is unreachable, to avoid unbounded memory growth and a flood of stale readings on reconnect.
+- Only fail startup when no platform TLS certificates are found; warn about individual load errors.
 
 ### ruuvi2mqtt-esp32
 

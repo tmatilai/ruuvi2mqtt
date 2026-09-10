@@ -4,7 +4,7 @@ mod homeassistant;
 mod mqtt;
 mod ruuvi;
 
-use anyhow::Result;
+use anyhow::{Result, bail};
 use tokio::sync::mpsc;
 
 use crate::config::{CliOptions, Config};
@@ -20,6 +20,7 @@ pub enum Event {
     RuuviUpdate(ruuvi::SensorData),
     MqttDeviceUpdate(BDAddr),
     MqttConnect,
+    BleStopped,
 }
 
 #[tokio::main]
@@ -44,7 +45,7 @@ async fn main() -> Result<()> {
         .await?;
 
     while let Some(event) = rx.recv().await {
-        use Event::{MqttConnect, MqttDeviceUpdate, RuuviUpdate};
+        use Event::{BleStopped, MqttConnect, MqttDeviceUpdate, RuuviUpdate};
 
         log::trace!("Received event: {event:?}");
         match event {
@@ -83,6 +84,7 @@ async fn main() -> Result<()> {
                     }
                 }
             }
+            BleStopped => bail!("BLE event stream ended; exiting"),
         }
     }
     Ok(())
