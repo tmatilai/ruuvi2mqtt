@@ -42,7 +42,7 @@ jobs:
           components: clippy
 
       - name: Setup | Cache
-        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
 
       - name: Run clippy
         run: cargo clippy --locked --tests --all-targets --all-features -- -D clippy::all -W clippy::pedantic
@@ -72,7 +72,7 @@ jobs:
         run: echo "version=$(grep -oP 'ESP_IDF_VERSION\s*=\s*"\K[^"]+' ruuvi2mqtt-esp32/.cargo/config.toml)" >> "$GITHUB_OUTPUT"
 
       - name: Setup | Cache
-        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           workspaces: ruuvi2mqtt-esp32 -> target
           cache-directories: ~/.espressif
@@ -121,7 +121,7 @@ jobs:
         run: echo "version=$(grep -oP 'ESP_IDF_VERSION\s*=\s*"\K[^"]+' ruuvi2mqtt-esp32/.cargo/config.toml)" >> "$GITHUB_OUTPUT"
 
       - name: Setup | Cache
-        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           workspaces: ruuvi2mqtt-esp32 -> target
           cache-directories: ~/.espressif
@@ -161,7 +161,7 @@ jobs:
           toolchain: stable
 
       - name: Setup | Cache
-        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           shared-key: ${{ matrix.target }}-${{ matrix.os }}-debug-build
 
