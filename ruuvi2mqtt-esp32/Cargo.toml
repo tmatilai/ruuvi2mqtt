@@ -5,7 +5,7 @@ authors = ["Teemu Matilainen <teemu.matilainen@iki.fi>"]
 license = "MIT"
 repository = "https://github.com/tmatilai/ruuvi2mqtt"
 edition = "2021"
-rust-version = "1.82"
+rust-version = "1.85"
 
 [[bin]]
 name = "ruuvi2mqtt-esp32"
@@ -22,7 +22,7 @@ opt-level = "z"
 anyhow = "=1.0.104"
 esp-idf-svc = "=0.52.1"
 esp32-nimble = "=0.12.0"
-ruuvi-sensor-protocol = "=0.6.1"
+ruuvi-sensor-protocol = "=0.7.0"
 log = "=0.4.34"
 serde = { version = "=1.0.229", features = ["derive"] }
 serde_json = "=1.0.151"

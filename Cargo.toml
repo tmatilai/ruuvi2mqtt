@@ -25,7 +25,7 @@ log = "=0.4.34"
 rand = "=0.10.2"
 rumqttc = "=0.25.1"
 rustls-native-certs = "=0.8.4"
-ruuvi-sensor-protocol = "=0.6.1"
+ruuvi-sensor-protocol = "=0.7.0"
 serde = { version = "=1.0.229", features = ["derive"] }
 serde_json = "=1.0.151"
 serde_with = "=3.23.0"

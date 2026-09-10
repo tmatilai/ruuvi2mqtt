@@ -1481,9 +1481,9 @@ checksum = "cf54715a573b99ac80df0bc206da022bcd442c974952c7b9720069370852e21f"
 
 [[package]]
 name = "ruuvi-sensor-protocol"
-version = "0.6.1"
+version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "edd5c692efdbfa1fc9802416cc6066e6b005da84e5ce5245bc23ec22b7bc0a7a"
+checksum = "52d03a6889989c8d2d19549f98bf2739862b5a5eaed7d0d47b2c800682e93503"
 dependencies = [
  "serde_json",
 ]
