@@ -75,10 +75,12 @@ impl RuuviListener {
                 log::trace!("BLE Peripheral: {peripheral:?}");
                 if let Some(values) = Self::parse_data(&peripheral).await? {
                     log::trace!("Ruuvi event: {values:?}");
+                    // Only data format 5 carries the MAC in the payload.
+                    // Older formats use the advertiser address.
                     let address = values
                         .mac_address()
-                        .context(format!("BDAddr not found: {peripheral:?}"))?;
-                    let data = SensorData::new(address.into(), values);
+                        .map_or_else(|| peripheral.address(), Into::into);
+                    let data = SensorData::new(address, values);
                     // Sleep a bit to avoid multiple/simultaneus updates
                     sleep(self.sleep).await;
                     self.tx.send(RuuviUpdate(data)).await?;

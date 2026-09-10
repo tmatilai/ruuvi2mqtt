@@ -6,6 +6,7 @@
 - Rename the example configuration to `ruuvi2mqtt.yaml.example` and git-ignore local `ruuvi2mqtt*.yaml` files.
 - Warn if the configuration file is readable by other users.
 - Exit with an error if the BLE event stream ends (e.g. BlueZ restart), instead of running idle.
+- Fix data format 3 tags logging `BDAddr not found` on every advertisement; use the advertiser address when the payload has no MAC.
 
 ### ruuvi2mqtt-esp32
 
