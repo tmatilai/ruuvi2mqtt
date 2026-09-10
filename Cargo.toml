@@ -16,7 +16,7 @@ strip = true
 
 [dependencies]
 anyhow = "=1.0.104"
-btleplug = "=0.12.0"
+btleplug = "=0.13.0"
 clap = { version = "=4.6.6", features = ["derive", "env", "wrap_help"] }
 derive_more = { version = "=2.1.1", features = ["debug"] }
 env_logger = "=0.11.11"
