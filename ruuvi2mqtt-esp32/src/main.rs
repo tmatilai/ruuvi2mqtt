@@ -1,11 +1,12 @@
 use std::thread;
 use std::time::{Duration, Instant};
 
+use anyhow::{anyhow, Context};
 use esp_idf_svc::{
     eventloop::EspSystemEventLoop, hal::peripherals::Peripherals, log::EspIdfLogger,
-    nvs::EspDefaultNvsPartition,
+    nvs::EspDefaultNvsPartition, sys,
 };
-use log::{error, info};
+use log::{error, info, warn};
 
 mod ble;
 mod config;
@@ -17,7 +18,7 @@ mod wifi;
 
 fn main() {
     // Required by esp-idf-svc: links esp-idf glue patches.
-    esp_idf_svc::sys::link_patches();
+    sys::link_patches();
 
     // Initialise logging. LOG_LEVEL only applies to our own crate; library
     // code stays at info to avoid noise when debugging.
@@ -29,6 +30,20 @@ fn main() {
         env!("CARGO_PKG_NAME"),
         env!("CARGO_PKG_VERSION")
     );
+
+    // A panic or watchdog reset restarts main() immediately. Sleep instead, so
+    // that a persistent failure costs one cycle per sleep period rather than a
+    // continuous >100mA boot loop that drains the battery.
+    let reset_reason = unsafe { sys::esp_reset_reason() };
+    if matches!(
+        reset_reason,
+        sys::esp_reset_reason_t_ESP_RST_PANIC
+            | sys::esp_reset_reason_t_ESP_RST_INT_WDT
+            | sys::esp_reset_reason_t_ESP_RST_TASK_WDT
+    ) {
+        warn!("Previous cycle crashed (reset reason {reset_reason}), skipping this one");
+        deep_sleep();
+    }
 
     info!(
         "Cycle: {}s BLE scan, {}s deep sleep",
@@ -50,7 +65,7 @@ fn main() {
 fn deep_sleep() -> ! {
     info!("Entering deep sleep for {}s", config::BLE_SLEEP_DURATION);
     unsafe {
-        esp_idf_svc::sys::esp_deep_sleep(config::BLE_SLEEP_DURATION as u64 * 1_000_000);
+        sys::esp_deep_sleep(config::BLE_SLEEP_DURATION as u64 * 1_000_000);
     }
 }
 
@@ -70,7 +85,7 @@ fn run(start: Instant) -> anyhow::Result<()> {
     let ble_handle = thread::Builder::new()
         .stack_size(4096)
         .spawn(ble::scan_once)
-        .expect("failed to spawn BLE scan thread");
+        .context("Failed to spawn BLE scan thread")?;
 
     let _wifi = wifi::connect(peripherals.modem, sysloop, nvs)?;
 
@@ -80,10 +95,12 @@ fn run(start: Instant) -> anyhow::Result<()> {
     thread::Builder::new()
         .stack_size(8192)
         .spawn(move || mqtt::run_event_loop(mqtt_conn))
-        .expect("failed to spawn MQTT event-loop thread");
+        .context("Failed to spawn MQTT event-loop thread")?;
 
     // ── Publish readings ─────────────────────────────────────────────────────
-    let readings = ble_handle.join().expect("BLE scan thread panicked")?;
+    let readings = ble_handle
+        .join()
+        .map_err(|_| anyhow!("BLE scan thread panicked"))??;
     let tags: Vec<String> = readings.iter().map(|r| r.mac.to_topic_string()).collect();
 
     for reading in &readings {
