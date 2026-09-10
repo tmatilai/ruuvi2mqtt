@@ -30,4 +30,4 @@ serde_json = "1.0.150"
 konst = "0.4.3"
 
 [build-dependencies]
-embuild = { version = "0.33.1", features = ["espidf"] }
+embuild = { version = "0.33.5", features = ["espidf"] }
