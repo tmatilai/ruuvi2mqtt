@@ -110,22 +110,32 @@ jobs:
             commented on this PR (`gh pr comment <number> --edit-last --create-if-none`).
 
             The comment must start with the line `<!-- claude-ci-triage -->` and use
-            this structure, in short plain sentences, including only the sections
-            of the parts that were done:
+            this structure, including only the sections of the parts that were
+            done. Each section title is bold on its own line, followed by its
+            content:
             - **Root cause** (Part A): what broke and why, naming the dependency
               and version.
             - **Failed jobs** (Part A): which CI jobs failed and with which error.
             - **Suggested fix** (Part A): concrete and specific. Either the code
               change (file and what to change), or the upstream release that is
               needed first, or a recommendation to wait or to close the PR.
-            - **Breaking changes** (Part B): each change that affects this
-              repository, with the file and line it touches and what to do about
-              it. If nothing affects this repository, this section is one line
-              naming the breaking changes that were checked and why each does
-              not apply, without file references. If no release notes were
+            - **Breaking changes** (Part B): a bullet list with one bullet per
+              breaking change in the release notes. Each bullet is one or two
+              short sentences: what changed, then whether it affects this
+              repository and why. Only for a change that needs action, add the
+              file and line and what to do. Skip additive changes entirely.
+              Link the release notes once, in the first bullet. If none were
               found, say so and name what was searched.
-            - **Verdict** (Part B): safe to merge as is, needs the listed
-              changes, or wait.
+            - **Verdict** (Part B): one line: safe to merge as is, needs the
+              listed changes, or wait.
+
+            Style, for a reader skimming the comment on GitHub:
+            - Short sentences, one idea each. No parentheses, no semicolons, no
+              slashes joining alternatives.
+            - Plain words instead of identifiers. Use code formatting only for a
+              file path, a version, or a name the reader must search for, at
+              most one per sentence.
+            - Never pack several checks into one sentence or one line.
 
             Rules:
             - Do not edit files, do not push commits, do not open pull requests.
