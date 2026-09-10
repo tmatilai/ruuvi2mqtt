@@ -74,7 +74,7 @@ impl Config {
         let config_str = fs::read_to_string(config_file)
             .with_context(|| format!("Failed to read {}", config_file.display()))?;
         warn_if_readable_by_others(config_file);
-        let mut config: Self = serde_yaml::from_str(&config_str)
+        let mut config: Self = serde_norway::from_str(&config_str)
             .with_context(|| format!("Failed to load {}", config_file.display()))?;
         config.mqtt.base_topic = validate_base_topic(&config.mqtt.base_topic)
             .with_context(|| format!("Invalid mqtt.base_topic in {}", config_file.display()))?;
