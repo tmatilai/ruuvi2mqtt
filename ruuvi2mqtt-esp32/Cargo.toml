@@ -5,7 +5,7 @@ authors = ["Teemu Matilainen <teemu.matilainen@iki.fi>"]
 license = "MIT"
 repository = "https://github.com/tmatilai/ruuvi2mqtt"
 edition = "2021"
-rust-version = "1.82"
+rust-version = "1.85"
 
 [[bin]]
 name = "ruuvi2mqtt-esp32"
