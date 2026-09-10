@@ -33,6 +33,20 @@
       groupName: 'ESP32 crates (minor and patch)',
     },
     {
+      // Major updates may break. Label them for the Claude review in CI.
+      matchUpdateTypes: ['major'],
+      addLabels: ['breaking-risk'],
+    },
+    {
+      // 0.x minor bumps may break too, so treat them like majors:
+      // separate PRs instead of the groups above, and the review label.
+      matchManagers: ['cargo'],
+      matchCurrentVersion: '/^0\\./',
+      matchUpdateTypes: ['minor'],
+      groupName: null,
+      addLabels: ['breaking-risk'],
+    },
+    {
       // A new ESP-IDF major needs matching esp-idf-sys/esp-idf-svc support.
       // Show it on the dependency dashboard instead of opening a PR.
       matchDepNames: ['espressif/esp-idf'],
