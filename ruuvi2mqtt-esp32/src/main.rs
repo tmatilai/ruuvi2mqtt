@@ -1,7 +1,7 @@
 use std::thread;
 use std::time::{Duration, Instant};
 
-use anyhow::{anyhow, Context};
+use anyhow::Context;
 use esp_idf_svc::{
     eventloop::EspSystemEventLoop, hal::peripherals::Peripherals, log::EspIdfLogger,
     nvs::EspDefaultNvsPartition, sys,
@@ -67,6 +67,12 @@ fn main() {
 /// Normal deep sleep between cycles.
 const SLEEP_SECS: u64 = config::BLE_SLEEP_DURATION as u64;
 
+/// How long to wait for the broker to accept the connection.
+const MQTT_CONNECT_TIMEOUT: Duration = Duration::from_secs(15);
+
+/// How long to wait for the broker to acknowledge the publishes.
+const MQTT_ACK_TIMEOUT: Duration = Duration::from_secs(5);
+
 /// Hard cap on awake time. The Wi-Fi and MQTT steps have their own timeouts,
 /// but a task blocked on an event does not trip the task watchdog.
 const CYCLE_TIMEOUT_SECS: u64 = 40 + config::BLE_SCAN_DURATION as u64;
@@ -111,22 +117,29 @@ fn run(start: Instant) -> anyhow::Result<()> {
     let _wifi = wifi::connect(peripherals.modem, sysloop, nvs)?;
 
     // ── MQTT ─────────────────────────────────────────────────────────────────
-    let (mut mqtt_client, mqtt_conn) = mqtt::connect()?;
-
-    thread::Builder::new()
-        .stack_size(8192)
-        .spawn(move || mqtt::run_event_loop(mqtt_conn))
-        .context("Failed to spawn MQTT event-loop thread")?;
+    let mut mqtt = mqtt::Mqtt::connect()?;
 
     // ── Publish readings ─────────────────────────────────────────────────────
-    let readings = ble_handle
-        .join()
-        .map_err(|_| anyhow!("BLE scan thread panicked"))??;
+    // A failed scan is still reported in the diagnostics.
+    let (readings, error) = match ble_handle.join() {
+        Ok(Ok(readings)) => (readings, None),
+        Ok(Err(e)) => (Vec::new(), Some(format!("BLE scan failed: {e:#}"))),
+        Err(_) => (Vec::new(), Some("BLE scan thread panicked".to_string())),
+    };
+    if let Some(e) = &error {
+        error!("{e}");
+    }
     let tags: Vec<String> = readings.iter().map(|r| r.mac.to_topic_string()).collect();
 
+    mqtt.wait_connected(MQTT_CONNECT_TIMEOUT)?;
+
     for reading in &readings {
-        let topic_mac = reading.mac.to_topic_string();
-        match mqtt::publish(&mut mqtt_client, &topic_mac, &reading.payload) {
+        let topic = format!(
+            "{}/{}",
+            config::MQTT_BASE_TOPIC,
+            reading.mac.to_topic_string()
+        );
+        match mqtt.publish(&topic, &reading.payload) {
             Ok(()) => info!("Updating: [{}]", reading.mac),
             Err(e) => error!("Failed to publish [{}]: {e}", reading.mac),
         }
@@ -140,12 +153,11 @@ fn run(start: Instant) -> anyhow::Result<()> {
         tags,
         #[allow(clippy::cast_possible_truncation)] // cycle duration is always well within u64
         cycle_ms: start.elapsed().as_millis() as u64,
-        error: None,
+        error,
     };
-    diag.publish(&mut mqtt_client);
+    diag.publish(&mut mqtt);
 
-    // Brief delay to let QoS 1 publishes get acknowledged.
-    thread::sleep(Duration::from_millis(500));
+    mqtt.wait_published(MQTT_ACK_TIMEOUT)?;
 
     led.off();
     Ok(())
