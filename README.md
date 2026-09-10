@@ -37,3 +37,5 @@ docker run --name ruuvi2mqtt --rm \
     ghcr.io/tmatilai/ruuvi2mqtt:v1.4.0 \
     --log-level=DEBUG
 ```
+
+The container runs as uid 65534 (`nobody`), so the mounted configuration file must be readable by that user, e.g. `chown 65534 ruuvi2mqtt.yaml`. The host needs BlueZ 5.51 or newer for non-root D-Bus access; on older hosts add `--user 0`.
