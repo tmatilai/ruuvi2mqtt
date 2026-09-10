@@ -12,6 +12,7 @@
 - Validate `mqtt.base_topic`: reject wildcards and a leading `$`, and trim a trailing `/`.
 - Add a CA certificate store to the Docker image, so `tls: true` works without `ca_file`.
 - Replace the archived `serde_yaml` crate with its fork `serde_norway`.
+- Run the Docker image as an unprivileged user (uid 65534); the mounted configuration file must be readable by it.
 
 ### ruuvi2mqtt-esp32
 
