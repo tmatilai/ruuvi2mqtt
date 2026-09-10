@@ -71,9 +71,10 @@ pub const MQTT_TLS: bool = konst::eq_str(
 /// `MQTT_CA_PEM` via `include_bytes!`.
 pub const MQTT_CA_FILE: Option<&str> = option_env_non_empty!("MQTT_CA_FILE");
 
-/// Skip TLS certificate verification (matches Linux `mqtt.tls_insecure`).
+/// Skip the TLS hostname check (matches Linux `mqtt.tls_insecure`). The
+/// certificate chain is still verified.
 ///
-/// WARNING: Only use for testing — disables certificate checks.
+/// WARNING: Only use for testing.
 pub const MQTT_TLS_INSECURE: bool = konst::eq_str(
     match option_env_non_empty!("MQTT_TLS_INSECURE") {
         Some(v) => v,
