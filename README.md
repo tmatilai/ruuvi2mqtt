@@ -21,7 +21,7 @@ The target platforms are Linux on amd64, arm64, and arm7 (Raspberry Pi). Because
 
 Pre-build binaries and container images can be found in <https://github.com/tmatilai/ruuvi2mqtt>.
 
-An example configuration file can be seen in [ruuvi2mqtt.yaml](./ruuvi2mqtt.yaml).
+An example configuration file can be seen in [ruuvi2mqtt.yaml.example](./ruuvi2mqtt.yaml.example).
 Configuration file is by default searched from the working directory, but the path can be specified with `--config` CLI option or `CONFIG_FILE` environment variable.
 
 Example command to run in a Docker container:
