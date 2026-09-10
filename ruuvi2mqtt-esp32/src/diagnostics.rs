@@ -1,9 +1,9 @@
-use esp_idf_svc::mqtt::client::{EspMqttClient, QoS};
 use esp_idf_svc::sys;
 use log::info;
 use serde::Serialize;
 
 use crate::config;
+use crate::mqtt::Mqtt;
 
 #[derive(Debug, Serialize)]
 pub struct Diagnostics {
@@ -17,7 +17,7 @@ pub struct Diagnostics {
 }
 
 impl Diagnostics {
-    pub fn publish(&self, client: &mut EspMqttClient<'static>) {
+    pub fn publish(&self, mqtt: &mut Mqtt) {
         let topic = format!(
             "{}/diagnostics/{}",
             config::MQTT_BASE_TOPIC,
@@ -25,7 +25,7 @@ impl Diagnostics {
         );
         let payload = serde_json::to_string(self).unwrap();
         info!("Diagnostics: {payload}");
-        if let Err(e) = client.publish(&topic, QoS::AtLeastOnce, false, payload.as_bytes()) {
+        if let Err(e) = mqtt.publish(&topic, &payload) {
             log::error!("Failed to publish diagnostics: {e}");
         }
     }

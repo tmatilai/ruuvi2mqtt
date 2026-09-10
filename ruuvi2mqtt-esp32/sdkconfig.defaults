@@ -18,8 +18,9 @@ CONFIG_ESP_MAIN_TASK_STACK_SIZE=8192
 # Disable for plain TCP MQTT (no TLS), which saves ~40 KB of flash.
 # CONFIG_MBEDTLS_TLS_CLIENT_ONLY=y
 
-# Task watchdog — reboots when any task is stuck for >15s.
-# Catches wifi.connect() hangs that would otherwise block forever.
+# Task watchdog — reboots when the idle task is starved for >15s, i.e. a busy
+# loop in a higher-priority task. It does not catch a task blocked on an
+# event; main.rs has a cycle timeout for that.
 CONFIG_ESP_TASK_WDT_EN=y
 CONFIG_ESP_TASK_WDT_TIMEOUT_S=15
 

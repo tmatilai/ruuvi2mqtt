@@ -18,6 +18,10 @@
 - Publish diagnostic information to MQTT.
 - Deep sleep instead of boot looping after a panic or watchdog reset, which used to drain the battery.
 - Fix the build script not re-running when `MQTT_CA_FILE` is set or unset, which could embed a stale CA certificate.
+- Skip the cycle and sleep 4x longer after a brownout reset, instead of boot looping on a weak battery.
+- Add a hard timeout for the whole cycle. The task watchdog does not catch a blocked Wi-Fi or MQTT wait.
+- Wait for the MQTT connection and for publish acknowledgements before deep sleep. Readings were lost when the broker connected slower than the BLE scan.
+- Report a failed BLE scan in the `error` field of the diagnostics message.
 
 ## 1.4.0 / 2026-04-15
 

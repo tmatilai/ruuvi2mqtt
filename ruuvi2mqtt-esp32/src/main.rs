@@ -1,7 +1,7 @@
 use std::thread;
 use std::time::{Duration, Instant};
 
-use anyhow::{anyhow, Context};
+use anyhow::Context;
 use esp_idf_svc::{
     eventloop::EspSystemEventLoop, hal::peripherals::Peripherals, log::EspIdfLogger,
     nvs::EspDefaultNvsPartition, sys,
@@ -34,15 +34,19 @@ fn main() {
     // A panic or watchdog reset restarts main() immediately. Sleep instead, so
     // that a persistent failure costs one cycle per sleep period rather than a
     // continuous >100mA boot loop that drains the battery.
-    let reset_reason = unsafe { sys::esp_reset_reason() };
-    if matches!(
-        reset_reason,
+    match unsafe { sys::esp_reset_reason() } {
         sys::esp_reset_reason_t_ESP_RST_PANIC
-            | sys::esp_reset_reason_t_ESP_RST_INT_WDT
-            | sys::esp_reset_reason_t_ESP_RST_TASK_WDT
-    ) {
-        warn!("Previous cycle crashed (reset reason {reset_reason}), skipping this one");
-        deep_sleep();
+        | sys::esp_reset_reason_t_ESP_RST_INT_WDT
+        | sys::esp_reset_reason_t_ESP_RST_TASK_WDT => {
+            warn!("Previous cycle crashed, skipping this one");
+            deep_sleep(SLEEP_SECS);
+        }
+        // A weak battery browns out under Wi-Fi load. Give it time to recover.
+        sys::esp_reset_reason_t_ESP_RST_BROWNOUT => {
+            warn!("Previous cycle browned out (weak battery?), skipping this one");
+            deep_sleep(BROWNOUT_SLEEP_SECS);
+        }
+        _ => {}
     }
 
     info!(
@@ -57,20 +61,43 @@ fn main() {
         error!("Cycle failed: {e:#}");
     }
 
-    deep_sleep();
+    deep_sleep(SLEEP_SECS);
 }
+
+/// Normal deep sleep between cycles.
+const SLEEP_SECS: u64 = config::BLE_SLEEP_DURATION as u64;
+
+/// How long to wait for the broker to accept the connection.
+const MQTT_CONNECT_TIMEOUT: Duration = Duration::from_secs(15);
+
+/// How long to wait for the broker to acknowledge the publishes.
+const MQTT_ACK_TIMEOUT: Duration = Duration::from_secs(5);
+
+/// Hard cap on awake time. The Wi-Fi and MQTT steps have their own timeouts,
+/// but a task blocked on an event does not trip the task watchdog.
+const CYCLE_TIMEOUT_SECS: u64 = 40 + config::BLE_SCAN_DURATION as u64;
+
+/// Deep sleep after a brownout reset.
+const BROWNOUT_SLEEP_SECS: u64 = 4 * SLEEP_SECS;
 
 /// Enter deep sleep. On wake the chip reboots (`main()` runs fresh).
 /// Deep sleep draws ~5-10µA vs >100mA active.
-fn deep_sleep() -> ! {
-    info!("Entering deep sleep for {}s", config::BLE_SLEEP_DURATION);
-    unsafe {
-        sys::esp_deep_sleep(config::BLE_SLEEP_DURATION as u64 * 1_000_000);
-    }
+fn deep_sleep(secs: u64) -> ! {
+    info!("Entering deep sleep for {secs}s");
+    unsafe { sys::esp_deep_sleep(secs * 1_000_000) }
 }
 
 /// One scan-connect-publish cycle.
 fn run(start: Instant) -> anyhow::Result<()> {
+    thread::Builder::new()
+        .stack_size(4096)
+        .spawn(|| {
+            thread::sleep(Duration::from_secs(CYCLE_TIMEOUT_SECS));
+            error!("Cycle timed out after {CYCLE_TIMEOUT_SECS}s");
+            deep_sleep(SLEEP_SECS);
+        })
+        .context("Failed to spawn cycle timeout thread")?;
+
     let peripherals = Peripherals::take()?;
     let sysloop = EspSystemEventLoop::take()?;
     let nvs = EspDefaultNvsPartition::take()?;
@@ -90,22 +117,29 @@ fn run(start: Instant) -> anyhow::Result<()> {
     let _wifi = wifi::connect(peripherals.modem, sysloop, nvs)?;
 
     // ── MQTT ─────────────────────────────────────────────────────────────────
-    let (mut mqtt_client, mqtt_conn) = mqtt::connect()?;
-
-    thread::Builder::new()
-        .stack_size(8192)
-        .spawn(move || mqtt::run_event_loop(mqtt_conn))
-        .context("Failed to spawn MQTT event-loop thread")?;
+    let mut mqtt = mqtt::Mqtt::connect()?;
 
     // ── Publish readings ─────────────────────────────────────────────────────
-    let readings = ble_handle
-        .join()
-        .map_err(|_| anyhow!("BLE scan thread panicked"))??;
+    // A failed scan is still reported in the diagnostics.
+    let (readings, error) = match ble_handle.join() {
+        Ok(Ok(readings)) => (readings, None),
+        Ok(Err(e)) => (Vec::new(), Some(format!("BLE scan failed: {e:#}"))),
+        Err(_) => (Vec::new(), Some("BLE scan thread panicked".to_string())),
+    };
+    if let Some(e) = &error {
+        error!("{e}");
+    }
     let tags: Vec<String> = readings.iter().map(|r| r.mac.to_topic_string()).collect();
 
+    mqtt.wait_connected(MQTT_CONNECT_TIMEOUT)?;
+
     for reading in &readings {
-        let topic_mac = reading.mac.to_topic_string();
-        match mqtt::publish(&mut mqtt_client, &topic_mac, &reading.payload) {
+        let topic = format!(
+            "{}/{}",
+            config::MQTT_BASE_TOPIC,
+            reading.mac.to_topic_string()
+        );
+        match mqtt.publish(&topic, &reading.payload) {
             Ok(()) => info!("Updating: [{}]", reading.mac),
             Err(e) => error!("Failed to publish [{}]: {e}", reading.mac),
         }
@@ -119,12 +153,11 @@ fn run(start: Instant) -> anyhow::Result<()> {
         tags,
         #[allow(clippy::cast_possible_truncation)] // cycle duration is always well within u64
         cycle_ms: start.elapsed().as_millis() as u64,
-        error: None,
+        error,
     };
-    diag.publish(&mut mqtt_client);
+    diag.publish(&mut mqtt);
 
-    // Brief delay to let QoS 1 publishes get acknowledged.
-    thread::sleep(Duration::from_millis(500));
+    mqtt.wait_published(MQTT_ACK_TIMEOUT)?;
 
     led.off();
     Ok(())
