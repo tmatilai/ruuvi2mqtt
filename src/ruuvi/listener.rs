@@ -92,10 +92,10 @@ impl RuuviListener {
     }
 
     async fn parse_data(peripheral: &Peripheral) -> Result<Option<SensorValues>> {
-        Ok(peripheral
-            .properties()
-            .await?
-            .unwrap()
+        let Some(properties) = peripheral.properties().await? else {
+            return Ok(None);
+        };
+        Ok(properties
             .manufacturer_data
             .into_iter()
             .find_map(|(id, data)| SensorValues::from_manufacturer_specific_data(id, data).ok()))

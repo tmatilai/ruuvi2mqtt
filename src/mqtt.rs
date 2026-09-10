@@ -237,6 +237,8 @@ impl EventLoop {
     }
 
     async fn send_event(&self, event: Event) {
-        self.tx.send(event).await.expect("Failed to send event");
+        if let Err(err) = self.tx.send(event).await {
+            log::error!("Failed to send event: {err}");
+        }
     }
 }
