@@ -35,8 +35,12 @@ impl Mqtt {
         let broker_url = format!("{scheme}://{}:{}", config::MQTT_SERVER, config::MQTT_PORT);
         let client_id = config::MQTT_CLIENT_ID.unwrap_or(config::DEVICE_HOSTNAME);
 
-        if config::MQTT_TLS_INSECURE {
-            log::warn!("TLS certificate verification is weakened (MQTT_TLS_INSECURE=true)");
+        if config::MQTT_TLS {
+            if config::MQTT_TLS_INSECURE {
+                log::warn!("TLS hostname check is disabled (MQTT_TLS_INSECURE=true)");
+            }
+        } else if config::MQTT_CA_FILE.is_some() {
+            log::warn!("MQTT_CA_FILE is set but TLS is disabled; the CA file is ignored");
         }
 
         let server_certificate = ca_certificate();
