@@ -160,3 +160,17 @@ All available targets:
 ```sh
 make help
 ```
+
+## Security
+
+The built firmware embeds `WIFI_PASS` and `MQTT_PASSWORD` as plaintext
+constants in flash. Don't share or publish built images, and note that
+physical access to a board is enough to read the credentials back with
+`espflash`/`esptool`.
+
+ESP-IDF [flash encryption][flash-enc] mitigates this, and can be enabled with
+`CONFIG_SECURE_FLASH_ENC_ENABLED` in `sdkconfig.defaults`. It is off by design:
+the first boot with it enabled burns eFuses irreversibly and changes how the
+board is flashed. Read the Espressif documentation before enabling it.
+
+[flash-enc]: https://docs.espressif.com/projects/esp-idf/en/stable/esp32/security/flash-encryption.html
