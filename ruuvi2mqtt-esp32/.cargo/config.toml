@@ -31,6 +31,6 @@ build-std = ["std", "panic_abort"]
 [env]
 MCU = "esp32c6"
 # ESP-IDF version to download automatically (via embuild).
-# Pin to a stable release; update intentionally.
-ESP_IDF_VERSION = "v5.5.1"
+# Pin to a stable release. Renovate opens a PR for new releases.
+ESP_IDF_VERSION = "v5.5.4"
 ESP_IDF_TOOLS_INSTALL_DIR = "global"

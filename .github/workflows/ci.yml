@@ -75,7 +75,7 @@ jobs:
           components: clippy, rust-src
 
       - name: Setup | ldproxy
-        run: cargo install ldproxy
+        run: cargo install ldproxy@0.3.5
 
       - name: Setup | ESP-IDF version
         id: esp-idf
@@ -128,7 +128,7 @@ jobs:
           components: rust-src
 
       - name: Setup | ldproxy
-        run: cargo install ldproxy
+        run: cargo install ldproxy@0.3.5
 
       - name: Setup | ESP-IDF version
         id: esp-idf
@@ -184,7 +184,7 @@ jobs:
       - name: Setup | Cross
         if: env.USE_CROSS == 'true'
         run: |
-          cargo install --bins cross
+          cargo install --bins cross@0.2.5
           echo "CARGO=cross" >> "$GITHUB_ENV"
 
       - name: Setup | Install build dependencies

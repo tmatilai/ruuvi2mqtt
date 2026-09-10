@@ -30,6 +30,12 @@ local: test ## Test and build locally
 .PHONY: cross
 cross: $(ARCHS) ## Build all non-local architectures
 
+# `cross` is installed from git: the last crates.io release is from 2023.
+.PHONY: setup
+setup: ## Install the tools for the Linux app and the ESP32 firmware
+	cargo install --git https://github.com/cross-rs/cross cross
+	$(MAKE) -C ruuvi2mqtt-esp32 setup
+
 .PHONY: $(ARCHS)
 $(ARCHS): ## Build for the specified architecture
 	cross build --target $(TARGET_ARCH_$@)

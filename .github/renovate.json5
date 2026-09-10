@@ -1,0 +1,70 @@
+{
+  $schema: 'https://docs.renovatebot.com/renovate-schema.json',
+  extends: [
+    'config:recommended',
+    // Keep GitHub Actions pinned to commit SHAs (with the version comment).
+    'helpers:pinGitHubActionDigests',
+  ],
+
+  // Weekly on Friday afternoon, with a cooldown for fresh releases.
+  timezone: 'Europe/Helsinki',
+  schedule: ['* 12-17 * * 5'],
+  minimumReleaseAge: '7 days',
+
+  // Refresh transitive deps in both Cargo.lock files.
+  lockFileMaintenance: { enabled: true },
+
+  packageRules: [
+    {
+      // Bump versions in Cargo.toml as well, not only in Cargo.lock.
+      matchManagers: ['cargo'],
+      rangeStrategy: 'bump',
+    },
+    {
+      matchManagers: ['cargo'],
+      matchFileNames: ['Cargo.toml'],
+      matchUpdateTypes: ['minor', 'patch'],
+      groupName: 'Linux crates (minor and patch)',
+    },
+    {
+      matchManagers: ['cargo'],
+      matchFileNames: ['ruuvi2mqtt-esp32/Cargo.toml'],
+      matchUpdateTypes: ['minor', 'patch'],
+      groupName: 'ESP32 crates (minor and patch)',
+    },
+    {
+      // A new ESP-IDF major needs matching esp-idf-sys/esp-idf-svc support.
+      // Show it on the dependency dashboard instead of opening a PR.
+      matchDepNames: ['espressif/esp-idf'],
+      matchUpdateTypes: ['major'],
+      dependencyDashboardApproval: true,
+    },
+  ],
+
+  customManagers: [
+    {
+      // ESP_IDF_VERSION = "v5.5.5" in ruuvi2mqtt-esp32/.cargo/config.toml
+      customType: 'regex',
+      managerFilePatterns: ['/^ruuvi2mqtt-esp32/\\.cargo/config\\.toml$/'],
+      matchStrings: ['ESP_IDF_VERSION\\s*=\\s*"(?<currentValue>v\\d+\\.\\d+\\.\\d+)"'],
+      depNameTemplate: 'espressif/esp-idf',
+      datasourceTemplate: 'github-releases',
+      versioningTemplate: 'semver-coerced',
+    },
+    {
+      // `cargo install [flags] <crate>@<version>` in workflows
+      customType: 'regex',
+      managerFilePatterns: ['/^\\.github/workflows/.+\\.ya?ml$/'],
+      matchStrings: ['cargo install(?:\\s+--?[\\w-]+)*\\s+(?<depName>[\\w-]+)@(?<currentValue>\\d+\\.\\d+\\.\\d+)'],
+      datasourceTemplate: 'crate',
+    },
+    {
+      // `# renovate: datasource=... depName=...` above a `FOO_VERSION := x.y.z` line in Makefiles
+      customType: 'regex',
+      managerFilePatterns: ['/(^|/)Makefile$/'],
+      matchStrings: [
+        '# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)\\n\\w+_VERSION\\s*:?=\\s*(?<currentValue>\\S+)',
+      ],
+    },
+  ],
+}

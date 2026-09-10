@@ -15,6 +15,10 @@ The second bullet means that the documentation, configuration, and code quality 
 
 The target platforms are Linux on amd64, arm64, and arm7 (Raspberry Pi). Because of [dbus](https://docs.rs/dbus/latest/dbus/) dependency, (cross) compiling and MUSL can get complicated. MacOS is supposed to work as well.
 
+For local development, `make setup` installs the tools for both the Linux app
+and the [ESP32 firmware](./ruuvi2mqtt-esp32/). Renovate keeps the pinned tool
+versions current, so re-run it after pulling.
+
 ---
 
 ## Usage

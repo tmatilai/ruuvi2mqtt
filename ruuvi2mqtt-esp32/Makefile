@@ -69,6 +69,8 @@ TEST_SRCS := src/mac.rs
 help: ## Show this help
 	@grep -hE '^[a-zA-Z-][a-zA-Z0-9_\.-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
 	@echo ''
+	@echo 'Run `make setup` to install the toolchain, and again after pulling.'
+	@echo ''
 	@echo 'Override target chip: make <target> CHIP=esp32  (default: esp32c6)'
 	@echo ''
 	@echo 'Device config: auto-detected from connected board MAC (see devices/),'
@@ -76,18 +78,24 @@ help: ## Show this help
 	@echo '               or skip:     make <target> DEVICE='
 
 # --- Toolchain setup -------------------------------------------------------
+# Tool versions are bumped by Renovate. Re-run `make setup` after pulling.
+# renovate: datasource=crate depName=espflash
+ESPFLASH_VERSION := 4.6.0
+# renovate: datasource=crate depName=espup
+ESPUP_VERSION := 0.17.1
+# renovate: datasource=crate depName=ldproxy
+LDPROXY_VERSION := 0.3.5
+
 .PHONY: setup
-setup: ## Install required toolchain and tools
-	@command -v ldproxy >/dev/null 2>&1 || { echo "Installing ldproxy..."; cargo install ldproxy; }
-	@command -v espflash >/dev/null 2>&1 || { echo "Installing espflash..."; cargo install espflash; }
-	@command -v espup >/dev/null 2>&1 || { echo "Installing espup..."; cargo install espup; }
-	@rustup toolchain list | grep -q esp || { echo "Installing Xtensa toolchain..."; espup install; }
+setup: ## Install the pinned tools and the latest Xtensa toolchain
+	cargo install espflash@$(ESPFLASH_VERSION) espup@$(ESPUP_VERSION) ldproxy@$(LDPROXY_VERSION)
+	espup update
 
 .PHONY: all
 all: lint test build ## Lint, test, and build
 
 .PHONY: lint
-lint: setup ## Format and lint
+lint: ## Format and lint
 	$(CARGO) fmt
 	$(CARGO) clippy --target $(TARGET) -- -D clippy::all -W clippy::pedantic
 
@@ -101,19 +109,19 @@ test: ## Run host-side unit tests (pure-Rust modules only)
 	done
 
 .PHONY: build
-build: setup ## Build the firmware (release)
+build: ## Build the firmware (release)
 	$(CARGO) build --release --target $(TARGET)
 
 .PHONY: flash
-flash: setup ## Build and flash the firmware, then open the serial monitor
+flash: ## Build and flash the firmware, then open the serial monitor
 	$(CARGO) run --release --target $(TARGET)
 
 .PHONY: monitor
-monitor: setup ## Open the serial monitor (no build/flash)
+monitor: ## Open the serial monitor (no build/flash)
 	espflash monitor
 
 .PHONY: register
-register: setup ## Register the connected board as DEVICE (e.g. make register DEVICE=kitchen)
+register: ## Register the connected board as DEVICE (e.g. make register DEVICE=kitchen)
 ifndef DEVICE
 	$(error DEVICE is required. Usage: make register DEVICE=kitchen)
 endif
