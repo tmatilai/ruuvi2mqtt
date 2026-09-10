@@ -10,6 +10,7 @@
 - Drop sensor readings instead of queueing them when the broker is unreachable, to avoid unbounded memory growth and a flood of stale readings on reconnect.
 - Only fail startup when no platform TLS certificates are found; warn about individual load errors.
 - Validate `mqtt.base_topic`: reject wildcards and a leading `$`, and trim a trailing `/`.
+- Add a CA certificate store to the Docker image, so `tls: true` works without `ca_file`.
 
 ### ruuvi2mqtt-esp32
 
