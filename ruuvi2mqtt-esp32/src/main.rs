@@ -67,6 +67,10 @@ fn main() {
 /// Normal deep sleep between cycles.
 const SLEEP_SECS: u64 = config::BLE_SLEEP_DURATION as u64;
 
+/// Hard cap on awake time. The Wi-Fi and MQTT steps have their own timeouts,
+/// but a task blocked on an event does not trip the task watchdog.
+const CYCLE_TIMEOUT_SECS: u64 = 40 + config::BLE_SCAN_DURATION as u64;
+
 /// Deep sleep after a brownout reset.
 const BROWNOUT_SLEEP_SECS: u64 = 4 * SLEEP_SECS;
 
@@ -79,6 +83,15 @@ fn deep_sleep(secs: u64) -> ! {
 
 /// One scan-connect-publish cycle.
 fn run(start: Instant) -> anyhow::Result<()> {
+    thread::Builder::new()
+        .stack_size(4096)
+        .spawn(|| {
+            thread::sleep(Duration::from_secs(CYCLE_TIMEOUT_SECS));
+            error!("Cycle timed out after {CYCLE_TIMEOUT_SECS}s");
+            deep_sleep(SLEEP_SECS);
+        })
+        .context("Failed to spawn cycle timeout thread")?;
+
     let peripherals = Peripherals::take()?;
     let sysloop = EspSystemEventLoop::take()?;
     let nvs = EspDefaultNvsPartition::take()?;
