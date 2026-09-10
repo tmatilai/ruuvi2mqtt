@@ -11,6 +11,7 @@
 - Only fail startup when no platform TLS certificates are found; warn about individual load errors.
 - Validate `mqtt.base_topic`: reject wildcards and a leading `$`, and trim a trailing `/`.
 - Add a CA certificate store to the Docker image, so `tls: true` works without `ca_file`.
+- Replace the archived `serde_yaml` crate with its fork `serde_norway`.
 
 ### ruuvi2mqtt-esp32
 
