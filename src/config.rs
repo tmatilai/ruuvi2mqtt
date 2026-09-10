@@ -1,4 +1,9 @@
-use std::{collections::HashMap, fs, path::PathBuf, time::Duration};
+use std::{
+    collections::HashMap,
+    fs,
+    path::{Path, PathBuf},
+    time::Duration,
+};
 
 use anyhow::{Context, Result};
 use clap::{CommandFactory, Parser};
@@ -68,6 +73,7 @@ impl Config {
 
         let config_str = fs::read_to_string(config_file)
             .with_context(|| format!("Failed to read {}", config_file.display()))?;
+        warn_if_readable_by_others(config_file);
         serde_yaml::from_str(&config_str)
             .with_context(|| format!("Failed to load {}", config_file.display()))
     }
@@ -81,6 +87,29 @@ impl CliOptions {
 
 pub fn version_info() -> String {
     CliOptions::command().render_long_version()
+}
+
+/// The config file may contain the MQTT password, so warn if other users can read it.
+#[cfg(unix)]
+fn warn_if_readable_by_others(path: &Path) {
+    use std::os::unix::fs::PermissionsExt;
+
+    if let Ok(metadata) = fs::metadata(path)
+        && is_readable_by_others(metadata.permissions().mode())
+    {
+        log::warn!(
+            "{} is readable by other users; consider restricting it with `chmod 600`",
+            path.display()
+        );
+    }
+}
+
+#[cfg(not(unix))]
+fn warn_if_readable_by_others(_path: &Path) {}
+
+#[cfg(unix)]
+const fn is_readable_by_others(mode: u32) -> bool {
+    mode & 0o044 != 0
 }
 
 fn default_mqtt_throttle() -> Duration {
@@ -116,6 +145,16 @@ mod tests {
     fn verify_cli() {
         use clap::CommandFactory;
         CliOptions::command().debug_assert();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn readable_by_others() {
+        assert!(!is_readable_by_others(0o600));
+        assert!(!is_readable_by_others(0o100_600));
+        assert!(is_readable_by_others(0o640));
+        assert!(is_readable_by_others(0o604));
+        assert!(is_readable_by_others(0o100_644));
     }
 
     #[test]
