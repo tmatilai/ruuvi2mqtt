@@ -11,8 +11,8 @@ use rumqttc::tokio_rustls::rustls::{
     ClientConfig, DigitallySignedStruct, RootCertStore, SignatureScheme,
 };
 use rumqttc::{
-    AsyncClient, ConnectReturnCode, Event as MqttEvent, EventLoop as MqttEventLoop, Incoming,
-    MqttOptions, QoS, TlsConfiguration, Transport,
+    AsyncClient, ClientError, ConnectReturnCode, Event as MqttEvent, EventLoop as MqttEventLoop,
+    Incoming, MqttOptions, QoS, TlsConfiguration, Transport,
 };
 use tokio::time::sleep;
 
@@ -119,19 +119,23 @@ impl Mqtt {
         });
     }
 
+    /// Sensor data is periodic, so it is dropped instead of queued when the
+    /// request channel is full (e.g. during a broker outage). Awaiting
+    /// `publish()` would pile up blocked tasks and flush stale readings on
+    /// reconnect.
     pub fn publish_sensor_data(&mut self, data: SensorData) {
-        let client = self.client.clone();
-        tokio::spawn(async move {
-            log::debug!("Publishing: {} -> {:?}", data.topic, data);
-            let payload = serde_json::to_vec(&data).unwrap();
-            match client
-                .publish(data.topic, QoS::AtLeastOnce, false, payload)
-                .await
-            {
-                Ok(()) => log::trace!("OK!"),
-                Err(err) => log::error!("Failed to publish: {err}"),
+        log::debug!("Publishing: {} -> {:?}", data.topic, data);
+        let payload = serde_json::to_vec(&data).unwrap();
+        match self
+            .client
+            .try_publish(data.topic, QoS::AtLeastOnce, false, payload)
+        {
+            Ok(()) => log::trace!("OK!"),
+            Err(ClientError::TryRequest(_)) => {
+                log::debug!("MQTT request queue full; dropping reading");
             }
-        });
+            Err(err) => log::error!("Failed to publish: {err}"),
+        }
     }
 }
 
