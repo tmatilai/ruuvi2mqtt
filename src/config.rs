@@ -5,7 +5,7 @@ use std::{
     time::Duration,
 };
 
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, bail};
 use clap::{CommandFactory, Parser};
 use derive_more::Debug;
 use rand::RngExt;
@@ -74,9 +74,28 @@ impl Config {
         let config_str = fs::read_to_string(config_file)
             .with_context(|| format!("Failed to read {}", config_file.display()))?;
         warn_if_readable_by_others(config_file);
-        serde_yaml::from_str(&config_str)
-            .with_context(|| format!("Failed to load {}", config_file.display()))
+        let mut config: Self = serde_yaml::from_str(&config_str)
+            .with_context(|| format!("Failed to load {}", config_file.display()))?;
+        config.mqtt.base_topic = validate_base_topic(&config.mqtt.base_topic)
+            .with_context(|| format!("Invalid mqtt.base_topic in {}", config_file.display()))?;
+        Ok(config)
     }
+}
+
+/// The base topic is used both for publishing and for a `<base_topic>/#`
+/// subscription, so wildcards and a leading `$` would break it.
+fn validate_base_topic(topic: &str) -> Result<String> {
+    let topic = topic.trim_end_matches('/');
+    if topic.is_empty() {
+        bail!("must not be empty");
+    }
+    if topic.contains(['#', '+']) {
+        bail!("must not contain wildcards ('#' or '+')");
+    }
+    if topic.starts_with('$') {
+        bail!("must not start with '$'");
+    }
+    Ok(topic.to_string())
 }
 
 impl CliOptions {
@@ -155,6 +174,24 @@ mod tests {
         assert!(is_readable_by_others(0o640));
         assert!(is_readable_by_others(0o604));
         assert!(is_readable_by_others(0o100_644));
+    }
+
+    #[test]
+    fn base_topic_valid() {
+        assert_eq!(validate_base_topic("ruuvi2mqtt").unwrap(), "ruuvi2mqtt");
+        assert_eq!(validate_base_topic("home/ruuvi").unwrap(), "home/ruuvi");
+        assert_eq!(validate_base_topic("ruuvi/").unwrap(), "ruuvi");
+        assert_eq!(validate_base_topic("ruuvi//").unwrap(), "ruuvi");
+        assert_eq!(validate_base_topic("a$b").unwrap(), "a$b");
+    }
+
+    #[test]
+    fn base_topic_invalid() {
+        assert!(validate_base_topic("").is_err());
+        assert!(validate_base_topic("/").is_err());
+        assert!(validate_base_topic("ruuvi/#").is_err());
+        assert!(validate_base_topic("ruuvi/+/x").is_err());
+        assert!(validate_base_topic("$SYS/ruuvi").is_err());
     }
 
     #[test]
