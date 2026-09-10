@@ -137,7 +137,8 @@ endif
 	if [ ! -f devices/$(DEVICE).mk ]; then \
 		cp devices/device.mk.example devices/$(DEVICE).mk; \
 		if [ -n "$$chip" ] && [ "$$chip" != "esp32c6" ]; then \
-			sed -i '' "s/^# CHIP = .*/CHIP = $$chip/" devices/$(DEVICE).mk; \
+			sed "s/^# CHIP = .*/CHIP = $$chip/" devices/$(DEVICE).mk > devices/$(DEVICE).mk.tmp \
+				&& mv devices/$(DEVICE).mk.tmp devices/$(DEVICE).mk; \
 		fi; \
 		echo "Created devices/$(DEVICE).mk from template (chip: $${chip:-unknown}) — edit it to set IP, hostname, etc."; \
 	else \

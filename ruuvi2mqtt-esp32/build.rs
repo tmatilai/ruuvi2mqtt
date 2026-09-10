@@ -1,6 +1,8 @@
 use std::path::PathBuf;
 
 fn main() {
+    println!("cargo:rerun-if-env-changed=MQTT_CA_FILE");
+
     // Required by esp-idf-sys (via embuild) to export ESP-IDF build environment
     // variables so that the linker and the Rust crate can find ESP-IDF headers
     // and libraries that are downloaded/built by embuild.
