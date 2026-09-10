@@ -85,17 +85,21 @@ jobs:
             Part B, if BREAKING CHANGE REVIEW is true: the update is a major
             version, or a 0.x minor which may break just as well. Look for
             breaking changes that a green CI cannot catch.
-            1. Identify the dependency and the old and new versions from
-               `gh pr diff`.
+            1. Identify the dependency and the old and new versions from the
+               PR title and body (`gh pr view --json title,body`). Use
+               `gh pr diff` only if they are unclear: the Cargo.lock part of
+               the diff is long and mostly transitive noise.
             2. Read the release notes or changelog for every release between
                those versions. Sources, in order of preference: the release
-               notes Renovate embedded in the PR body (`gh pr view --json body`),
-               the GitHub releases of the source repository (`gh release list`
+               notes Renovate embedded in the PR body, the GitHub releases of
+               the source repository (`gh release list`
                and `gh release view --repo <owner>/<repo>`), the CHANGELOG file
                of the repository, and docs.rs. For a crate, find the source
                repository with WebFetch on `https://crates.io/api/v1/crates/<name>`.
             3. Find every place this repository uses the dependency (Cargo.toml
-               features, imports, calls, configuration) and check each breaking
+               features, imports, calls, configuration). CLAUDE.md maps the
+               modules, so Grep for the crate and read only the files that use
+               it. Check each breaking
                or behavioral change against that usage. Also consider changes
                the compiler does not see: changed defaults, changed runtime
                behavior, renamed or removed cargo features, MSRV bumps, and
@@ -129,5 +133,6 @@ jobs:
             - Do not speculate: if the logs or release notes are inconclusive, say
               what is missing.
           claude_args: |
+            --model claude-sonnet-5
             --max-turns 40
             --allowedTools "Read,Glob,Grep,Bash(gh pr diff:*),Bash(gh pr view:*),Bash(gh pr comment:*),Bash(gh run view:*),Bash(gh release list:*),Bash(gh release view:*),WebFetch(domain:github.com),WebFetch(domain:raw.githubusercontent.com),WebFetch(domain:crates.io),WebFetch(domain:docs.rs),mcp__github_ci__get_ci_status,mcp__github_ci__get_workflow_run_details,mcp__github_ci__download_job_log"
