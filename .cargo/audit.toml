@@ -1,0 +1,11 @@
+[advisories]
+# rustls-webpki 0.102 is pulled in only by rumqttc, which uses it for an
+# error enum type. Actual verification goes through rustls 0.23 and
+# rustls-webpki 0.103, which is fixed. Drop these once rumqttc moves to
+# webpki 0.103+.
+ignore = [
+    "RUSTSEC-2026-0049",
+    "RUSTSEC-2026-0098",
+    "RUSTSEC-2026-0099",
+    "RUSTSEC-2026-0104",
+]
