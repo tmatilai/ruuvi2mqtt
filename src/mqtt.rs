@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use std::sync::Arc;
 
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, bail};
 use rumqttc::tokio_rustls::rustls::client::danger::{
     HandshakeSignatureValid, ServerCertVerified, ServerCertVerifier,
 };
@@ -81,11 +81,11 @@ impl Mqtt {
                 })
             } else {
                 let native_certs = rustls_native_certs::load_native_certs();
-                if !native_certs.errors.is_empty() {
-                    return Err(anyhow::anyhow!(
-                        "Failed to load platform TLS certificates: {:?}",
-                        native_certs.errors
-                    ));
+                for err in &native_certs.errors {
+                    log::warn!("Failed to load a platform TLS certificate: {err}");
+                }
+                if native_certs.certs.is_empty() {
+                    bail!("No platform TLS certificates found");
                 }
                 let mut root_cert_store = RootCertStore::empty();
                 for cert in native_certs.certs {
@@ -108,7 +108,13 @@ impl Mqtt {
         let client = self.client.clone();
         tokio::spawn(async move {
             log::debug!("Publishing: {} -> {:?}", device.topic, device);
-            let payload = serde_json::to_vec(&device).unwrap();
+            let payload = match serde_json::to_vec(&device) {
+                Ok(payload) => payload,
+                Err(err) => {
+                    log::error!("Failed to serialize device: {err}");
+                    return;
+                }
+            };
             match client
                 .publish(device.topic, QoS::AtLeastOnce, true, payload)
                 .await
@@ -125,7 +131,13 @@ impl Mqtt {
     /// reconnect.
     pub fn publish_sensor_data(&mut self, data: SensorData) {
         log::debug!("Publishing: {} -> {:?}", data.topic, data);
-        let payload = serde_json::to_vec(&data).unwrap();
+        let payload = match serde_json::to_vec(&data) {
+            Ok(payload) => payload,
+            Err(err) => {
+                log::error!("Failed to serialize sensor data: {err}");
+                return;
+            }
+        };
         match self
             .client
             .try_publish(data.topic, QoS::AtLeastOnce, false, payload)

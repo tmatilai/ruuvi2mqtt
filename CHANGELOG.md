@@ -8,6 +8,7 @@
 - Exit with an error if the BLE event stream ends (e.g. BlueZ restart), instead of running idle.
 - Fix data format 3 tags logging `BDAddr not found` on every advertisement; use the advertiser address when the payload has no MAC.
 - Drop sensor readings instead of queueing them when the broker is unreachable, to avoid unbounded memory growth and a flood of stale readings on reconnect.
+- Only fail startup when no platform TLS certificates are found; warn about individual load errors.
 
 ### ruuvi2mqtt-esp32
 
