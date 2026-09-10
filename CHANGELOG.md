@@ -23,6 +23,8 @@
 - Wait for the MQTT connection and for publish acknowledgements before deep sleep. Readings were lost when the broker connected slower than the BLE scan.
 - Report a failed BLE scan in the `error` field of the diagnostics message.
 - Validate the compile-time configuration at build time (Wi-Fi credential lengths, static IP addresses, durations, LED GPIO) instead of panicking on the device.
+- Warn about `MQTT_TLS_INSECURE` only when TLS is enabled, and about `MQTT_CA_FILE` when it is not.
+- Log failures when setting the hostname or writing the Wi-Fi cache.
 
 ## 1.4.0 / 2026-04-15
 

@@ -28,7 +28,14 @@ pub fn connect(
 
     let hostname = CString::new(config::DEVICE_HOSTNAME)
         .expect("ESP32_DEVICE_HOSTNAME contains an unexpected null byte");
-    unsafe { sys::esp_netif_set_hostname(esp_wifi.sta_netif().handle(), hostname.as_ptr()) };
+    if let Err(e) = unsafe {
+        sys::esp!(sys::esp_netif_set_hostname(
+            esp_wifi.sta_netif().handle(),
+            hostname.as_ptr()
+        ))
+    } {
+        log::warn!("Could not set hostname: {e}");
+    }
 
     // ── Static IP ────────────────────────────────────────────────────────────
     if let Some(ip) = config::WIFI_IP {
@@ -100,7 +107,7 @@ pub fn connect(
     info!("Connected to Wi-Fi as '{}'", config::DEVICE_HOSTNAME);
 
     // ── Update NVS cache ─────────────────────────────────────────────────────
-    update_wifi_cache();
+    update_wifi_cache(cached.as_ref());
 
     Ok(wifi)
 }
@@ -197,7 +204,7 @@ fn load_wifi_cache() -> Option<WifiCache> {
 }
 
 /// Read current AP info and update NVS cache if channel or BSSID changed.
-fn update_wifi_cache() {
+fn update_wifi_cache(cached: Option<&WifiCache>) {
     unsafe {
         let mut ap_info: sys::wifi_ap_record_t = std::mem::zeroed();
         if sys::esp_wifi_sta_get_ap_info(&raw mut ap_info) != sys::ESP_OK {
@@ -208,8 +215,7 @@ fn update_wifi_cache() {
         let channel = ap_info.primary;
         let bssid = ap_info.bssid;
 
-        // Check if cache is already up to date.
-        if let Some(cached) = load_wifi_cache() {
+        if let Some(cached) = cached {
             if cached.channel == channel && cached.bssid == bssid {
                 return;
             }
@@ -226,14 +232,24 @@ fn update_wifi_cache() {
             return;
         }
 
-        sys::nvs_set_u8(handle, c"channel".as_ptr(), channel);
-        sys::nvs_set_blob(handle, c"bssid".as_ptr(), bssid.as_ptr().cast(), 6);
-        sys::nvs_commit(handle);
+        let result = sys::esp!(sys::nvs_set_u8(handle, c"channel".as_ptr(), channel))
+            .and_then(|()| {
+                sys::esp!(sys::nvs_set_blob(
+                    handle,
+                    c"bssid".as_ptr(),
+                    bssid.as_ptr().cast(),
+                    6
+                ))
+            })
+            .and_then(|()| sys::esp!(sys::nvs_commit(handle)));
         sys::nvs_close(handle);
 
-        info!(
-            "WiFi cache updated: channel {channel}, BSSID {}",
-            Mac::from(bssid),
-        );
+        match result {
+            Ok(()) => info!(
+                "WiFi cache updated: channel {channel}, BSSID {}",
+                Mac::from(bssid),
+            ),
+            Err(e) => log::warn!("Could not write WiFi cache: {e}"),
+        }
     }
 }
