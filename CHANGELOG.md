@@ -7,6 +7,7 @@
 ### ruuvi2mqtt-esp32
 
 - Publish diagnostic information to MQTT.
+- Fix the build script not re-running when `MQTT_CA_FILE` is set or unset, which could embed a stale CA certificate.
 
 ## 1.4.0 / 2026-04-15
 
