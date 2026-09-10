@@ -6,12 +6,14 @@ on:
       - "v*"
   workflow_dispatch: {}
 
+permissions: {}
+
 jobs:
   build:
     name: Build binaries
     permissions:
       contents: read
-      packages: write
+      packages: read
     strategy:
       fail-fast: false
       matrix:
@@ -30,44 +32,38 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - name: Setup | Checkout
-        uses: actions/checkout@v7.0.1
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Setup | Rust
         uses: dtolnay/rust-toolchain@d1031067263f94b142dd6c0ce24c5eb9d02d52a0
         with:
           toolchain: stable
 
-      - name: Setup | Cache
-        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
-        with:
-          shared-key: ${{ matrix.target }}-${{ matrix.os }}-${{ env.PROFILE }}-build
-
       - name: Setup | Cross
         run: |
           cargo install --bins cross
 
       - name: Setup | Log in to the Container registry
-        uses: docker/login-action@v4.6.0
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Setup | Set build options
-        if: env.RELEASE == 'true'
-        run: |
-          echo 'RELEASE_FLAG=--release' >> $GITHUB_ENV
-
       - name: Build
-        run: cross build --verbose ${{ env.RELEASE_FLAG }} --target ${{ matrix.target }}
+        run: |
+          if [[ "$RELEASE" == 'true' ]]; then set -- --release; fi
+          cross build --verbose "$@" --target ${{ matrix.target }}
 
       - name: Prepare artifact
         run: |
           mkdir -p 'binaries/${{ matrix.target }}'
-          cp target/${{ matrix.target }}/${{ ENV.PROFILE }}/ruuvi2mqtt binaries/${{ matrix.target }}/
+          cp target/${{ matrix.target }}/"$PROFILE"/ruuvi2mqtt binaries/${{ matrix.target }}/
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v7.0.1
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: binaries-${{ matrix.target }}
           path: binaries
@@ -87,10 +83,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Setup | Checkout
-        uses: actions/checkout@v7.0.1
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Setup | Download artifacts
-        uses: actions/download-artifact@v8.0.1
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           pattern: binaries-*
           path: binaries
@@ -105,26 +103,26 @@ jobs:
           ln -s ../../x86_64-unknown-linux-musl/ruuvi2mqtt binaries/linux/amd64/
 
       - name: Setup | Log in to the Container registry
-        uses: docker/login-action@v4.6.0
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Setup | Docker QEMU
-        uses: docker/setup-qemu-action@v4.2.0
+        uses: docker/setup-qemu-action@96fe6ef7f33517b61c61be40b68a1882f3264fb8 # v4.2.0
 
       - name: Setup | Docker Buildx
-        uses: docker/setup-buildx-action@v4.3.0
+        uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4.3.0
 
       - name: Extract metadata (tags, labels) for Docker
         id: meta
-        uses: docker/metadata-action@v6.2.0
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
 
       - name: Build and push Docker image
-        uses: docker/build-push-action@v7.3.0
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
         with:
           context: .
           platforms: ${{ env.PLATFORMS }}
@@ -141,7 +139,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Setup | Download artifacts
-        uses: actions/download-artifact@v8.0.1
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           pattern: binaries-*
           path: binaries
@@ -154,9 +152,8 @@ jobs:
             tar -czf tarballs/$(basename $target).tar.gz -C $target .
           done
 
-      - name: Create a Release
-        uses: ncipollo/release-action@339a81892b84b4eeb0f6e744e4574d79d0d9b8dd # v1.21.0
-        with:
-          draft: true
-          artifacts: tarballs/*
-          artifactErrorsFailBuild: true
+      - name: Create a draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: gh release create "$GITHUB_REF_NAME" --draft --verify-tag tarballs/*

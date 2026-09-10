@@ -5,6 +5,10 @@ on:
     branches: ["main"]
   pull_request:
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 permissions:
   contents: read
 
@@ -14,7 +18,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Setup | Checkout
-        uses: actions/checkout@v7.0.1
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Setup | Rust
         uses: dtolnay/rust-toolchain@d1031067263f94b142dd6c0ce24c5eb9d02d52a0
@@ -33,7 +39,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Setup | Checkout
-        uses: actions/checkout@v7.0.1
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Setup | Rust
         uses: dtolnay/rust-toolchain@d1031067263f94b142dd6c0ce24c5eb9d02d52a0
@@ -56,7 +64,9 @@ jobs:
       MQTT_SERVER: dummy
     steps:
       - name: Setup | Checkout
-        uses: actions/checkout@v7.0.1
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Setup | Rust
         uses: dtolnay/rust-toolchain@d1031067263f94b142dd6c0ce24c5eb9d02d52a0
@@ -86,7 +96,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Setup | Checkout
-        uses: actions/checkout@v7.0.1
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Setup | Rust
         uses: dtolnay/rust-toolchain@d1031067263f94b142dd6c0ce24c5eb9d02d52a0
@@ -105,7 +117,9 @@ jobs:
       MQTT_SERVER: dummy
     steps:
       - name: Setup | Checkout
-        uses: actions/checkout@v7.0.1
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Setup | Rust
         uses: dtolnay/rust-toolchain@d1031067263f94b142dd6c0ce24c5eb9d02d52a0
@@ -153,7 +167,9 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - name: Setup | Checkout
-        uses: actions/checkout@v7.0.1
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Setup | Rust
         uses: dtolnay/rust-toolchain@d1031067263f94b142dd6c0ce24c5eb9d02d52a0
@@ -169,7 +185,7 @@ jobs:
         if: env.USE_CROSS == 'true'
         run: |
           cargo install --bins cross
-          echo "CARGO=cross" >> $GITHUB_ENV
+          echo "CARGO=cross" >> "$GITHUB_ENV"
 
       - name: Setup | Install build dependencies
         if: env.USE_CROSS == 'false'
@@ -182,20 +198,34 @@ jobs:
 
       - name: Setup | Log in to the Container registry
         if: env.USE_CROSS == 'true'
-        uses: docker/login-action@v4.6.0
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Run check
-        run: ${{ env.CARGO }} check --target ${{ matrix.target }}
+        run: $CARGO check --target ${{ matrix.target }}
 
       - name: Run tests
-        run: ${{ env.CARGO }} test --verbose --target ${{ matrix.target }} --bin ruuvi2mqtt
+        run: $CARGO test --verbose --target ${{ matrix.target }} --bin ruuvi2mqtt
 
       - name: Run CLI tests
         # trycmd doesn't support cross runners yet:
         # https://github.com/assert-rs/snapbox/issues/51
         if: env.USE_CROSS == 'false'
-        run: ${{ env.CARGO }} test --verbose --target ${{ matrix.target }} --test cli_tests
+        run: $CARGO test --verbose --target ${{ matrix.target }} --test cli_tests
+
+  zizmor:
+    name: Zizmor
+    runs-on: ubuntu-latest
+    steps:
+      - name: Setup | Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Run zizmor
+        uses: zizmorcore/zizmor-action@cc914d7f3750a2d13d75c7f184a1060aa0e9d482 # v0.6.4
+        with:
+          advanced-security: false
