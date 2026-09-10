@@ -16,9 +16,12 @@
 
   packageRules: [
     {
-      // Bump versions in Cargo.toml as well, not only in Cargo.lock.
+      // Pin exact versions in Cargo.toml. With ranges, Renovate runs a plain
+      // `cargo update` after editing Cargo.toml, which resolves to the newest
+      // release even when that is still within minimumReleaseAge, and then
+      // refuses the result. See renovatebot/renovate#41624.
       matchManagers: ['cargo'],
-      rangeStrategy: 'bump',
+      rangeStrategy: 'pin',
     },
     {
       matchManagers: ['cargo'],
