@@ -43,7 +43,7 @@ jobs:
 
       - name: Setup | Cross
         run: |
-          cargo install --bins cross
+          cargo install --bins cross@0.2.5
 
       - name: Setup | Log in to the Container registry
         uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
