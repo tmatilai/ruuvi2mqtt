@@ -180,3 +180,75 @@ pub const LOG_LEVEL: &str = match option_env_non_empty!("LOG_LEVEL") {
     Some(v) => v,
     None => "info",
 };
+
+// ---------------------------------------------------------------------------
+// Validation
+// ---------------------------------------------------------------------------
+// Invalid values fail the build here instead of panicking on the device.
+
+const _: () = assert!(WIFI_SSID.len() <= 32, "WIFI_SSID is longer than 32 bytes");
+const _: () = assert!(WIFI_PASS.len() <= 64, "WIFI_PASS is longer than 64 bytes");
+const _: () = assert!(
+    WIFI_IP.is_none() || WIFI_GATEWAY.is_some(),
+    "WIFI_GATEWAY must be set when WIFI_IP is set"
+);
+const _: () = assert!(
+    is_ip4_or_unset(WIFI_IP),
+    "WIFI_IP is not a valid IPv4 address"
+);
+const _: () = assert!(
+    is_ip4_or_unset(WIFI_GATEWAY),
+    "WIFI_GATEWAY is not a valid IPv4 address"
+);
+const _: () = assert!(
+    is_ip4_or_unset(WIFI_NETMASK),
+    "WIFI_NETMASK is not a valid IPv4 address"
+);
+const _: () = assert!(
+    is_ip4_or_unset(WIFI_DNS),
+    "WIFI_DNS is not a valid IPv4 address"
+);
+const _: () = assert!(
+    BLE_SCAN_DURATION > 0 && BLE_SCAN_DURATION <= i32::MAX / 1000,
+    "BLE_SCAN_DURATION must be positive (seconds)"
+);
+const _: () = assert!(
+    BLE_SLEEP_DURATION > 0,
+    "BLE_SLEEP_DURATION must be positive (seconds)"
+);
+const _: () = assert!(
+    LED_GPIO < esp_idf_svc::sys::gpio_num_t_GPIO_NUM_MAX as u32,
+    "LED_GPIO is not a valid GPIO number for this chip"
+);
+
+/// True when `v` is unset or a dotted-decimal IPv4 address.
+const fn is_ip4_or_unset(v: Option<&str>) -> bool {
+    let Some(s) = v else { return true };
+    let bytes = s.as_bytes();
+    let mut i = 0;
+    let mut dots = 0;
+    let mut digits = 0;
+    let mut octet: u32 = 0;
+    while i < bytes.len() {
+        match bytes[i] {
+            b'0'..=b'9' => {
+                digits += 1;
+                octet = octet * 10 + (bytes[i] - b'0') as u32;
+                if digits > 3 || octet > 255 {
+                    return false;
+                }
+            }
+            b'.' => {
+                if digits == 0 {
+                    return false;
+                }
+                dots += 1;
+                digits = 0;
+                octet = 0;
+            }
+            _ => return false,
+        }
+        i += 1;
+    }
+    dots == 3 && digits > 0
+}
