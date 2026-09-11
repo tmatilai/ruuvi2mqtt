@@ -1,29 +1,36 @@
-## _Not released yet_
+## 1.5.0 / 2026-09-11
 
 ### ruuvi2mqtt
 
-- Fix panicking in a background task if BLE peripheral properties are missing.
-- Rename the example configuration to `ruuvi2mqtt.yaml.example` and git-ignore local `ruuvi2mqtt*.yaml` files.
-- Warn if the configuration file is readable by other users.
-- Exit with an error if the BLE event stream ends (e.g. BlueZ restart), instead of running idle.
-- Fix data format 3 tags logging `BDAddr not found` on every advertisement; use the advertiser address when the payload has no MAC.
-- Drop sensor readings instead of queueing them when the broker is unreachable, to avoid unbounded memory growth and a flood of stale readings on reconnect.
-- Only fail startup when no platform TLS certificates are found; warn about individual load errors.
-- Validate `mqtt.base_topic`: reject wildcards and a leading `$`, and trim a trailing `/`.
-- Add a CA certificate store to the Docker image, so `tls: true` works without `ca_file`.
-- Replace the archived `serde_yaml` crate with its fork `serde_norway`.
+#### Features
+
 - Run the Docker image as an unprivileged user (uid 65534); the mounted configuration file must be readable by it.
+- Add a CA certificate store to the Docker image, so `tls: true` works without `ca_file`.
+- Validate `mqtt.base_topic`: reject wildcards and a leading `$`, and trim a trailing `/`.
+- Warn if the configuration file is readable by other users.
+- Rename the example configuration to `ruuvi2mqtt.yaml.example`.
+
+#### Fixes
+
+- Exit with an error if the BLE event stream ends (e.g. BlueZ restart), instead of running idle.
+- Drop sensor readings instead of queueing them when the broker is unreachable, to avoid unbounded memory growth and a flood of stale readings on reconnect.
+- Fix panicking in a background task if BLE peripheral properties are missing.
+- Only fail startup when no platform TLS certificates are found; warn about individual load errors.
+- Fix data format 3 tags logging `BDAddr not found` on every advertisement; use the advertiser address when the payload has no MAC.
 
 ### ruuvi2mqtt-esp32
 
-- Publish diagnostic information to MQTT.
-- Deep sleep instead of boot looping after a panic or watchdog reset, which used to drain the battery.
-- Fix the build script not re-running when `MQTT_CA_FILE` is set or unset, which could embed a stale CA certificate.
-- Skip the cycle and sleep 4x longer after a brownout reset, instead of boot looping on a weak battery.
-- Add a hard timeout for the whole cycle. The task watchdog does not catch a blocked Wi-Fi or MQTT wait.
-- Wait for the MQTT connection and for publish acknowledgements before deep sleep. Readings were lost when the broker connected slower than the BLE scan.
-- Report a failed BLE scan in the `error` field of the diagnostics message.
+#### Features
+
+- Publish diagnostic information to MQTT, including the reason for a failed BLE scan in the `error` field.
 - Validate the compile-time configuration at build time (Wi-Fi credential lengths, static IP addresses, durations, LED GPIO) instead of panicking on the device.
+
+#### Fixes
+
+- Deep sleep instead of boot looping after a panic, watchdog, or brownout reset, which used to drain the battery. After a brownout the sleep is 4x longer, to let a weak battery recover.
+- Wait for the MQTT connection and for publish acknowledgements before deep sleep. Readings were lost when the broker connected slower than the BLE scan.
+- Add a hard timeout for the whole cycle. The task watchdog does not catch a blocked Wi-Fi or MQTT wait.
+- Fix the build script not re-running when `MQTT_CA_FILE` is set or unset, which could embed a stale CA certificate.
 - Warn about `MQTT_TLS_INSECURE` only when TLS is enabled, and about `MQTT_CA_FILE` when it is not.
 - Log failures when setting the hostname or writing the Wi-Fi cache.
 
