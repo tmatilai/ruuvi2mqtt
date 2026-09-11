@@ -1,16 +1,51 @@
 name: Release
 
+# A release commit sets the crate version to one without the -dev suffix.
+# Merging it to main tags, builds and publishes the release, and opens the
+# PR for the next dev cycle. A manual dispatch builds a debug image tagged
+# after the branch.
 on:
   push:
-    tags:
-      - "v*"
+    branches: ["main"]
   workflow_dispatch: {}
 
 permissions: {}
 
+concurrency: release
+
 jobs:
+  check:
+    name: Check for a release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      version: ${{ steps.check.outputs.version }}
+    steps:
+      - name: Setup | Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Check for an unreleased version
+        id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          script/check-version
+          version="$(awk -F'"' '/^version = / { print $2; exit }' Cargo.toml)"
+          if [[ "$version" == *-dev ]]; then
+              echo "Development version $version, nothing to release"
+          elif gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/v$version" --silent 2>/dev/null; then
+              echo "Tag v$version already exists"
+          else
+              echo "version=$version" >> "$GITHUB_OUTPUT"
+          fi
+
   build:
     name: Build binaries
+    needs: check
+    if: needs.check.outputs.version || github.event_name == 'workflow_dispatch'
     permissions:
       contents: read
       packages: read
@@ -26,8 +61,8 @@ jobs:
           - x86_64-unknown-linux-musl
         os: [ubuntu-latest]
     env:
-      RELEASE: ${{ startsWith(github.ref, 'refs/tags/v') }}
-      PROFILE: ${{ startsWith(github.ref, 'refs/tags/v') && 'release' || 'debug' }}
+      RELEASE: ${{ needs.check.outputs.version != '' }}
+      PROFILE: ${{ needs.check.outputs.version && 'release' || 'debug' }}
       MUSL: ${{ contains(matrix.target, '-unknown-linux-musl') }}
     runs-on: ${{ matrix.os }}
     steps:
@@ -72,7 +107,9 @@ jobs:
 
   docker:
     name: Build and push Docker images
-    needs: build
+    needs: [check, build]
+    # Requires manual approval before anything is published
+    environment: release
     permissions:
       contents: read
       packages: write
@@ -120,6 +157,10 @@ jobs:
         uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=raw,value=v${{ needs.check.outputs.version }},enable=${{ needs.check.outputs.version != '' }}
+            type=raw,value=latest,enable=${{ needs.check.outputs.version != '' }}
+            type=ref,event=branch,enable=${{ needs.check.outputs.version == '' }}
 
       - name: Build and push Docker image
         uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
@@ -132,12 +173,19 @@ jobs:
 
   gh-release:
     name: Make a GitHub release
-    if: startsWith(github.ref, 'refs/tags/v')
-    needs: build
+    needs: [check, docker]
+    if: needs.check.outputs.version
     permissions:
       contents: write
     runs-on: ubuntu-latest
+    env:
+      VERSION: ${{ needs.check.outputs.version }}
     steps:
+      - name: Setup | Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
       - name: Setup | Download artifacts
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
@@ -152,8 +200,81 @@ jobs:
             tar -czf tarballs/$(basename $target).tar.gz -C $target .
           done
 
-      - name: Create a draft release
+      - name: Create the tag and the GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
-        run: gh release create "$GITHUB_REF_NAME" --draft --verify-tag tarballs/*
+        run: |
+          notes="$(awk -v heading="## $VERSION /" '
+              index($0, heading) == 1 { found = 1; next }
+              /^## / { found = 0 }
+              found
+          ' CHANGELOG.md)"
+          if ! grep -q '[^[:space:]]' <<< "$notes"; then
+              echo "No changelog entry for $VERSION" >&2
+              exit 1
+          fi
+          gh release create "v$VERSION" --title "v$VERSION" --notes "$notes" --target "$GITHUB_SHA" tarballs/*
+
+  bump:
+    name: Start the next dev cycle
+    needs: [check, gh-release]
+    permissions:
+      contents: read
+    runs-on: ubuntu-latest
+    env:
+      VERSION: ${{ needs.check.outputs.version }}
+    steps:
+      - name: Setup | Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # The app token makes CI run on the PR; GITHUB_TOKEN does not trigger workflows
+      - name: Generate token
+        id: generate-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          client-id: ${{ vars.APP_CLIENT_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          permission-contents: write
+          permission-pull-requests: write
+
+      # Committed through the API so that GitHub signs it, and as a PR
+      # because main requires the status checks
+      - name: Open the pull request
+        env:
+          GH_TOKEN: ${{ steps.generate-token.outputs.token }}
+        run: |
+          next="$(awk -F. '{ print $1 "." $2 "." $3 + 1 }' <<< "$VERSION")"
+          script/bump "$next"
+          branch='next-dev-cycle'
+          gh api "repos/$GITHUB_REPOSITORY/git/refs" --silent -f ref="refs/heads/$branch" -f sha="$GITHUB_SHA"
+          jq -n \
+            --arg repo "$GITHUB_REPOSITORY" \
+            --arg branch "$branch" \
+            --arg oid "$GITHUB_SHA" \
+            --rawfile changelog CHANGELOG.md \
+            --rawfile toml Cargo.toml \
+            --rawfile lock Cargo.lock \
+            --rawfile esp32_toml ruuvi2mqtt-esp32/Cargo.toml \
+            --rawfile esp32_lock ruuvi2mqtt-esp32/Cargo.lock \
+            '{
+              query: "mutation($input: CreateCommitOnBranchInput!) { createCommitOnBranch(input: $input) { commit { oid } } }",
+              variables: {input: {
+                branch: {repositoryNameWithOwner: $repo, branchName: $branch},
+                expectedHeadOid: $oid,
+                message: {headline: "Start the next dev cycle"},
+                fileChanges: {additions: [
+                  {path: "CHANGELOG.md", contents: ($changelog | @base64)},
+                  {path: "Cargo.toml", contents: ($toml | @base64)},
+                  {path: "Cargo.lock", contents: ($lock | @base64)},
+                  {path: "ruuvi2mqtt-esp32/Cargo.toml", contents: ($esp32_toml | @base64)},
+                  {path: "ruuvi2mqtt-esp32/Cargo.lock", contents: ($esp32_lock | @base64)}
+                ]}
+              }}
+            }' > commit.json
+          gh api graphql --silent --input commit.json
+          gh pr create --base main --head "$branch" \
+            --title "Start the next dev cycle" \
+            --body "Bump to $next-dev after releasing v$VERSION."
+          gh pr merge --auto --squash "$branch"

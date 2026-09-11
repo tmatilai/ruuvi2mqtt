@@ -15,7 +15,8 @@ help: ## Display this help
 all: local $(ARCHS) ## Lint and build all architectures
 
 .PHONY: lint
-lint: ## Format and lint
+lint: ## Check the version, format and lint
+	script/check-version
 	cargo fmt --all
 	cargo clippy --tests --all-targets --all-features -- -D clippy::all -W clippy::pedantic
 
@@ -39,3 +40,7 @@ setup: ## Install the tools for the Linux app and the ESP32 firmware
 .PHONY: $(ARCHS)
 $(ARCHS): ## Build for the specified architecture
 	cross build --target $(TARGET_ARCH_$@)
+
+.PHONY: release
+release: ## Prepare the release PR: make release VERSION=1.2.3
+	script/release $(VERSION)

@@ -1,0 +1,54 @@
+#!/usr/bin/env bash
+# Check that the version agrees in both crates, their lockfiles, CHANGELOG.md and README.md.
+
+set -eu -o pipefail
+
+cd "$(dirname "$0")/.."
+
+toml_version() { # <Cargo.toml>
+    awk -F'"' '/^version = / { print $2; exit }' "$1"
+}
+lock_version() { # <Cargo.lock> <crate>
+    awk -F'"' -v name="$2" '
+        $0 == "name = \"" name "\"" { found = 1; next }
+        found && /^version = / { print $2; exit }
+    ' "$1"
+}
+
+version="$(toml_version Cargo.toml)"
+esp32_version="$(toml_version ruuvi2mqtt-esp32/Cargo.toml)"
+lock_version="$(lock_version Cargo.lock ruuvi2mqtt)"
+esp32_lock_version="$(lock_version ruuvi2mqtt-esp32/Cargo.lock ruuvi2mqtt-esp32)"
+heading="$(awk '/^## / { print; exit }' CHANGELOG.md)"
+released_version="$(awk '/^## [0-9.]+ \/ [0-9][0-9][0-9][0-9]-/ { print $2; exit }' CHANGELOG.md)"
+readme_version="$(awk '/ghcr\.io\/tmatilai\/ruuvi2mqtt:v/ {
+    sub(/.*ruuvi2mqtt:v/, ""); sub(/[^0-9.].*/, ""); print; exit
+}' README.md)"
+
+status=0
+fail() {
+    echo "check-version: $*" >&2
+    status=1
+}
+
+[[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-dev)?$ ]] ||
+    fail "invalid version in Cargo.toml: $version"
+[[ "$version" == "$esp32_version" ]] ||
+    fail "ruuvi2mqtt is $version but ruuvi2mqtt-esp32 is $esp32_version"
+[[ "$version" == "$lock_version" ]] ||
+    fail "Cargo.toml has $version but Cargo.lock has $lock_version"
+[[ "$esp32_version" == "$esp32_lock_version" ]] ||
+    fail "ruuvi2mqtt-esp32/Cargo.toml has $esp32_version but its Cargo.lock has $esp32_lock_version"
+
+if [[ "$version" == *-dev ]]; then
+    [[ "$heading" == '## _Not released yet_' ]] ||
+        fail "development version $version but the changelog heading is: $heading"
+else
+    [[ "$heading" =~ ^"## $version / "[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]] ||
+        fail "release version $version but the changelog heading is: $heading"
+fi
+
+[[ "$readme_version" == "$released_version" ]] ||
+    fail "README refers to v$readme_version but the latest released version is $released_version"
+
+exit "$status"

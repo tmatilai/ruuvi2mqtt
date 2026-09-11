@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+# Set the crate version in both Cargo.toml and Cargo.lock files.
+# Usage: script/set-version <version>
+
+set -eu -o pipefail
+
+cd "$(dirname "$0")/.."
+
+version="${1:-}"
+if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-dev)?$ ]]; then
+    echo "usage: script/set-version <version>" >&2
+    exit 1
+fi
+
+# The first `version =` line is the [package] one
+set_toml() { # <Cargo.toml>
+    awk -v v="$version" '
+        !done && /^version = / { print "version = \"" v "\""; done = 1; next }
+        { print }
+    ' "$1" > "$1.new" && mv "$1.new" "$1"
+}
+
+# Edited directly: `cargo update` would also rewrite the lockfile format
+# to whatever the local toolchain prefers.
+set_lock() { # <Cargo.lock> <crate>
+    awk -v v="$version" -v name="$2" '
+        $0 == "name = \"" name "\"" { found = 1 }
+        found && /^version = / { print "version = \"" v "\""; found = 0; next }
+        { print }
+    ' "$1" > "$1.new" && mv "$1.new" "$1"
+}
+
+set_toml Cargo.toml
+set_lock Cargo.lock ruuvi2mqtt
+set_toml ruuvi2mqtt-esp32/Cargo.toml
+set_lock ruuvi2mqtt-esp32/Cargo.lock ruuvi2mqtt-esp32

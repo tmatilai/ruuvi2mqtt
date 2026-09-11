@@ -1,0 +1,43 @@
+#!/usr/bin/env bash
+# Prepare a release: set the version everywhere, test, commit and open the PR.
+# Usage: script/release <version>
+
+set -eu -o pipefail
+
+cd "$(dirname "$0")/.."
+
+version="${1:-}"
+if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+    echo "usage: script/release <version>" >&2
+    exit 1
+fi
+
+if [[ "$(git branch --show-current)" != 'main' ]]; then
+    echo "release: not on main" >&2
+    exit 1
+fi
+# The changelog entry is usually polished right before the release, so let
+# those edits ride along in the release commit
+if [[ -n "$(git status --porcelain -- ':!CHANGELOG.md')" ]]; then
+    echo "release: working tree has changes outside CHANGELOG.md" >&2
+    exit 1
+fi
+
+git checkout -b "release-$version"
+
+script/set-version "$version"
+
+sed "s|\(ghcr\.io/tmatilai/ruuvi2mqtt:v\)[0-9][0-9.]*|\1$version|" README.md > README.new &&
+    mv README.new README.md
+
+awk -v heading="## $version / $(date +%Y-%m-%d)" '
+    !done && /^## / { print heading; done = 1; next }
+    { print }
+' CHANGELOG.md > CHANGELOG.new && mv CHANGELOG.new CHANGELOG.md
+
+script/check-version
+make test
+make -C ruuvi2mqtt-esp32 test
+
+git commit -am "Release v$version"
+gh pr create --fill
