@@ -34,6 +34,9 @@ jobs:
       - name: Run fmt (esp32)
         run: cargo fmt --manifest-path ruuvi2mqtt-esp32/Cargo.toml -- --check
 
+      - name: Check the version
+        run: script/check-version
+
   clippy:
     name: Clippy
     runs-on: ubuntu-latest

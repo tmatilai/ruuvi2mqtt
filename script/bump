@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+# Start a new development cycle: set <version>-dev and add the changelog placeholder.
+# Usage: script/bump <version>
+
+set -eu -o pipefail
+
+cd "$(dirname "$0")/.."
+
+version="${1:-}"
+if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+    echo "usage: script/bump <version>" >&2
+    exit 1
+fi
+
+script/set-version "$version-dev"
+
+{
+    printf '## _Not released yet_\n\n\n'
+    cat CHANGELOG.md
+} > CHANGELOG.new && mv CHANGELOG.new CHANGELOG.md
+
+script/check-version
+
+echo "Bumped to $version-dev, commit as 'Start the next dev cycle'"
