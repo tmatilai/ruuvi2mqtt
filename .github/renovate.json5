@@ -56,6 +56,15 @@
       addLabels: ['breaking-risk'],
     },
     {
+      // esp32-nimble depends on a single esp-idf-svc minor, so the two only
+      // resolve when bumped together. Keep the whole ESP-IDF crate stack in
+      // one PR, overriding the split above. Still labeled for the review.
+      matchManagers: ['cargo'],
+      matchDepNames: ['/^esp-idf-/', '/^esp32-/', 'embuild'],
+      groupName: 'ESP-IDF crates',
+      addLabels: ['breaking-risk'],
+    },
+    {
       // A new ESP-IDF major needs matching esp-idf-sys/esp-idf-svc support.
       // Show it on the dependency dashboard instead of opening a PR.
       matchDepNames: ['espressif/esp-idf'],
