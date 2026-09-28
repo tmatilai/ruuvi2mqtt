@@ -81,6 +81,11 @@ jobs:
                github_ci tools, or `gh run view <id> --log-failed`).
             2. Read the PR diff with `gh pr diff` and the relevant code in the
                checked-out repository (this is the base branch, not the PR branch).
+            3. If the error is inside a dependency, find the upstream commit
+               that caused it with `gh api repos/<owner>/<repo>/...` (commits,
+               compare, file contents at a tag). A change there may expect a
+               newer version of another dependency, such as ESP-IDF. Only use
+               `gh api` to read.
 
             Part B, if BREAKING CHANGE REVIEW is true: the update is a major
             version, or a 0.x minor which may break just as well. Look for
@@ -147,6 +152,7 @@ jobs:
               new APIs, unused features, the dependency's edition, or the CI
               result. Do not describe code that is not affected.
           claude_args: |
-            --model claude-sonnet-5
+            --model claude-opus-5-5
             --max-turns 40
-            --allowedTools "Read,Glob,Grep,Bash(gh pr diff:*),Bash(gh pr view:*),Bash(gh pr comment:*),Bash(gh run view:*),Bash(gh release list:*),Bash(gh release view:*),WebFetch(domain:github.com),WebFetch(domain:raw.githubusercontent.com),WebFetch(domain:crates.io),WebFetch(domain:docs.rs),mcp__github_ci__get_ci_status,mcp__github_ci__get_workflow_run_details,mcp__github_ci__download_job_log"
+            --allowedTools "Read,Glob,Grep,Bash(gh pr diff:*),Bash(gh pr view:*),Bash(gh pr comment:*),Bash(gh run view:*),Bash(gh release list:*),Bash(gh release view:*),Bash(gh api repos/*),WebFetch(domain:github.com),WebFetch(domain:raw.githubusercontent.com),WebFetch(domain:crates.io),WebFetch(domain:docs.rs),mcp__github_ci__get_ci_status,mcp__github_ci__get_workflow_run_details,mcp__github_ci__download_job_log"
+            --disallowedTools "Bash(gh api * -X*),Bash(gh api * --method*),Bash(gh api * -f*),Bash(gh api * -F*),Bash(gh api * --field*),Bash(gh api * --raw-field*),Bash(gh api * --input*)"
