@@ -6,13 +6,20 @@
     'helpers:pinGitHubActionDigests',
   ],
 
-  // Weekly on Friday afternoon, with a cooldown for fresh releases.
+  // Fridays and Saturdays only, with a cooldown for fresh releases.
+  // A tighter window didn't leave Renovate enough runs to open its PRs.
   timezone: 'Europe/Helsinki',
-  schedule: ['* 12-17 * * 5'],
-  minimumReleaseAge: '7 days',
+  schedule: ['* * * * 5,6'],
+  // Keep in sync with global-min-publish-age in .cargo/config.toml.
+  minimumReleaseAge: '3 days',
 
   // Refresh transitive deps in both Cargo.lock files.
-  lockFileMaintenance: { enabled: true },
+  lockFileMaintenance: {
+    enabled: true,
+    // Don't rebuild the PR while it waits out minimumReleaseAge. A rebuild
+    // can pull in fresh releases and restart the wait.
+    rebaseWhen: 'conflicted',
+  },
 
   packageRules: [
     {
@@ -47,6 +54,15 @@
       matchCurrentVersion: '/^0\\./',
       matchUpdateTypes: ['minor'],
       groupName: null,
+      addLabels: ['breaking-risk'],
+    },
+    {
+      // esp32-nimble depends on a single esp-idf-svc minor, so the two only
+      // resolve when bumped together. Keep the whole ESP-IDF crate stack in
+      // one PR, overriding the split above. Still labeled for the review.
+      matchManagers: ['cargo'],
+      matchDepNames: ['/^esp-idf-/', '/^esp32-/', 'embuild'],
+      groupName: 'ESP-IDF crates',
       addLabels: ['breaking-risk'],
     },
     {

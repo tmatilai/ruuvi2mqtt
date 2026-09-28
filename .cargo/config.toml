@@ -1,0 +1,6 @@
+# Skip crate versions newer than Renovate's minimumReleaseAge when resolving.
+# Renovate rebuilds Cargo.lock with plain `cargo update`, so this is what
+# enforces the cooldown for lock file maintenance. Lives at the repo root to
+# cover both crates. Needs Cargo 1.100+, older versions ignore it.
+[registry]
+global-min-publish-age = "3 days"
