@@ -57,12 +57,13 @@
       addLabels: ['breaking-risk'],
     },
     {
-      // esp32-nimble depends on a single esp-idf-svc minor, so the two only
-      // resolve when bumped together. Keep the whole ESP-IDF crate stack in
-      // one PR, overriding the split above. Still labeled for the review.
-      matchManagers: ['cargo'],
-      matchDepNames: ['/^esp-idf-/', '/^esp32-/', 'embuild'],
-      groupName: 'ESP-IDF crates',
+      // The ESP-IDF crates and ESP-IDF itself often only build together.
+      // esp32-nimble depends on a single esp-idf-svc minor, and new ESP-IDF
+      // releases change the C API that esp-idf-hal and esp32-nimble bind to.
+      // Keep them in one PR, overriding the split above. Still labeled for
+      // the review.
+      matchDepNames: ['/^esp-idf-/', '/^esp32-/', 'embuild', 'espressif/esp-idf'],
+      groupName: 'ESP-IDF',
       addLabels: ['breaking-risk'],
     },
     {
