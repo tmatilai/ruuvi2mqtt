@@ -6,9 +6,10 @@
     'helpers:pinGitHubActionDigests',
   ],
 
-  // Weekly on Friday afternoon, with a cooldown for fresh releases.
+  // Fridays and Saturdays only, with a cooldown for fresh releases.
+  // A tighter window didn't leave Renovate enough runs to open its PRs.
   timezone: 'Europe/Helsinki',
-  schedule: ['* 12-17 * * 5'],
+  schedule: ['* * * * 5,6'],
   // Keep in sync with global-min-publish-age in .cargo/config.toml.
   minimumReleaseAge: '3 days',
 
