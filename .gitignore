@@ -1,2 +1,5 @@
 target/
 /ruuvi2mqtt*.yaml
+# ESP-IDF component manager locks, one per chip. Renovate cannot update
+# them, and they go stale on every ESP-IDF bump.
+/ruuvi2mqtt-esp32/components_*.lock

@@ -77,10 +77,11 @@
 
   customManagers: [
     {
-      // ESP_IDF_VERSION = "v5.5.5" in ruuvi2mqtt-esp32/.cargo/config.toml
+      // ESP_IDF_VERSION = "v6.1" in ruuvi2mqtt-esp32/.cargo/config.toml.
+      // The first release of a minor has no patch part in its tag.
       customType: 'regex',
       managerFilePatterns: ['/^ruuvi2mqtt-esp32/\\.cargo/config\\.toml$/'],
-      matchStrings: ['ESP_IDF_VERSION\\s*=\\s*"(?<currentValue>v\\d+\\.\\d+\\.\\d+)"'],
+      matchStrings: ['ESP_IDF_VERSION\\s*=\\s*"(?<currentValue>v\\d+\\.\\d+(?:\\.\\d+)?)"'],
       depNameTemplate: 'espressif/esp-idf',
       datasourceTemplate: 'github-releases',
       versioningTemplate: 'semver-coerced',

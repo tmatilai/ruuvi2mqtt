@@ -30,3 +30,7 @@ konst = "=0.4.3"
 
 [build-dependencies]
 embuild = { version = "=0.33.5", features = ["espidf"] }
+
+# ESP-IDF 6.0 moved the MQTT client out of the core into a managed component.
+[[package.metadata.esp-idf-sys.extra_components]]
+remote_component = { name = "espressif/mqtt", version = "1.*" }
