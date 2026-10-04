@@ -82,7 +82,7 @@ help: ## Show this help
 # renovate: datasource=crate depName=espflash
 ESPFLASH_VERSION := 4.6.0
 # renovate: datasource=crate depName=espup
-ESPUP_VERSION := 0.17.1
+ESPUP_VERSION := 0.18.0
 # renovate: datasource=crate depName=ldproxy
 LDPROXY_VERSION := 0.3.5
 
