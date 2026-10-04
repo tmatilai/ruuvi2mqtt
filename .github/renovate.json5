@@ -50,8 +50,7 @@
     {
       // 0.x minor bumps may break too, so treat them like majors:
       // separate PRs instead of the groups above, and the review label.
-      matchManagers: ['cargo'],
-      matchCurrentVersion: '/^0\\./',
+      matchCurrentVersion: '/^v?0\\./',
       matchUpdateTypes: ['minor'],
       groupName: null,
       addLabels: ['breaking-risk'],
