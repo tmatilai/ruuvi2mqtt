@@ -2,5 +2,7 @@
 # RISC-V targets (ESP32-C6, ESP32-C3) need nightly for build-std support.
 # Xtensa targets (ESP32, ESP32-S3) require the Espressif fork: cargo +esp
 # Install with: cargo install espup && espup install
-channel = "nightly"
-components = ["rust-src"]
+# Pinned: a new nightly can break the build. Renovate bumps it.
+channel = "nightly-2026-10-09"
+profile = "minimal"
+components = ["rust-src", "clippy", "rustfmt"]
