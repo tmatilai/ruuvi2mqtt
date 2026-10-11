@@ -39,10 +39,7 @@ async fn main() -> Result<()> {
 
     let (tx, mut rx) = mpsc::channel(32);
     let mut mqtt = Mqtt::init(tx.clone(), &config.mqtt)?;
-    RuuviListener::new(tx, config.mqtt.throttle / 100)
-        .await?
-        .start()
-        .await?;
+    RuuviListener::new(tx).await?.start().await?;
 
     while let Some(event) = rx.recv().await {
         use Event::{BleStopped, MqttConnect, MqttDeviceUpdate, RuuviUpdate};

@@ -1,5 +1,12 @@
 ## _Not released yet_
 
+### ruuvi2mqtt
+
+#### Features
+
+- Pick the publish delay for each reading from its RSSI plus random jitter, so the instance closest to a tag usually publishes it. Instances no longer need different `mqtt.throttle` values to avoid duplicates.
+- Default `mqtt.throttle` to 60 seconds instead of a random 50–69 seconds. Use the same value on every instance.
+
 
 ## 1.5.1 / 2026-09-30
 

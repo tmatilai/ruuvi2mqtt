@@ -18,7 +18,11 @@ static IP can also be configured to skip DHCP.
 
 Unlike the Linux app, the ESP32 does **not** subscribe to MQTT for
 cross-gateway throttle coordination — each cycle simply publishes every sensor
-it heard during the scan window.
+it heard during the scan window. When Linux instances hear the same tags and
+their `throttle` is below the ESP32's full cycle (`BLE_SLEEP_DURATION` plus the
+awake time, ~67s with the defaults), those tags get two messages per cycle.
+That is harmless. To avoid it, set the `throttle` above the cycle; the Linux
+instances then fill in only when the ESP32 misses a tag.
 
 This firmware does **not** publish Home Assistant MQTT discovery config.
 At least one instance of the full [`ruuvi2mqtt`](/) Linux app must
