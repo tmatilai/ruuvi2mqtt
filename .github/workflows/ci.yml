@@ -72,10 +72,7 @@ jobs:
           persist-credentials: false
 
       - name: Setup | Rust
-        uses: dtolnay/rust-toolchain@d1031067263f94b142dd6c0ce24c5eb9d02d52a0
-        with:
-          toolchain: nightly
-          components: clippy, rust-src
+        run: cd ruuvi2mqtt-esp32 && rustup toolchain install
 
       - name: Setup | ldproxy
         run: cargo install ldproxy@0.3.5
@@ -125,10 +122,7 @@ jobs:
           persist-credentials: false
 
       - name: Setup | Rust
-        uses: dtolnay/rust-toolchain@d1031067263f94b142dd6c0ce24c5eb9d02d52a0
-        with:
-          toolchain: nightly
-          components: rust-src
+        run: cd ruuvi2mqtt-esp32 && rustup toolchain install
 
       - name: Setup | ldproxy
         run: cargo install ldproxy@0.3.5
