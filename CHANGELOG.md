@@ -7,6 +7,10 @@
 - Pick the publish delay for each reading from its RSSI plus random jitter, so the instance closest to a tag usually publishes it. Instances no longer need different `mqtt.throttle` values to avoid duplicates.
 - Default `mqtt.throttle` to 60 seconds instead of a random 50–69 seconds. Use the same value on every instance.
 
+#### Fixes
+
+- Read sensor data from BlueZ manufacturer data updates instead of RSSI updates. BlueZ after 5.86 sends RSSI updates only on changes of 8 dB or more, so most readings would be missed.
+
 
 ## 1.5.1 / 2026-09-30
 
