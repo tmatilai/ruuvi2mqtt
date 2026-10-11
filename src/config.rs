@@ -131,9 +131,8 @@ const fn is_readable_by_others(mode: u32) -> bool {
     mode & 0o044 != 0
 }
 
-fn default_mqtt_throttle() -> Duration {
-    let throttle = rand::rng().random_range(50..70);
-    Duration::new(throttle, 0)
+const fn default_mqtt_throttle() -> Duration {
+    Duration::from_mins(1)
 }
 
 fn default_mqtt_client_id() -> String {

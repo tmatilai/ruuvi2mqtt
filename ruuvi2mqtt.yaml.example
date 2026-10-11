@@ -14,7 +14,9 @@ mqtt:
   password: "changeme"
   #client_id: "ruuvi2mqtt_<hostname>"
   #base_topic: "ruuvi2mqtt"
-  throttle: 60
+  # Minimum seconds between publishes per tag, shared by all instances (default: 60)
+  # Use the same value on every instance. See README.md for ESP32 setups.
+  #throttle: 60
 
 devices:
   AA:12:BB:34:CC:56:

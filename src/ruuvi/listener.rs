@@ -2,23 +2,22 @@ use anyhow::{Context, Result};
 use btleplug::api::{Central, CentralEvent, Manager as _, Peripheral as _, ScanFilter};
 use btleplug::platform::{Adapter, Manager, Peripheral, PeripheralId};
 use futures::stream::StreamExt;
-use rand::RngExt;
 use ruuvi_sensor_protocol::{MacAddress, SensorValues};
 use tokio::time::{Duration, sleep};
 
 use crate::Event::{BleStopped, RuuviUpdate};
 use crate::EventSender;
 use crate::ruuvi::SensorData;
+use crate::ruuvi::delay::{publish_delay, random_jitter};
 
 #[derive(Clone)]
 pub struct RuuviListener {
     central: Adapter,
     tx: EventSender,
-    sleep: Duration,
 }
 
 impl RuuviListener {
-    pub async fn new(tx: EventSender, sleep: Duration) -> Result<Self> {
+    pub async fn new(tx: EventSender) -> Result<Self> {
         let manager = Manager::new().await?;
 
         // get the first bluetooth adapter
@@ -28,12 +27,7 @@ impl RuuviListener {
             .next()
             .context("No Bluetooth adapters found")?;
 
-        let sleep = if sleep.is_zero() {
-            Duration::from_millis(rand::rng().random_range(0..500))
-        } else {
-            sleep
-        };
-        Ok(Self { central, tx, sleep })
+        Ok(Self { central, tx })
     }
 
     pub async fn start(self) -> Result<()> {
@@ -73,17 +67,20 @@ impl RuuviListener {
             | CentralEvent::RssiUpdate { id, .. } => {
                 let peripheral = self.find_peripheral(&id).await?;
                 log::trace!("BLE Peripheral: {peripheral:?}");
-                if let Some(values) = Self::parse_data(&peripheral).await? {
+                if let Some((values, rssi)) = Self::parse_data(&peripheral).await? {
                     log::trace!("Ruuvi event: {values:?}");
                     // Only data format 5 carries the MAC in the payload.
                     // Older formats use the advertiser address.
                     let address = values
                         .mac_address()
                         .map_or_else(|| peripheral.address(), Into::into);
-                    let data = SensorData::new(address, values);
-                    // Sleep a bit to avoid multiple/simultaneus updates
-                    sleep(self.sleep).await;
-                    self.tx.send(RuuviUpdate(data)).await?;
+                    let delay = publish_delay(rssi, random_jitter());
+                    log::debug!(
+                        "Reading from [{address}]: RSSI {}, delay {} ms",
+                        rssi.map_or_else(|| "unknown".to_string(), |r| format!("{r} dBm")),
+                        delay.as_millis(),
+                    );
+                    send_delayed(&self.tx, SensorData::new(address, values), delay).await?;
                 }
             }
             _ => {}
@@ -98,13 +95,74 @@ impl RuuviListener {
             .context("Failed to find peripheral")
     }
 
-    async fn parse_data(peripheral: &Peripheral) -> Result<Option<SensorValues>> {
+    /// Returns the sensor values and the RSSI from the same properties
+    /// snapshot. btleplug always sets a discovery filter, so `BlueZ` up to
+    /// 5.86 updates the RSSI on every advertisement. Newer `BlueZ` updates it
+    /// only when it changes by 8 dB or more.
+    async fn parse_data(peripheral: &Peripheral) -> Result<Option<(SensorValues, Option<i16>)>> {
         let Some(properties) = peripheral.properties().await? else {
             return Ok(None);
         };
+        let rssi = properties.rssi;
         Ok(properties
             .manufacturer_data
             .into_iter()
-            .find_map(|(id, data)| SensorValues::from_manufacturer_specific_data(id, data).ok()))
+            .find_map(|(id, data)| SensorValues::from_manufacturer_specific_data(id, data).ok())
+            .map(|values| (values, rssi)))
+    }
+}
+
+/// The main loop checks the throttle only when the reading arrives, so a
+/// reading that waited is throttled if another instance published meanwhile.
+async fn send_delayed(tx: &EventSender, data: SensorData, delay: Duration) -> Result<()> {
+    sleep(delay).await;
+    tx.send(RuuviUpdate(data)).await?;
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashMap;
+
+    use tokio::sync::mpsc;
+
+    use super::*;
+    use crate::Event::MqttDeviceUpdate;
+    use crate::devices::{Devices, ThrottleResult};
+    use crate::ruuvi::BDAddr;
+
+    fn sensor(address: BDAddr) -> SensorData {
+        // Data format 3 has no MAC in the payload.
+        let payload = [3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+        let values = SensorValues::from_manufacturer_specific_data(0x0499, payload).unwrap();
+        SensorData::new(address, values)
+    }
+
+    #[tokio::test]
+    async fn reading_is_throttled_if_another_instance_publishes_during_delay() {
+        let address = BDAddr::from([1, 2, 3, 4, 5, 6]);
+        let mut devices = Devices::new(&HashMap::from([(address, "tag")]), Duration::from_mins(1));
+        let (tx, mut rx) = mpsc::channel(4);
+
+        let delayed = tokio::spawn({
+            let tx = tx.clone();
+            async move { send_delayed(&tx, sensor(address), Duration::from_millis(50)).await }
+        });
+        // Another instance's state message arrives while the reading waits.
+        tx.send(MqttDeviceUpdate(address)).await.unwrap();
+
+        // Handle events in arrival order, as main() does.
+        let Some(MqttDeviceUpdate(bdaddr)) = rx.recv().await else {
+            panic!("the reading arrived before the delay ended");
+        };
+        devices.mark_published(&bdaddr);
+        let Some(RuuviUpdate(data)) = rx.recv().await else {
+            panic!("expected the reading");
+        };
+        assert_eq!(
+            devices.should_publish(&data.bdaddr),
+            ThrottleResult::Throttle
+        );
+        delayed.await.unwrap().unwrap();
     }
 }
