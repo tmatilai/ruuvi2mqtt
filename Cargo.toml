@@ -6,6 +6,12 @@ license = "MIT"
 repository = "https://github.com/tmatilai/ruuvi2mqtt"
 edition = "2024"
 
+# The checker is the test bed's. The ESP32 firmware is a crate of its own,
+# with its own toolchain and lockfile.
+[workspace]
+members = ["checker"]
+exclude = ["ruuvi2mqtt-esp32"]
+
 [features]
 default = ["vendored"]
 vendored = ["dbus/vendored"]

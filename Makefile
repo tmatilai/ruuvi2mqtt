@@ -18,11 +18,11 @@ all: local $(ARCHS) ## Lint and build all architectures
 lint: ## Check the version, format and lint
 	script/check-version
 	cargo fmt --all
-	cargo clippy --tests --all-targets --all-features -- -D clippy::all -W clippy::pedantic
+	cargo clippy --workspace --tests --all-targets --all-features -- -D clippy::all -W clippy::pedantic
 
 .PHONY: test
 test: lint ## Lint and test
-	cargo test
+	cargo test --workspace
 
 .PHONY: local
 local: test ## Test and build locally
