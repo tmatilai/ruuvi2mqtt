@@ -41,6 +41,12 @@ docker run --name ruuvi2mqtt --rm \
 
 The container runs as uid 65534 (`nobody`), so the mounted configuration file must be readable by that user, e.g. `chown 65534 ruuvi2mqtt.yaml`. The host needs BlueZ 5.51 or newer for non-root D-Bus access; on older hosts add `--user 0`.
 
+### Status
+
+Each instance publishes a retained status message to `<base_topic>/status/<client_id>`.
+On connect it is `{"state":"online","version":"<version> (<commit>)"}`.
+When the connection drops, the broker replaces it with `{"state":"offline"}`.
+
 ### Multiple instances
 
 Several instances, and the [ESP32 firmware](./ruuvi2mqtt-esp32/), can hear the same tags.

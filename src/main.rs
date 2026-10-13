@@ -53,7 +53,8 @@ async fn main() -> Result<()> {
         log::trace!("Received event: {event:?}");
         match event {
             MqttConnect => {
-                log::info!("Connected to Mqtt. Publishing devices.");
+                log::info!("Connected to Mqtt. Publishing status and devices.");
+                mqtt.publish_status();
                 for device in homeassistant::Device::all(&config) {
                     mqtt.publish_device(device);
                 }
