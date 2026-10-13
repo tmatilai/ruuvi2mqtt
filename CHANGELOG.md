@@ -10,6 +10,8 @@
 #### Fixes
 
 - Read sensor data from BlueZ manufacturer data updates instead of RSSI updates. BlueZ after 5.86 sends RSSI updates only on changes of 8 dB or more, so most readings would be missed.
+- Start the throttle timer when publishing, not when the message comes back over MQTT. Two readings of a tag within one MQTT round trip were both published.
+- Skip the data BlueZ cached from an earlier scan at startup. It could be stale.
 
 
 ## 1.5.1 / 2026-09-30

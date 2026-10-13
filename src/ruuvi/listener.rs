@@ -1,7 +1,9 @@
 use std::collections::HashMap;
 
 use anyhow::{Context, Result};
-use btleplug::api::{Central, CentralEvent, Manager as _, Peripheral as _, ScanFilter};
+use btleplug::api::{
+    Central, CentralEvent, Manager as _, Peripheral as _, PeripheralProperties, ScanFilter,
+};
 use btleplug::platform::{Adapter, Manager, Peripheral, PeripheralId};
 use futures::stream::StreamExt;
 use ruuvi_sensor_protocol::{MacAddress, SensorValues};
@@ -65,6 +67,9 @@ impl RuuviListener {
     /// `BlueZ` reports a device's first advertisement with the device object
     /// (`DeviceDiscovered`), and later ones as `ManufacturerDataAdvertisement`
     /// when the payload changes. Each reading comes from exactly one of them.
+    /// btleplug also reports each device `BlueZ` already knows as
+    /// `DeviceDiscovered` when the event stream starts, see
+    /// [`discovered_reading`].
     ///
     /// `RssiUpdate` is not a reading. `BlueZ` after 5.86 sends it only when
     /// the RSSI changes by 8 dB or more. Older versions send it on every
@@ -78,9 +83,8 @@ impl RuuviListener {
                 let Some(properties) = peripheral.properties().await? else {
                     return Ok(());
                 };
-                if let Some(values) = parse_values(properties.manufacturer_data) {
-                    self.send_reading(&peripheral, values, properties.rssi)
-                        .await?;
+                if let Some((values, rssi)) = discovered_reading(properties) {
+                    self.send_reading(&peripheral, values, Some(rssi)).await?;
                 }
             }
             CentralEvent::ManufacturerDataAdvertisement {
@@ -137,6 +141,19 @@ fn parse_values(manufacturer_data: HashMap<u16, Vec<u8>>) -> Option<SensorValues
         .find_map(|(id, data)| SensorValues::from_manufacturer_specific_data(id, data).ok())
 }
 
+/// A device `BlueZ` cached from an earlier scan has the payload it last saw,
+/// which may be stale. `BlueZ` clears the RSSI when discovery stops, so a
+/// device without RSSI hasn't been heard since. Its next advertisement
+/// arrives as `ManufacturerDataAdvertisement` within about a second.
+fn discovered_reading(properties: PeripheralProperties) -> Option<(SensorValues, i16)> {
+    let values = parse_values(properties.manufacturer_data)?;
+    let Some(rssi) = properties.rssi else {
+        log::debug!("Skipping cached reading from [{}]", properties.address);
+        return None;
+    };
+    Some((values, rssi))
+}
+
 /// The main loop checks the throttle only when the reading arrives, so a
 /// reading that waited is throttled if another instance published meanwhile.
 async fn send_delayed(tx: &EventSender, data: SensorData, delay: Duration) -> Result<()> {
@@ -171,6 +188,28 @@ mod tests {
         assert!(parse_values(data).is_some());
     }
 
+    fn ruuvi_properties(rssi: Option<i16>) -> PeripheralProperties {
+        PeripheralProperties {
+            rssi,
+            manufacturer_data: HashMap::from([(
+                0x0499,
+                vec![3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            )]),
+            ..PeripheralProperties::default()
+        }
+    }
+
+    #[test]
+    fn reads_discovered_device_with_rssi() {
+        let reading = discovered_reading(ruuvi_properties(Some(-70)));
+        assert_eq!(reading.map(|(_, rssi)| rssi), Some(-70));
+    }
+
+    #[test]
+    fn skips_cached_device_without_rssi() {
+        assert!(discovered_reading(ruuvi_properties(None)).is_none());
+    }
+
     #[test]
     fn ignores_other_manufacturer_data() {
         let data = HashMap::from([(0x004c, vec![0x02, 0x15])]);
@@ -198,10 +237,7 @@ mod tests {
         let Some(RuuviUpdate(data)) = rx.recv().await else {
             panic!("expected the reading");
         };
-        assert_eq!(
-            devices.should_publish(&data.bdaddr),
-            ThrottleResult::Throttle
-        );
+        assert_eq!(devices.try_publish(&data.bdaddr), ThrottleResult::Throttle);
         delayed.await.unwrap().unwrap();
     }
 }

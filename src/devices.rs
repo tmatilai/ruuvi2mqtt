@@ -36,21 +36,27 @@ where
         self.devices.get(device_id).map(|d| &d.data)
     }
 
-    pub fn should_publish(&self, device_id: &K) -> ThrottleResult {
-        match self.devices.get(device_id) {
-            None => ThrottleResult::UnknownDevice,
-            Some(device) => match device.last_updated() {
-                // Throttling disabled, don't set the timestamp
-                None if self.throttle.is_zero() => ThrottleResult::Update,
-                // If timestamp is set, the interval can't be None
-                Some(last_updated) if last_updated.elapsed() < self.throttle => {
-                    ThrottleResult::Throttle
-                }
-                _ => ThrottleResult::Update,
-            },
+    /// Returns `Update` and starts the throttle timer, so a second reading
+    /// that arrives before our own message comes back over MQTT is throttled.
+    pub fn try_publish(&mut self, device_id: &K) -> ThrottleResult {
+        let Some(device) = self.devices.get_mut(device_id) else {
+            return ThrottleResult::UnknownDevice;
+        };
+        if self.throttle.is_zero() {
+            return ThrottleResult::Update;
         }
+        if device
+            .last_updated()
+            .is_some_and(|last_updated| last_updated.elapsed() < self.throttle)
+        {
+            return ThrottleResult::Throttle;
+        }
+        device.mark_published();
+        ThrottleResult::Update
     }
 
+    /// Restarts the throttle timer when a message for the device arrives over
+    /// MQTT, from this instance or another.
     pub fn mark_published(&mut self, device_id: &K) -> Option<V> {
         if self.throttle.is_zero() {
             return None;
@@ -93,8 +99,8 @@ mod tests {
 
     #[test]
     fn unknown_device_returns_unknown() {
-        let devs = make_devices(&[1], Duration::from_mins(1));
-        assert_eq!(devs.should_publish(&2), ThrottleResult::UnknownDevice);
+        let mut devs = make_devices(&[1], Duration::from_mins(1));
+        assert_eq!(devs.try_publish(&2), ThrottleResult::UnknownDevice);
     }
 
     #[test]
@@ -110,53 +116,71 @@ mod tests {
     }
 
     #[test]
-    fn first_should_publish_returns_update() {
-        let devs = make_devices(&[1], Duration::from_mins(1));
-        assert_eq!(devs.should_publish(&1), ThrottleResult::Update);
-    }
-
-    #[test]
-    fn should_publish_without_timestamp_always_returns_update() {
-        let devs = make_devices(&[1], Duration::from_mins(1));
-        // should_publish doesn't set the timestamp, so repeated calls still return Update
-        assert_eq!(devs.should_publish(&1), ThrottleResult::Update);
-        assert_eq!(devs.should_publish(&1), ThrottleResult::Update);
-    }
-
-    #[test]
-    fn mark_published_sets_timestamp_and_should_publish_throttles() {
+    fn first_try_publish_returns_update() {
         let mut devs = make_devices(&[1], Duration::from_mins(1));
-        // Simulate MQTT feedback: mark_published() sets the timestamp
+        assert_eq!(devs.try_publish(&1), ThrottleResult::Update);
+    }
+
+    #[test]
+    fn second_reading_before_mqtt_echo_is_throttled() {
+        // Two readings of one tag reach the main loop before our own message
+        // comes back over MQTT.
+        let mut devs = make_devices(&[1], Duration::from_mins(1));
+        assert_eq!(devs.try_publish(&1), ThrottleResult::Update);
+        assert_eq!(devs.try_publish(&1), ThrottleResult::Throttle);
+    }
+
+    #[test]
+    fn try_publish_marks_only_its_device() {
+        let mut devs = make_devices(&[1, 2], Duration::from_mins(1));
+        assert_eq!(devs.try_publish(&1), ThrottleResult::Update);
+        assert_eq!(devs.try_publish(&2), ThrottleResult::Update);
+    }
+
+    #[test]
+    fn mark_published_sets_timestamp_and_try_publish_throttles() {
+        let mut devs = make_devices(&[1], Duration::from_mins(1));
+        // Another instance's message arrives over MQTT.
         devs.mark_published(&1);
-        // Now should_publish should throttle
-        assert_eq!(devs.should_publish(&1), ThrottleResult::Throttle);
+        assert_eq!(devs.try_publish(&1), ThrottleResult::Throttle);
     }
 
     #[test]
     fn throttle_expires_after_duration() {
         let mut devs = make_devices(&[1], Duration::from_millis(10));
-        devs.mark_published(&1);
-        assert_eq!(devs.should_publish(&1), ThrottleResult::Throttle);
+        assert_eq!(devs.try_publish(&1), ThrottleResult::Update);
+        assert_eq!(devs.try_publish(&1), ThrottleResult::Throttle);
 
         std::thread::sleep(Duration::from_millis(15));
-        assert_eq!(devs.should_publish(&1), ThrottleResult::Update);
+        assert_eq!(devs.try_publish(&1), ThrottleResult::Update);
+    }
+
+    #[test]
+    fn mqtt_message_restarts_throttle() {
+        let mut devs = make_devices(&[1], Duration::from_millis(200));
+        assert_eq!(devs.try_publish(&1), ThrottleResult::Update);
+
+        std::thread::sleep(Duration::from_millis(120));
+        // Another instance published before our message came back.
+        devs.mark_published(&1);
+
+        // 240 ms after our publish, but only 120 ms after the MQTT message.
+        std::thread::sleep(Duration::from_millis(120));
+        assert_eq!(devs.try_publish(&1), ThrottleResult::Throttle);
     }
 
     #[test]
     fn zero_throttle_always_returns_update() {
-        let devs = make_devices(&[1], Duration::ZERO);
-        // With zero throttle, should_publish always returns Update
-        assert_eq!(devs.should_publish(&1), ThrottleResult::Update);
-        assert_eq!(devs.should_publish(&1), ThrottleResult::Update);
+        let mut devs = make_devices(&[1], Duration::ZERO);
+        assert_eq!(devs.try_publish(&1), ThrottleResult::Update);
+        assert_eq!(devs.try_publish(&1), ThrottleResult::Update);
     }
 
     #[test]
     fn zero_throttle_mark_published_is_noop() {
         let mut devs = make_devices(&[1], Duration::ZERO);
-        // mark_published() with zero throttle doesn't set timestamp
         assert!(devs.mark_published(&1).is_none());
-        // Still returns Update
-        assert_eq!(devs.should_publish(&1), ThrottleResult::Update);
+        assert_eq!(devs.try_publish(&1), ThrottleResult::Update);
     }
 
     #[test]
@@ -170,20 +194,5 @@ mod tests {
         let mut devs = make_devices(&[1], Duration::from_mins(1));
         let result = devs.mark_published(&1);
         assert_eq!(result.as_deref(), Some("data-1"));
-    }
-
-    #[test]
-    fn cross_instance_throttle_flow() {
-        // Simulates: BLE scan → should_publish(Update) → publish → MQTT arrives → mark_published() → BLE scan → should_publish(Throttle)
-        let mut devs = make_devices(&[1], Duration::from_mins(1));
-
-        // First BLE reading passes through
-        assert_eq!(devs.should_publish(&1), ThrottleResult::Update);
-
-        // MQTT message arrives (from self or another instance), setting the timestamp
-        devs.mark_published(&1);
-
-        // Next BLE reading is throttled
-        assert_eq!(devs.should_publish(&1), ThrottleResult::Throttle);
     }
 }

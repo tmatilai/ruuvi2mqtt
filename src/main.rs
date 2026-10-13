@@ -58,8 +58,9 @@ async fn main() -> Result<()> {
                 }
             }
             RuuviUpdate(sensor) => {
+                let result = devices.try_publish(&sensor.bdaddr);
                 let device_name = devices.get(&sensor.bdaddr).map(|d| d.name.as_str());
-                match devices.should_publish(&sensor.bdaddr) {
+                match result {
                     ThrottleResult::UnknownDevice => {
                         log::debug!("Unknown device: [{}]", sensor.bdaddr);
                     }
