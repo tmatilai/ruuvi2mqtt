@@ -59,9 +59,10 @@ endif
 export MCU := $(CHIP)
 CARGO := cargo $(TOOLCHAIN)
 
-# Pure-Rust source files with #[cfg(test)] unit tests.
-# These have no ESP-IDF dependencies and can be tested on the host.
-TEST_SRCS := src/mac.rs
+# The lib holds the pure-Rust modules. ESP-IDF is an espidf-only dependency,
+# so the lib builds and tests on the host with stable Rust.
+HOST_CARGO := cargo +stable
+HOST_TARGET := --target host-tuple
 
 .DEFAULT_GOAL := help
 
@@ -98,15 +99,11 @@ all: lint test build ## Lint, test, and build
 lint: ## Format and lint
 	$(CARGO) fmt
 	$(CARGO) clippy --target $(TARGET) -- -D clippy::all -W clippy::pedantic
+	$(HOST_CARGO) clippy $(HOST_TARGET) --lib --tests -- -D clippy::all -W clippy::pedantic
 
 .PHONY: test
 test: ## Run host-side unit tests (pure-Rust modules only)
-	@mkdir -p target
-	@for f in $(TEST_SRCS); do \
-	  echo "Testing $$f..."; \
-	  rustup run stable rustc --test --edition 2021 $$f -o target/test_$$(basename $$f .rs) && \
-	  target/test_$$(basename $$f .rs) || exit 1; \
-	done
+	$(HOST_CARGO) test $(HOST_TARGET) --lib
 
 .PHONY: build
 build: ## Build the firmware (release)
