@@ -6,12 +6,23 @@
 
 - Pick the publish delay for each reading from its RSSI plus random jitter, so the instance closest to a tag usually publishes it. Instances no longer need different `mqtt.throttle` values to avoid duplicates.
 - Default `mqtt.throttle` to 60 seconds instead of a random 50–69 seconds. Use the same value on every instance.
+- Add `publisher`, the MQTT client ID, to each reading, so it shows which instance sent it.
+- Publish a retained status message to `<base_topic>/status/<client_id>`: `online` with the version on connect, and `offline` as the MQTT last will.
+- Add `--check-config` to validate the configuration file without connecting to MQTT or Bluetooth.
+- Include the git commit in the version, when built from a git checkout.
 
 #### Fixes
 
 - Read sensor data from BlueZ manufacturer data updates instead of RSSI updates. BlueZ after 5.86 sends RSSI updates only on changes of 8 dB or more, so most readings would be missed.
 - Start the throttle timer when publishing, not when the message comes back over MQTT. Two readings of a tag within one MQTT round trip were both published.
 - Skip the data BlueZ cached from an earlier scan at startup. It could be stale.
+
+### ruuvi2mqtt-esp32
+
+#### Features
+
+- Add `publisher`, the MQTT client ID, to each reading, like the Linux app.
+- Include the git commit in the diagnostics' `firmware` version, when built from a git checkout.
 
 
 ## 1.5.1 / 2026-09-30

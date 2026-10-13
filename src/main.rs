@@ -35,6 +35,12 @@ async fn main() -> Result<()> {
     let config = Config::load(&options)?;
     log::debug!("{config:?}");
 
+    if options.check_config {
+        Mqtt::check(&config.mqtt)?;
+        println!("{}: OK", options.config.display());
+        return Ok(());
+    }
+
     let mut devices = Devices::new(&config.devices, config.mqtt.throttle);
 
     let (tx, mut rx) = mpsc::channel(32);
@@ -47,7 +53,8 @@ async fn main() -> Result<()> {
         log::trace!("Received event: {event:?}");
         match event {
             MqttConnect => {
-                log::info!("Connected to Mqtt. Publishing devices.");
+                log::info!("Connected to Mqtt. Publishing status and devices.");
+                mqtt.publish_status();
                 for device in homeassistant::Device::all(&config) {
                     mqtt.publish_device(device);
                 }
@@ -77,7 +84,7 @@ async fn main() -> Result<()> {
                             device_name.unwrap_or("?"),
                             sensor.bdaddr,
                         );
-                        let data = SensorData::new(&sensor, &config.mqtt.base_topic);
+                        let data = SensorData::new(&sensor, &config.mqtt);
                         mqtt.publish_sensor_data(data);
                     }
                 }

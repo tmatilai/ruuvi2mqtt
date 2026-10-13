@@ -1,0 +1,3 @@
+bin.name = "ruuvi2mqtt"
+args = "--check-config"
+status.code = 1

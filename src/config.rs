@@ -58,14 +58,20 @@ pub struct Device {
 }
 
 #[derive(Debug, Parser)]
-#[command(version)]
+#[command(version = VERSION)]
 pub struct CliOptions {
     /// Configuration file
     #[arg(long, env = "CONFIG_FILE", default_value = "ruuvi2mqtt.yaml")]
     pub config: PathBuf,
     #[arg(long, env, default_value = "INFO")]
     pub log_level: log::LevelFilter,
+    /// Check the configuration file and exit
+    #[arg(long)]
+    pub check_config: bool,
 }
+
+/// The package version and the git commit, from `build.rs`.
+pub const VERSION: &str = env!("BUILD_VERSION");
 
 impl Config {
     pub fn load(options: &CliOptions) -> Result<Self> {

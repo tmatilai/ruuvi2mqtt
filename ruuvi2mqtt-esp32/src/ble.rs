@@ -103,6 +103,7 @@ struct SensorPayload {
     battery_low: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     tx_power: Option<i8>,
+    publisher: &'static str,
 }
 
 /// Build the JSON payload from parsed sensor values.
@@ -135,6 +136,7 @@ fn encode_payload(v: &SensorValues) -> String {
         battery,
         battery_low,
         tx_power,
+        publisher: config::MQTT_CLIENT_ID,
     };
 
     serde_json::to_string(&payload).unwrap()

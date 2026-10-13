@@ -1,0 +1,4 @@
+mqtt:
+  server: localhost
+  user: ruuvi2mqtt
+devices: {}

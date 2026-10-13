@@ -12,8 +12,9 @@ use rumqttc::tokio_rustls::rustls::{
 };
 use rumqttc::{
     AsyncClient, ClientError, ConnectReturnCode, Event as MqttEvent, EventLoop as MqttEventLoop,
-    Incoming, MqttOptions, QoS, TlsConfiguration, Transport,
+    Incoming, LastWill, MqttOptions, QoS, TlsConfiguration, Transport,
 };
+use serde::Serialize;
 use tokio::time::sleep;
 
 use crate::Event::{self, MqttConnect, MqttDeviceUpdate};
@@ -24,6 +25,31 @@ use crate::ruuvi::BDAddr;
 
 pub struct Mqtt {
     client: AsyncClient,
+    status_topic: String,
+}
+
+/// Retained on `<base_topic>/status/<client_id>`. The broker replaces it
+/// with `offline` when the connection drops, as the last will.
+#[derive(Debug, Serialize)]
+struct Status {
+    state: &'static str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    version: Option<&'static str>,
+}
+
+impl Status {
+    const ONLINE: Self = Self {
+        state: "online",
+        version: Some(config::VERSION),
+    };
+    const OFFLINE: Self = Self {
+        state: "offline",
+        version: None,
+    };
+
+    fn payload(&self) -> Vec<u8> {
+        serde_json::to_vec(self).expect("status serializes to JSON")
+    }
 }
 
 #[derive(Clone)]
@@ -45,12 +71,26 @@ impl Mqtt {
                 .await;
         });
 
-        Ok(Self { client })
+        Ok(Self {
+            client,
+            status_topic: status_topic(config),
+        })
+    }
+
+    /// Validate the options without connecting, for `--check-config`.
+    pub fn check(config: &config::Mqtt) -> Result<()> {
+        Self::options(config).map(|_| ())
     }
 
     fn options(config: &config::Mqtt) -> Result<MqttOptions> {
         let mut options = MqttOptions::new(&config.client_id, &config.server, config.port());
         options.set_keep_alive(Duration::from_secs(15));
+        options.set_last_will(LastWill::new(
+            status_topic(config),
+            Status::OFFLINE.payload(),
+            QoS::AtLeastOnce,
+            true,
+        ));
         if let Some(user) = &config.user {
             let password = config
                 .password
@@ -104,6 +144,20 @@ impl Mqtt {
         Ok(options)
     }
 
+    pub fn publish_status(&mut self) {
+        let client = self.client.clone();
+        let topic = self.status_topic.clone();
+        tokio::spawn(async move {
+            log::debug!("Publishing: {topic} -> {:?}", Status::ONLINE);
+            if let Err(err) = client
+                .publish(topic, QoS::AtLeastOnce, true, Status::ONLINE.payload())
+                .await
+            {
+                log::error!("Failed to publish status: {err}");
+            }
+        });
+    }
+
     pub fn publish_device(&mut self, device: Device<'static>) {
         let client = self.client.clone();
         tokio::spawn(async move {
@@ -149,6 +203,10 @@ impl Mqtt {
             Err(err) => log::error!("Failed to publish: {err}"),
         }
     }
+}
+
+fn status_topic(config: &config::Mqtt) -> String {
+    format!("{}/status/{}", config.base_topic, config.client_id)
 }
 
 #[derive(Debug)]
