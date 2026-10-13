@@ -73,23 +73,13 @@
       dependencyDashboardApproval: true,
     },
     {
-      // Its own PR, so a broken nightly blocks nothing else.
-      matchDepNames: ['rust-nightly'],
+      // The pinned ESP32 nightly. Its own PR, so a broken nightly blocks
+      // nothing else.
+      matchManagers: ['rust-toolchain'],
       groupName: null,
       addLabels: ['breaking-risk'],
     },
   ],
-
-  customDatasources: {
-    // Dates of all published nightlies.
-    'rust-nightly': {
-      defaultRegistryUrlTemplate: 'https://static.rust-lang.org/manifests.txt',
-      format: 'plain',
-      transformTemplates: [
-        '{"releases": releases[$contains(version, "/channel-rust-nightly.toml")].($d := $substringBefore($substringAfter(version, "/dist/"), "/"); {"version": $d, "releaseTimestamp": $d & "T00:00:00Z"})}',
-      ],
-    },
-  },
 
   customManagers: [
     {
@@ -101,15 +91,6 @@
       depNameTemplate: 'espressif/esp-idf',
       datasourceTemplate: 'github-releases',
       versioningTemplate: 'semver-coerced',
-    },
-    {
-      // channel = "nightly-2026-10-09" in ruuvi2mqtt-esp32/rust-toolchain.toml
-      customType: 'regex',
-      managerFilePatterns: ['/^ruuvi2mqtt-esp32/rust-toolchain\\.toml$/'],
-      matchStrings: ['channel\\s*=\\s*"nightly-(?<currentValue>\\d{4}-\\d{2}-\\d{2})"'],
-      depNameTemplate: 'rust-nightly',
-      datasourceTemplate: 'custom.rust-nightly',
-      versioningTemplate: 'regex:^(?<major>\\d{4})-(?<minor>\\d{2})-(?<patch>\\d{2})$',
     },
     {
       // `cargo install [flags] <crate>@<version>` in workflows
