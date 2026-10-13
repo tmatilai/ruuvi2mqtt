@@ -48,6 +48,11 @@ impl Mqtt {
         Ok(Self { client })
     }
 
+    /// Validate the options without connecting, for `--check-config`.
+    pub fn check(config: &config::Mqtt) -> Result<()> {
+        Self::options(config).map(|_| ())
+    }
+
     fn options(config: &config::Mqtt) -> Result<MqttOptions> {
         let mut options = MqttOptions::new(&config.client_id, &config.server, config.port());
         options.set_keep_alive(Duration::from_secs(15));

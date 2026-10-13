@@ -1,0 +1,5 @@
+...
+Error: Failed to load ruuvi2mqtt.yaml
+
+Caused by:
+    devices: Bluetooth address has to be 6 bytes long at line 4 column 3

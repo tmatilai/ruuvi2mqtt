@@ -35,6 +35,12 @@ async fn main() -> Result<()> {
     let config = Config::load(&options)?;
     log::debug!("{config:?}");
 
+    if options.check_config {
+        Mqtt::check(&config.mqtt)?;
+        println!("{}: OK", options.config.display());
+        return Ok(());
+    }
+
     let mut devices = Devices::new(&config.devices, config.mqtt.throttle);
 
     let (tx, mut rx) = mpsc::channel(32);

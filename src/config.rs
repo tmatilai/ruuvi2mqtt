@@ -65,6 +65,9 @@ pub struct CliOptions {
     pub config: PathBuf,
     #[arg(long, env, default_value = "INFO")]
     pub log_level: log::LevelFilter,
+    /// Check the configuration file and exit
+    #[arg(long)]
+    pub check_config: bool,
 }
 
 /// The package version and the git commit, from `build.rs`.

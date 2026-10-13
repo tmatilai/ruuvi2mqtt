@@ -3,5 +3,6 @@ Usage: ruuvi2mqtt [OPTIONS]
 Options:
       --config <CONFIG>        Configuration file [env: CONFIG_FILE=] [default: ruuvi2mqtt.yaml]
       --log-level <LOG_LEVEL>  [env: LOG_LEVEL=] [default: INFO]
+      --check-config           Check the configuration file and exit
   -h, --help                   Print help
   -V, --version                Print version

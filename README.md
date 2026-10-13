@@ -27,6 +27,7 @@ Pre-build binaries and container images can be found in <https://github.com/tmat
 
 An example configuration file can be seen in [ruuvi2mqtt.yaml.example](./ruuvi2mqtt.yaml.example).
 Configuration file is by default searched from the working directory, but the path can be specified with `--config` CLI option or `CONFIG_FILE` environment variable.
+`--check-config` validates the configuration file and exits, without connecting to MQTT or Bluetooth.
 
 Example command to run in a Docker container:
 

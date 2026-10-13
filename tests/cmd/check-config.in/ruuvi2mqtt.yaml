@@ -1,0 +1,9 @@
+mqtt:
+  server: localhost
+  user: ruuvi2mqtt
+  password: secret
+  base_topic: test/ruuvi/
+  throttle: 30
+devices:
+  AA:12:BB:34:CC:56:
+    name: Indoors

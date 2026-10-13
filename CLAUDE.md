@@ -18,7 +18,7 @@ publishes Home Assistant MQTT discovery. Released for Linux; the optional
 - `src/homeassistant.rs`: Home Assistant discovery payloads and topics.
 - `src/devices.rs`: per-device state and update throttling.
 - `build.rs`: sets `BUILD_VERSION`, the package version plus the git commit. The ESP32 `build.rs` has a copy.
-- `tests/cmd/`: trycmd CLI tests (help output and config errors only).
+- `tests/cmd/`: trycmd CLI tests: help output, and config checks with `--check-config`. A `<name>.in/` directory is the test's working directory.
 
 Commands: `make lint`, `make test`, `make local`. Cross builds use `cross`.
 
@@ -47,7 +47,7 @@ targets, and a release firmware build for ESP32-C6.
 
 Not covered: no MQTT broker, no Bluetooth hardware, and no ESP32 runtime.
 Runtime behavior in `mqtt.rs`, `ruuvi/listener.rs`, `wifi.rs`, and `ble.rs`,
-as well as YAML config parsing beyond the two trycmd cases, is only verified
+as well as YAML config parsing beyond the trycmd cases, is only verified
 manually.
 
 ## Writing style
