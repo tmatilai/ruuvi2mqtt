@@ -71,3 +71,5 @@ Be concise. Prefer short sentences that say one thing, in docs, code
 comments, commit messages, and replies. Comments explain why, not what the
 code already says. Commit messages state what changed and why in a few
 plain sentences. Leave out summaries, restatements, and hedging.
+
+Commit messages have no trailers, such as `Co-Authored-By`.
