@@ -55,6 +55,8 @@ pub struct SensorData {
     battery: Option<f32>,
     battery_low: Option<bool>,
     tx_power: Option<i8>,
+    /// MQTT client ID, so a reading can be traced to the instance that sent it.
+    publisher: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -95,15 +97,16 @@ impl<'a> Device<'a> {
 }
 
 impl SensorData {
-    pub fn new(data: &ruuvi::SensorData, base_topic: &str) -> Self {
+    pub fn new(data: &ruuvi::SensorData, config: &config::Mqtt) -> Self {
         Self {
-            topic: format!("{}/{}", base_topic, data.bdaddr.to_string_no_delim()),
+            topic: format!("{}/{}", config.base_topic, data.bdaddr.to_string_no_delim()),
             humidity: data.humidity(),
             pressure: data.pressure(),
             temperature: data.temperature(),
             battery: data.battery(),
             battery_low: data.battery_low(),
             tx_power: data.tx_power(),
+            publisher: config.client_id.clone(),
         }
     }
 }

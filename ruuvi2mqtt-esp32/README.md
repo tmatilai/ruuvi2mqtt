@@ -85,7 +85,7 @@ All settings are baked in at compile-time via environment variables.
 | `MQTT_TLS` | `mqtt.tls` | `false` | Set to `true` to enable TLS (`mqtts://`) |
 | `MQTT_CA_FILE` | `mqtt.ca_file` | — | Path to a PEM CA cert, embedded at compile time |
 | `MQTT_TLS_INSECURE` | `mqtt.tls_insecure` | `false` | Set to `true` to skip cert hostname check |
-| `MQTT_CLIENT_ID` | `mqtt.client_id` | *hostname* | MQTT client ID |
+| `MQTT_CLIENT_ID` | `mqtt.client_id` | *hostname* | MQTT client ID, also sent as `publisher` in each reading |
 | `MQTT_USER` | `mqtt.user` | *(anonymous)* | MQTT username |
 | `MQTT_PASSWORD` | `mqtt.password` | *(anonymous)* | MQTT password |
 | `MQTT_BASE_TOPIC` | `mqtt.base_topic` | `ruuvi2mqtt` | Topic prefix |

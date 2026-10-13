@@ -96,10 +96,12 @@ pub const MQTT_PORT: u16 = match option_env_non_empty!("MQTT_PORT") {
     }
 };
 
-/// Optional MQTT client identifier override (matches Linux `mqtt.client_id`).
-///
-/// If not set, the runtime code derives the client ID from `DEVICE_HOSTNAME`.
-pub const MQTT_CLIENT_ID: Option<&str> = option_env_non_empty!("MQTT_CLIENT_ID");
+/// MQTT client identifier (matches Linux `mqtt.client_id`). Also sent as
+/// `publisher` in each reading. Default: `DEVICE_HOSTNAME`.
+pub const MQTT_CLIENT_ID: &str = match option_env_non_empty!("MQTT_CLIENT_ID") {
+    Some(v) => v,
+    None => DEVICE_HOSTNAME,
+};
 
 /// Optional MQTT username (matches Linux `mqtt.user`).
 pub const MQTT_USER: &str = match option_env_non_empty!("MQTT_USER") {

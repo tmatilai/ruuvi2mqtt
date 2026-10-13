@@ -77,7 +77,7 @@ async fn main() -> Result<()> {
                             device_name.unwrap_or("?"),
                             sensor.bdaddr,
                         );
-                        let data = SensorData::new(&sensor, &config.mqtt.base_topic);
+                        let data = SensorData::new(&sensor, &config.mqtt);
                         mqtt.publish_sensor_data(data);
                     }
                 }

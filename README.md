@@ -47,12 +47,13 @@ Each instance subscribes to `<base_topic>/#`, so a publish from any of them rest
 When the timer runs out, each instance holds its next reading for 0–700 ms: up to 600 ms by signal strength, plus up to 100 ms of random jitter.
 The closest instance usually publishes first, and the others see its message and skip theirs.
 Instances with a similar signal take turns, and now and then both publish.
+Each reading has a `publisher` field with the MQTT client ID of the instance that sent it.
 
 Use the same `throttle` on every instance.
 Different values work, but the instance with the shortest one publishes every tag it hears.
 
 An ESP32 doesn't throttle: it publishes every tag it hears once per cycle (`BLE_SLEEP_DURATION` plus the awake time, about 67 s with the defaults).
 With a `throttle` below that, the tags it hears get two messages per cycle, one from the ESP32 and one from a Linux instance.
-That is harmless: Home Assistant stores no new state when the value is unchanged.
+That is harmless, though Home Assistant records a new state when `publisher` changes, as it is an attribute.
 To avoid it, set `throttle` above the ESP32's cycle.
 The ESP32 then publishes the tags it hears, and the Linux instances fill in when it misses one.

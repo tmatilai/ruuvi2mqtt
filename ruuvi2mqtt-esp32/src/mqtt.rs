@@ -33,7 +33,6 @@ impl Mqtt {
     pub fn connect() -> anyhow::Result<Self> {
         let scheme = if config::MQTT_TLS { "mqtts" } else { "mqtt" };
         let broker_url = format!("{scheme}://{}:{}", config::MQTT_SERVER, config::MQTT_PORT);
-        let client_id = config::MQTT_CLIENT_ID.unwrap_or(config::DEVICE_HOSTNAME);
 
         if config::MQTT_TLS {
             if config::MQTT_TLS_INSECURE {
@@ -46,7 +45,7 @@ impl Mqtt {
         let server_certificate = ca_certificate();
 
         let cfg = MqttClientConfiguration {
-            client_id: Some(client_id),
+            client_id: Some(config::MQTT_CLIENT_ID),
             username: if config::MQTT_USER.is_empty() {
                 None
             } else {
