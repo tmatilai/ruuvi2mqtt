@@ -7,6 +7,7 @@
 - Pick the publish delay for each reading from its RSSI plus random jitter, so the instance closest to a tag usually publishes it. Instances no longer need different `mqtt.throttle` values to avoid duplicates.
 - Default `mqtt.throttle` to 60 seconds instead of a random 50–69 seconds. Use the same value on every instance.
 - Add `publisher`, the MQTT client ID, to each reading, so it shows which instance sent it.
+- Include the git commit in the version, when built from a git checkout.
 
 #### Fixes
 
@@ -19,6 +20,7 @@
 #### Features
 
 - Add `publisher`, the MQTT client ID, to each reading, like the Linux app.
+- Include the git commit in the diagnostics' `firmware` version, when built from a git checkout.
 
 
 ## 1.5.1 / 2026-09-30

@@ -1,4 +1,5 @@
 use std::path::PathBuf;
+use std::process::Command;
 
 fn main() {
     println!("cargo:rerun-if-env-changed=MQTT_CA_FILE");
@@ -22,4 +23,36 @@ fn main() {
         println!("cargo:rustc-env=MQTT_CA_PEM_PATH={}", dest.display());
         println!("cargo:rustc-cfg=mqtt_ca_file");
     }
+
+    // The package version plus the git commit, so the diagnostics show
+    // exactly what a board was flashed with.
+    let version = env!("CARGO_PKG_VERSION");
+    let build_version = match git_revision() {
+        Some(revision) => format!("{version} ({revision})"),
+        None => version.to_string(),
+    };
+    println!("cargo:rustc-env=BUILD_VERSION={build_version}");
+}
+
+/// The short commit hash, with `-dirty` for uncommitted changes.
+fn git_revision() -> Option<String> {
+    // HEAD and its reflog change on commit and checkout, the index on
+    // staging, and src on edits.
+    let git_dir = git(&["rev-parse", "--absolute-git-dir"])?;
+    for path in ["HEAD", "logs/HEAD", "index"] {
+        println!("cargo:rerun-if-changed={git_dir}/{path}");
+    }
+    println!("cargo:rerun-if-changed=src");
+
+    // `--exclude=*` skips the tags, so the output is only the hash.
+    git(&["describe", "--always", "--dirty", "--exclude=*"])
+}
+
+fn git(args: &[&str]) -> Option<String> {
+    let output = Command::new("git").args(args).output().ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let stdout = String::from_utf8(output.stdout).ok()?;
+    Some(stdout.trim().to_string())
 }

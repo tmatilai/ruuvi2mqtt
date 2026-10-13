@@ -147,7 +147,7 @@ fn run(start: Instant) -> anyhow::Result<()> {
 
     // ── Diagnostics ──────────────────────────────────────────────────────────
     let diag = diagnostics::Diagnostics {
-        firmware: concat!(env!("CARGO_PKG_NAME"), " ", env!("CARGO_PKG_VERSION")),
+        firmware: concat!(env!("CARGO_PKG_NAME"), " ", env!("BUILD_VERSION")),
         wifi_rssi: diagnostics::wifi_rssi(),
         free_heap: diagnostics::free_heap(),
         tags,

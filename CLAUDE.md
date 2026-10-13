@@ -17,6 +17,7 @@ publishes Home Assistant MQTT discovery. Released for Linux; the optional
 - `src/mqtt.rs`: rumqttc client and event loop, TLS via rustls-native-certs.
 - `src/homeassistant.rs`: Home Assistant discovery payloads and topics.
 - `src/devices.rs`: per-device state and update throttling.
+- `build.rs`: sets `BUILD_VERSION`, the package version plus the git commit. The ESP32 `build.rs` has a copy.
 - `tests/cmd/`: trycmd CLI tests (help output and config errors only).
 
 Commands: `make lint`, `make test`, `make local`. Cross builds use `cross`.
