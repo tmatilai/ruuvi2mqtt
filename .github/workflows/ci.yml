@@ -56,7 +56,7 @@ jobs:
         uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
 
       - name: Run clippy
-        run: cargo clippy --locked --tests --all-targets --all-features -- -D clippy::all -W clippy::pedantic
+        run: cargo clippy --locked --workspace --tests --all-targets --all-features -- -D clippy::all -W clippy::pedantic
 
   clippy-esp32:
     name: Clippy (ESP32-C6)
@@ -149,6 +149,26 @@ jobs:
 
       - name: Build firmware
         run: cd ruuvi2mqtt-esp32 && cargo build --release --locked
+
+  test-checker:
+    name: Test (checker)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Setup | Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup | Rust
+        uses: dtolnay/rust-toolchain@d1031067263f94b142dd6c0ce24c5eb9d02d52a0
+        with:
+          toolchain: stable
+
+      - name: Setup | Cache
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+
+      - name: Run tests
+        run: cargo test --locked -p ruuvi2mqtt-checker
 
   test:
     name: Test
