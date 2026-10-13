@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use anyhow::{Context, Result};
 use btleplug::api::{Central, CentralEvent, Manager as _, Peripheral as _, ScanFilter};
 use btleplug::platform::{Adapter, Manager, Peripheral, PeripheralId};
@@ -60,32 +62,65 @@ impl RuuviListener {
         Ok(())
     }
 
+    /// `BlueZ` reports a device's first advertisement with the device object
+    /// (`DeviceDiscovered`), and later ones as `ManufacturerDataAdvertisement`
+    /// when the payload changes. Each reading comes from exactly one of them.
+    ///
+    /// `RssiUpdate` is not a reading. `BlueZ` after 5.86 sends it only when
+    /// the RSSI changes by 8 dB or more. Older versions send it on every
+    /// advertisement, in the same signal as the manufacturer data, so
+    /// handling it too would send each reading twice. The btleplug `BlueZ`
+    /// backend never emits `DeviceUpdated`.
     async fn on_event(self, event: CentralEvent) -> Result<()> {
         match event {
-            CentralEvent::DeviceDiscovered(id)
-            | CentralEvent::DeviceUpdated(id)
-            | CentralEvent::RssiUpdate { id, .. } => {
+            CentralEvent::DeviceDiscovered(id) => {
                 let peripheral = self.find_peripheral(&id).await?;
-                log::trace!("BLE Peripheral: {peripheral:?}");
-                if let Some((values, rssi)) = Self::parse_data(&peripheral).await? {
-                    log::trace!("Ruuvi event: {values:?}");
-                    // Only data format 5 carries the MAC in the payload.
-                    // Older formats use the advertiser address.
-                    let address = values
-                        .mac_address()
-                        .map_or_else(|| peripheral.address(), Into::into);
-                    let delay = publish_delay(rssi, random_jitter());
-                    log::debug!(
-                        "Reading from [{address}]: RSSI {}, delay {} ms",
-                        rssi.map_or_else(|| "unknown".to_string(), |r| format!("{r} dBm")),
-                        delay.as_millis(),
-                    );
-                    send_delayed(&self.tx, SensorData::new(address, values), delay).await?;
+                let Some(properties) = peripheral.properties().await? else {
+                    return Ok(());
+                };
+                if let Some(values) = parse_values(properties.manufacturer_data) {
+                    self.send_reading(&peripheral, values, properties.rssi)
+                        .await?;
+                }
+            }
+            CentralEvent::ManufacturerDataAdvertisement {
+                id,
+                manufacturer_data,
+            } => {
+                // Parse first to skip the D-Bus lookups for other devices.
+                if let Some(values) = parse_values(manufacturer_data) {
+                    let peripheral = self.find_peripheral(&id).await?;
+                    let rssi = peripheral.properties().await?.and_then(|p| p.rssi);
+                    self.send_reading(&peripheral, values, rssi).await?;
                 }
             }
             _ => {}
         }
         Ok(())
+    }
+
+    /// `rssi` is the last value `BlueZ` reported. After 5.86 it can lag the
+    /// current signal by up to 7 dB, which shifts the delay by up to 70 ms.
+    async fn send_reading(
+        &self,
+        peripheral: &Peripheral,
+        values: SensorValues,
+        rssi: Option<i16>,
+    ) -> Result<()> {
+        log::trace!("BLE Peripheral: {peripheral:?}");
+        log::trace!("Ruuvi event: {values:?}");
+        // Only data format 5 carries the MAC in the payload.
+        // Older formats use the advertiser address.
+        let address = values
+            .mac_address()
+            .map_or_else(|| peripheral.address(), Into::into);
+        let delay = publish_delay(rssi, random_jitter());
+        log::debug!(
+            "Reading from [{address}]: RSSI {}, delay {} ms",
+            rssi.map_or_else(|| "unknown".to_string(), |r| format!("{r} dBm")),
+            delay.as_millis(),
+        );
+        send_delayed(&self.tx, SensorData::new(address, values), delay).await
     }
 
     async fn find_peripheral(&self, id: &PeripheralId) -> Result<Peripheral> {
@@ -94,22 +129,12 @@ impl RuuviListener {
             .await
             .context("Failed to find peripheral")
     }
+}
 
-    /// Returns the sensor values and the RSSI from the same properties
-    /// snapshot. btleplug always sets a discovery filter, so `BlueZ` up to
-    /// 5.86 updates the RSSI on every advertisement. Newer `BlueZ` updates it
-    /// only when it changes by 8 dB or more.
-    async fn parse_data(peripheral: &Peripheral) -> Result<Option<(SensorValues, Option<i16>)>> {
-        let Some(properties) = peripheral.properties().await? else {
-            return Ok(None);
-        };
-        let rssi = properties.rssi;
-        Ok(properties
-            .manufacturer_data
-            .into_iter()
-            .find_map(|(id, data)| SensorValues::from_manufacturer_specific_data(id, data).ok())
-            .map(|values| (values, rssi)))
-    }
+fn parse_values(manufacturer_data: HashMap<u16, Vec<u8>>) -> Option<SensorValues> {
+    manufacturer_data
+        .into_iter()
+        .find_map(|(id, data)| SensorValues::from_manufacturer_specific_data(id, data).ok())
 }
 
 /// The main loop checks the throttle only when the reading arrives, so a
@@ -122,8 +147,6 @@ async fn send_delayed(tx: &EventSender, data: SensorData, delay: Duration) -> Re
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashMap;
-
     use tokio::sync::mpsc;
 
     use super::*;
@@ -136,6 +159,22 @@ mod tests {
         let payload = [3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
         let values = SensorValues::from_manufacturer_specific_data(0x0499, payload).unwrap();
         SensorData::new(address, values)
+    }
+
+    #[test]
+    fn parses_ruuvi_manufacturer_data() {
+        // Data format 3 with an unrelated Apple entry next to it.
+        let data = HashMap::from([
+            (0x004c, vec![0x02, 0x15]),
+            (0x0499, vec![3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
+        ]);
+        assert!(parse_values(data).is_some());
+    }
+
+    #[test]
+    fn ignores_other_manufacturer_data() {
+        let data = HashMap::from([(0x004c, vec![0x02, 0x15])]);
+        assert!(parse_values(data).is_none());
     }
 
     #[tokio::test]
