@@ -12,7 +12,6 @@ mod ble;
 mod config;
 mod diagnostics;
 mod led;
-mod mac;
 mod mqtt;
 mod wifi;
 

@@ -10,6 +10,7 @@ rust-version = "1.85"
 [[bin]]
 name = "ruuvi2mqtt-esp32"
 harness = false # required: ESP-IDF entry point is not compatible with the test harness
+test = false # needs ESP-IDF; the host tests are in the lib
 
 [profile.release]
 opt-level = "s"
@@ -20,13 +21,16 @@ opt-level = "z"
 
 [dependencies]
 anyhow = "=1.0.104"
-esp-idf-svc = "=0.53.0"
-esp32-nimble = "=0.13.0"
 ruuvi-sensor-protocol = "=0.7.0"
 log = "=0.4.34"
 serde = { version = "=1.0.229", features = ["derive"] }
 serde_json = "=1.0.151"
 konst = "=0.4.3"
+
+# Only on the ESP32, so the lib's pure-Rust modules build and test on the host.
+[target.'cfg(target_os = "espidf")'.dependencies]
+esp-idf-svc = "=0.53.0"
+esp32-nimble = "=0.13.0"
 
 [build-dependencies]
 embuild = { version = "=0.33.5", features = ["espidf"] }

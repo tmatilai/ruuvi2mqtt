@@ -32,11 +32,11 @@ compile-time via environment variables, see `ruuvi2mqtt-esp32/README.md`.
 - `src/main.rs`: the wake cycle and logger setup.
 - `src/config.rs`: compile-time config from env vars (konst).
 - `src/wifi.rs`, `src/mqtt.rs`, `src/ble.rs`, `src/led.rs`, `src/diagnostics.rs`: one esp-idf-svc subsystem each; `ble.rs` uses esp32-nimble.
-- `src/mac.rs`: MAC address parsing, pure Rust with unit tests.
+- `src/lib.rs`: the pure-Rust modules, `mac.rs` (MAC addresses) and `payload.rs` (the reading's JSON). esp-idf-svc and esp32-nimble are espidf-only dependencies, so the lib's unit tests run on the host with stable Rust (`--target host-tuple`). The bin has `test = false`.
 - `build.rs`: embuild glue for ESP-IDF.
 
-esp-idf-svc is used by every module here, so an update to it touches the whole
-crate. Commands: `make -C ruuvi2mqtt-esp32 lint|test|build`. The firmware
+esp-idf-svc is used by every module outside the lib, so an update to it
+touches the whole firmware. Commands: `make -C ruuvi2mqtt-esp32 lint|test|build`. The firmware
 build needs the ESP toolchain (`make setup`); CI builds it for ESP32-C6 only.
 
 ## What CI covers

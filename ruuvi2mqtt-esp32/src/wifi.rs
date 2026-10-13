@@ -7,10 +7,10 @@ use esp_idf_svc::{
     wifi::{AuthMethod, BlockingWifi, ClientConfiguration, Configuration, EspWifi, ScanMethod},
 };
 use log::info;
+use ruuvi2mqtt_esp32::mac::Mac;
 use std::ffi::CString;
 
 use crate::config;
-use crate::mac::Mac;
 
 /// Connect to Wi-Fi and return the `BlockingWifi` guard.
 ///

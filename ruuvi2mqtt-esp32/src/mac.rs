@@ -6,6 +6,7 @@ pub struct Mac(pub [u8; 6]);
 
 impl Mac {
     /// Bare lowercase hex string for use in MQTT topics (e.g. `"aabbccddeeff"`).
+    #[must_use]
     pub fn to_topic_string(self) -> String {
         format!(
             "{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}",
