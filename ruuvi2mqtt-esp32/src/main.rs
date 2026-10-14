@@ -8,7 +8,7 @@ use esp_idf_svc::{
     nvs::EspDefaultNvsPartition, sys,
 };
 use log::{error, info, warn};
-use ruuvi2mqtt_esp32::diagnostics::Diagnostics;
+use ruuvi2mqtt_esp32::diagnostics::{Diagnostics, Settings};
 
 mod ble;
 mod config;
@@ -56,8 +56,9 @@ fn main() {
     }
 
     info!(
-        "Cycle: {}s BLE scan, {}s deep sleep",
+        "Cycle: {}s {} BLE scan, {}s deep sleep",
         config::BLE_SCAN_DURATION,
+        config::BLE_SCAN_MODE,
         config::BLE_SLEEP_DURATION
     );
 
@@ -125,14 +126,20 @@ fn run(start: Instant, cycle: u32) -> anyhow::Result<()> {
     let mut led = led::Led::new()?;
     led.apply_mode();
 
-    // ── BLE scan + Wi-Fi connect in parallel ─────────────────────────────────
+    // ── BLE scan + Wi-Fi connect ─────────────────────────────────────────────
     // Wi-Fi and BLE share one 2.4 GHz radio. Scanning while Wi-Fi connects
     // saves a few seconds of active time per cycle, but until Wi-Fi has
-    // connected, the scan gets only part of the airtime.
+    // connected, the scan gets only part of the airtime. The sequential mode
+    // finishes the scan before Wi-Fi starts.
     let ble_handle = thread::Builder::new()
         .stack_size(4096)
         .spawn(move || ble::scan(start))
         .context("Failed to spawn BLE scan thread")?;
+    let scan = if config::BLE_SCAN_SEQUENTIAL {
+        ScanThread::Finished(finish_scan(ble_handle, start))
+    } else {
+        ScanThread::Running(ble_handle)
+    };
 
     let (_wifi, wifi_cache) = wifi::connect(peripherals.modem, sysloop, nvs)?;
     let wifi_ms = ms_since(start);
@@ -142,7 +149,7 @@ fn run(start: Instant, cycle: u32) -> anyhow::Result<()> {
     let mut mqtt = mqtt::Mqtt::connect()?;
 
     // ── Publish readings ─────────────────────────────────────────────────────
-    let (scan, error) = finish_scan(ble_handle, start);
+    let (scan, error) = scan.finish(start);
 
     let mqtt_ms = ms_between(start, mqtt.wait_connected(MQTT_CONNECT_TIMEOUT)?);
 
@@ -165,6 +172,10 @@ fn run(start: Instant, cycle: u32) -> anyhow::Result<()> {
         client_id: config::MQTT_CLIENT_ID,
         chip: system::chip(),
         cycle,
+        settings: Settings {
+            scan_mode: config::BLE_SCAN_MODE,
+            scan_duration: config::BLE_SCAN_DURATION.unsigned_abs(),
+        },
         wifi_rssi: ap_info.map(|(rssi, _)| rssi),
         wifi_channel: ap_info.map(|(_, channel)| channel),
         wifi_cache,
@@ -192,6 +203,21 @@ fn run(start: Instant, cycle: u32) -> anyhow::Result<()> {
 
     led.off();
     Ok(())
+}
+
+/// The BLE scan thread, or its result.
+enum ScanThread {
+    Running(JoinHandle<anyhow::Result<ble::Scan>>),
+    Finished((ble::Scan, Option<String>)),
+}
+
+impl ScanThread {
+    fn finish(self, start: Instant) -> (ble::Scan, Option<String>) {
+        match self {
+            Self::Running(handle) => finish_scan(handle, start),
+            Self::Finished(result) => result,
+        }
+    }
 }
 
 /// Wait for the scan to finish. A failed scan is still reported in the

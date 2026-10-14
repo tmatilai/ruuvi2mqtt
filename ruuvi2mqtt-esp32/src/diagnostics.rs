@@ -13,6 +13,7 @@ pub struct Diagnostics<'a> {
     pub chip: &'a str,
     /// Cycles since a cold boot or a crash, this one included.
     pub cycle: u32,
+    pub settings: Settings<'a>,
     /// The access point's signal, in dBm.
     pub wifi_rssi: Option<i8>,
     pub wifi_channel: Option<u8>,
@@ -42,6 +43,15 @@ impl Diagnostics<'_> {
     }
 }
 
+/// The build-time settings that the test bed compares.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+pub struct Settings<'a> {
+    /// `parallel` or `sequential`.
+    pub scan_mode: &'a str,
+    /// Seconds.
+    pub scan_duration: u32,
+}
+
 /// How Wi-Fi used the channel and BSSID cached in NVS.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -67,6 +77,10 @@ mod tests {
             client_id: "esp32-test",
             chip: "esp32c6",
             cycle: 42,
+            settings: Settings {
+                scan_mode: "parallel",
+                scan_duration: 5,
+            },
             wifi_rssi: Some(-61),
             wifi_channel: Some(6),
             wifi_cache: CacheUse::Hit,
@@ -91,7 +105,8 @@ mod tests {
             diagnostics(scan).to_json(),
             concat!(
                 r#"{"firmware":"ruuvi2mqtt-esp32 1.5.2-dev (c43f162)","client_id":"esp32-test","#,
-                r#""chip":"esp32c6","cycle":42,"wifi_rssi":-61,"wifi_channel":6,"#,
+                r#""chip":"esp32c6","cycle":42,"settings":{"scan_mode":"parallel","scan_duration":5},"#,
+                r#""wifi_rssi":-61,"wifi_channel":6,"#,
                 r#""wifi_cache":"hit","free_heap":151000,"scan_start_ms":180,"scan_end_ms":5190,"#,
                 r#""wifi_ms":1450,"mqtt_ms":2210,"cycle_ms":5230,"#,
                 r#""tags":{"f817624e4c0b":{"rssi":-74,"adverts":2,"first_ms":1210}},"#,

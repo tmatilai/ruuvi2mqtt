@@ -12,7 +12,9 @@ active time is ~7s per ~67s cycle, reducing average current draw to roughly
 a tenth of always-on operation.
 
 Wi-Fi and BLE share one 2.4 GHz radio, so the scan gets only part of the
-airtime until Wi-Fi has connected.
+airtime until Wi-Fi has connected. `BLE_SCAN_MODE=sequential` scans first and
+then starts Wi-Fi. That gives the scan the whole radio, but adds the Wi-Fi
+and MQTT connect time to the awake time.
 
 To further reduce active time, the firmware caches the Wi-Fi channel and BSSID
 in NVS flash after the first connection. On subsequent boots it connects
@@ -95,6 +97,7 @@ All settings are baked in at compile-time via environment variables.
 | `MQTT_PASSWORD` | `mqtt.password` | *(anonymous)* | MQTT password |
 | `MQTT_BASE_TOPIC` | `mqtt.base_topic` | `ruuvi2mqtt` | Topic prefix |
 | `BLE_SCAN_DURATION` | — | `5` | BLE scan duration (seconds). Set close to your Wi-Fi + MQTT connect time (see boot log), min 3s |
+| `BLE_SCAN_MODE` | — | `parallel` | `parallel` scans while Wi-Fi connects. `sequential` scans first, then starts Wi-Fi |
 | `BLE_SLEEP_DURATION` | — | `60` | Deep sleep between cycles (seconds) |
 | `LED_MODE` | — | *(unset)* | `on` to light while awake, `off` to turn off at boot, or unset to do nothing |
 | `LED_TYPE` | — | `ws2812` | `ws2812` or `gpio` |
@@ -183,6 +186,7 @@ heard and when, so a missed tag can be traced to range or to the radio.
   "client_id": "ruuvi2mqtt-kitchen",
   "chip": "esp32c6",
   "cycle": 42,
+  "settings": { "scan_mode": "parallel", "scan_duration": 5 },
   "wifi_rssi": -61,
   "wifi_channel": 6,
   "wifi_cache": "hit",
@@ -208,6 +212,7 @@ heard and when, so a missed tag can be traced to range or to the radio.
 | `client_id` | `MQTT_CLIENT_ID`, the `publisher` in the readings |
 | `chip` | ESP-IDF target |
 | `cycle` | Cycles since a cold boot or a crash, this one included. A gap means cycles without diagnostics |
+| `settings` | The build-time settings that A/B tests compare: `BLE_SCAN_MODE` and `BLE_SCAN_DURATION` |
 | `wifi_rssi`, `wifi_channel` | The access point's signal (dBm) and channel |
 | `wifi_cache` | `hit`: connected with the cached channel and BSSID. `miss`: nothing cached. `stale`: the cache failed, so a full scan |
 | `free_heap` | Free heap in bytes |
