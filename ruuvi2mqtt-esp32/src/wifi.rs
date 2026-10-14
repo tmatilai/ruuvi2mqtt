@@ -7,12 +7,14 @@ use esp_idf_svc::{
     wifi::{AuthMethod, BlockingWifi, ClientConfiguration, Configuration, EspWifi, ScanMethod},
 };
 use log::info;
+use ruuvi2mqtt_esp32::diagnostics::CacheUse;
 use ruuvi2mqtt_esp32::mac::Mac;
 use std::ffi::CString;
 
 use crate::config;
 
-/// Connect to Wi-Fi and return the `BlockingWifi` guard.
+/// Connect to Wi-Fi and return the `BlockingWifi` guard, and how the NVS
+/// cache was used.
 ///
 /// Uses NVS-cached channel/BSSID for fast reconnect when available, falling
 /// back to a full scan on first boot or when the cache is stale. Optionally
@@ -23,7 +25,7 @@ pub fn connect(
     modem: Modem<'static>,
     sysloop: EspSystemEventLoop,
     nvs: EspDefaultNvsPartition,
-) -> anyhow::Result<BlockingWifi<EspWifi<'static>>> {
+) -> anyhow::Result<(BlockingWifi<EspWifi<'static>>, CacheUse)> {
     let esp_wifi = EspWifi::new(modem, sysloop.clone(), Some(nvs))?;
 
     let hostname = CString::new(config::DEVICE_HOSTNAME)
@@ -81,8 +83,9 @@ pub fn connect(
     wifi.start()?;
     info!("Connecting to Wi-Fi '{}'...", config::WIFI_SSID);
 
-    match wifi.connect() {
-        Ok(()) => {}
+    let cache_use = match wifi.connect() {
+        Ok(()) if cached.is_some() => CacheUse::Hit,
+        Ok(()) => CacheUse::Miss,
         Err(e) if cached.is_some() => {
             // Cached channel/BSSID may be stale — retry with full scan.
             log::warn!("Fast reconnect failed ({e}), retrying with full scan");
@@ -97,9 +100,10 @@ pub fn connect(
                 ..Default::default()
             }))?;
             wifi.connect()?;
+            CacheUse::Stale
         }
         Err(e) => return Err(e.into()),
-    }
+    };
 
     if config::WIFI_IP.is_none() {
         wifi.wait_netif_up()?;
@@ -109,7 +113,7 @@ pub fn connect(
     // ── Update NVS cache ─────────────────────────────────────────────────────
     update_wifi_cache(cached.as_ref());
 
-    Ok(wifi)
+    Ok((wifi, cache_use))
 }
 
 /// Configure static IP on the STA netif, bypassing DHCP.

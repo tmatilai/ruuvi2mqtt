@@ -1,4 +1,5 @@
-use std::thread;
+use std::sync::atomic::{AtomicU32, Ordering};
+use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
 use anyhow::Context;
@@ -7,12 +8,13 @@ use esp_idf_svc::{
     nvs::EspDefaultNvsPartition, sys,
 };
 use log::{error, info, warn};
+use ruuvi2mqtt_esp32::diagnostics::Diagnostics;
 
 mod ble;
 mod config;
-mod diagnostics;
 mod led;
 mod mqtt;
+mod system;
 mod wifi;
 
 fn main() {
@@ -29,6 +31,11 @@ fn main() {
         env!("CARGO_PKG_NAME"),
         env!("CARGO_PKG_VERSION")
     );
+
+    // RTC memory keeps the count through deep sleep. Only this thread uses
+    // it, so a plain load and store will do.
+    let cycle = CYCLE.load(Ordering::Relaxed).wrapping_add(1);
+    CYCLE.store(cycle, Ordering::Relaxed);
 
     // A panic or watchdog reset restarts main() immediately. Sleep instead, so
     // that a persistent failure costs one cycle per sleep period rather than a
@@ -56,12 +63,16 @@ fn main() {
 
     let start = Instant::now();
 
-    if let Err(e) = run(start) {
+    if let Err(e) = run(start, cycle) {
         error!("Cycle failed: {e:#}");
     }
 
     deep_sleep(SLEEP_SECS);
 }
+
+/// Cycles since a cold boot or a crash, which reset RTC memory.
+#[link_section = ".rtc.data.cycle"]
+static CYCLE: AtomicU32 = AtomicU32::new(0);
 
 /// Normal deep sleep between cycles.
 const SLEEP_SECS: u64 = config::BLE_SLEEP_DURATION as u64;
@@ -86,8 +97,17 @@ fn deep_sleep(secs: u64) -> ! {
     unsafe { sys::esp_deep_sleep(secs * 1_000_000) }
 }
 
+/// Milliseconds since `start`, for the diagnostics.
+fn ms_since(start: Instant) -> u32 {
+    ms_between(start, Instant::now())
+}
+
+fn ms_between(start: Instant, end: Instant) -> u32 {
+    u32::try_from(end.saturating_duration_since(start).as_millis()).unwrap_or(u32::MAX)
+}
+
 /// One scan-connect-publish cycle.
-fn run(start: Instant) -> anyhow::Result<()> {
+fn run(start: Instant, cycle: u32) -> anyhow::Result<()> {
     thread::Builder::new()
         .stack_size(4096)
         .spawn(|| {
@@ -106,33 +126,27 @@ fn run(start: Instant) -> anyhow::Result<()> {
     led.apply_mode();
 
     // ── BLE scan + Wi-Fi connect in parallel ─────────────────────────────────
-    // BLE and Wi-Fi use independent radios, so scan while connecting to save
-    // a few seconds of active time per cycle.
+    // Wi-Fi and BLE share one 2.4 GHz radio. Scanning while Wi-Fi connects
+    // saves a few seconds of active time per cycle, but until Wi-Fi has
+    // connected, the scan gets only part of the airtime.
     let ble_handle = thread::Builder::new()
         .stack_size(4096)
-        .spawn(ble::scan_once)
+        .spawn(move || ble::scan(start))
         .context("Failed to spawn BLE scan thread")?;
 
-    let _wifi = wifi::connect(peripherals.modem, sysloop, nvs)?;
+    let (_wifi, wifi_cache) = wifi::connect(peripherals.modem, sysloop, nvs)?;
+    let wifi_ms = ms_since(start);
+    ble::wifi_connected();
 
     // ── MQTT ─────────────────────────────────────────────────────────────────
     let mut mqtt = mqtt::Mqtt::connect()?;
 
     // ── Publish readings ─────────────────────────────────────────────────────
-    // A failed scan is still reported in the diagnostics.
-    let (readings, error) = match ble_handle.join() {
-        Ok(Ok(readings)) => (readings, None),
-        Ok(Err(e)) => (Vec::new(), Some(format!("BLE scan failed: {e:#}"))),
-        Err(_) => (Vec::new(), Some("BLE scan thread panicked".to_string())),
-    };
-    if let Some(e) = &error {
-        error!("{e}");
-    }
-    let tags: Vec<String> = readings.iter().map(|r| r.mac.to_topic_string()).collect();
+    let (scan, error) = finish_scan(ble_handle, start);
 
-    mqtt.wait_connected(MQTT_CONNECT_TIMEOUT)?;
+    let mqtt_ms = ms_between(start, mqtt.wait_connected(MQTT_CONNECT_TIMEOUT)?);
 
-    for reading in &readings {
+    for reading in &scan.readings {
         let topic = format!(
             "{}/{}",
             config::MQTT_BASE_TOPIC,
@@ -145,21 +159,60 @@ fn run(start: Instant) -> anyhow::Result<()> {
     }
 
     // ── Diagnostics ──────────────────────────────────────────────────────────
-    let diag = diagnostics::Diagnostics {
+    let ap_info = system::ap_info();
+    let diag = Diagnostics {
         firmware: concat!(env!("CARGO_PKG_NAME"), " ", env!("BUILD_VERSION")),
-        wifi_rssi: diagnostics::wifi_rssi(),
-        free_heap: diagnostics::free_heap(),
-        tags,
-        #[allow(clippy::cast_possible_truncation)] // cycle duration is always well within u64
-        cycle_ms: start.elapsed().as_millis() as u64,
+        client_id: config::MQTT_CLIENT_ID,
+        chip: system::chip(),
+        cycle,
+        wifi_rssi: ap_info.map(|(rssi, _)| rssi),
+        wifi_channel: ap_info.map(|(_, channel)| channel),
+        wifi_cache,
+        free_heap: system::free_heap(),
+        scan_start_ms: scan.started_ms,
+        scan_end_ms: scan.finished_ms,
+        wifi_ms,
+        mqtt_ms,
+        cycle_ms: ms_since(start),
+        scan: scan.stats,
         error,
     };
-    diag.publish(&mut mqtt);
+    let topic = format!(
+        "{}/diagnostics/{}",
+        config::MQTT_BASE_TOPIC,
+        config::DEVICE_HOSTNAME,
+    );
+    let payload = diag.to_json();
+    info!("Diagnostics: {payload}");
+    if let Err(e) = mqtt.publish(&topic, &payload) {
+        error!("Failed to publish diagnostics: {e}");
+    }
 
     mqtt.wait_published(MQTT_ACK_TIMEOUT)?;
 
     led.off();
     Ok(())
+}
+
+/// Wait for the scan to finish. A failed scan is still reported in the
+/// diagnostics, so it returns the error instead.
+fn finish_scan(
+    handle: JoinHandle<anyhow::Result<ble::Scan>>,
+    start: Instant,
+) -> (ble::Scan, Option<String>) {
+    let error = match handle.join() {
+        Ok(Ok(scan)) => return (scan, None),
+        Ok(Err(e)) => format!("BLE scan failed: {e:#}"),
+        Err(_) => "BLE scan thread panicked".to_string(),
+    };
+    error!("{error}");
+    let now = ms_since(start);
+    let scan = ble::Scan {
+        started_ms: now,
+        finished_ms: now,
+        ..ble::Scan::default()
+    };
+    (scan, Some(error))
 }
 
 /// Thin logger wrapper that applies `LOG_LEVEL` only to this crate's modules

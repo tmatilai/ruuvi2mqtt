@@ -11,6 +11,9 @@ the chip reboots and reconnects. With the defaults (5s scan, 60s sleep) the
 active time is ~7s per ~67s cycle, reducing average current draw to roughly
 a tenth of always-on operation.
 
+Wi-Fi and BLE share one 2.4 GHz radio, so the scan gets only part of the
+airtime until Wi-Fi has connected.
+
 To further reduce active time, the firmware caches the Wi-Fi channel and BSSID
 in NVS flash after the first connection. On subsequent boots it connects
 directly without scanning all channels, saving several seconds per cycle. A
@@ -23,6 +26,8 @@ their `throttle` is below the ESP32's full cycle (`BLE_SLEEP_DURATION` plus the
 awake time, ~67s with the defaults), those tags get two messages per cycle.
 That is harmless. To avoid it, set the `throttle` above the cycle; the Linux
 instances then fill in only when the ESP32 misses a tag.
+
+Each cycle also publishes [diagnostics](#diagnostics).
 
 This firmware does **not** publish Home Assistant MQTT discovery config.
 At least one instance of the full [`ruuvi2mqtt`](/) Linux app must
@@ -165,6 +170,57 @@ All available targets:
 ```sh
 make help
 ```
+
+## Diagnostics
+
+Each cycle ends with a message on
+`{MQTT_BASE_TOPIC}/diagnostics/{DEVICE_HOSTNAME}`. It shows what the board
+heard and when, so a missed tag can be traced to range or to the radio.
+
+```json
+{
+  "firmware": "ruuvi2mqtt-esp32 1.5.2-dev (c43f162)",
+  "client_id": "ruuvi2mqtt-kitchen",
+  "chip": "esp32c6",
+  "cycle": 42,
+  "wifi_rssi": -61,
+  "wifi_channel": 6,
+  "wifi_cache": "hit",
+  "free_heap": 151000,
+  "scan_start_ms": 180,
+  "scan_end_ms": 5190,
+  "wifi_ms": 1450,
+  "mqtt_ms": 2210,
+  "cycle_ms": 5230,
+  "tags": {
+    "f817624e4c0b": { "rssi": -74, "adverts": 2, "first_ms": 1210 }
+  },
+  "adverts_before_wifi": 1,
+  "adverts_after_wifi": 1,
+  "other_adverts_before_wifi": 35,
+  "other_adverts_after_wifi": 61
+}
+```
+
+| Field | Description |
+|---|---|
+| `firmware` | Package version and git commit, with `-dirty` for local changes |
+| `client_id` | `MQTT_CLIENT_ID`, the `publisher` in the readings |
+| `chip` | ESP-IDF target |
+| `cycle` | Cycles since a cold boot or a crash, this one included. A gap means cycles without diagnostics |
+| `wifi_rssi`, `wifi_channel` | The access point's signal (dBm) and channel |
+| `wifi_cache` | `hit`: connected with the cached channel and BSSID. `miss`: nothing cached. `stale`: the cache failed, so a full scan |
+| `free_heap` | Free heap in bytes |
+| `scan_start_ms`, `scan_end_ms` | When the BLE scan started and finished |
+| `wifi_ms`, `mqtt_ms` | When Wi-Fi and the broker connection were up |
+| `cycle_ms` | When the message was built |
+| `tags` | Per Ruuvi MAC: the strongest RSSI (dBm), the advertisements received, and when the first one arrived |
+| `adverts_before_wifi`, `adverts_after_wifi` | Ruuvi advertisements before and after Wi-Fi connected |
+| `other_adverts_before_wifi`, `other_adverts_after_wifi` | Other BLE advertisements, the same way. They show the scan's airtime |
+| `error` | Only when the BLE scan failed |
+
+All times are in milliseconds from the start of the cycle. The test bed's
+[checker](../checker/README.md) turns the counts into rates over many cycles.
 
 ## Security
 

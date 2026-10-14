@@ -32,8 +32,8 @@ compile-time via environment variables, see `ruuvi2mqtt-esp32/README.md`.
 
 - `src/main.rs`: the wake cycle and logger setup.
 - `src/config.rs`: compile-time config from env vars (konst).
-- `src/wifi.rs`, `src/mqtt.rs`, `src/ble.rs`, `src/led.rs`, `src/diagnostics.rs`: one esp-idf-svc subsystem each; `ble.rs` uses esp32-nimble.
-- `src/lib.rs`: the pure-Rust modules, `mac.rs` (MAC addresses) and `payload.rs` (the reading's JSON). esp-idf-svc and esp32-nimble are espidf-only dependencies, so the lib's unit tests run on the host with stable Rust (`--target host-tuple`). The bin has `test = false`.
+- `src/wifi.rs`, `src/mqtt.rs`, `src/ble.rs`, `src/led.rs`: one esp-idf-svc subsystem each; `ble.rs` uses esp32-nimble. `src/system.rs` reads values for the diagnostics.
+- `src/lib.rs`: the pure-Rust modules, `mac.rs` (MAC addresses), `payload.rs` (the reading's JSON), `scan.rs` (BLE reception statistics) and `diagnostics.rs` (the diagnostics JSON). esp-idf-svc and esp32-nimble are espidf-only dependencies, so the lib's unit tests run on the host with stable Rust (`--target host-tuple`). The bin has `test = false`.
 - `build.rs`: embuild glue for ESP-IDF.
 
 esp-idf-svc is used by every module outside the lib, so an update to it

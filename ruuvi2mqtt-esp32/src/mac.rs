@@ -1,7 +1,9 @@
 use std::fmt;
 
+use serde::{Serialize, Serializer};
+
 /// A 6-byte MAC address with colon-separated `Display` and bare-hex topic format.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Mac(pub [u8; 6]);
 
 impl Mac {
@@ -26,6 +28,13 @@ impl fmt::Display for Mac {
     }
 }
 
+/// The topic format, so that a reading and its statistics share the ID.
+impl Serialize for Mac {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_str(&self.to_topic_string())
+    }
+}
+
 impl From<[u8; 6]> for Mac {
     fn from(bytes: [u8; 6]) -> Self {
         Self(bytes)
@@ -46,6 +55,14 @@ mod tests {
     #[test]
     fn topic_string_is_bare_lowercase_hex() {
         assert_eq!(EXAMPLE.to_topic_string(), "aabbccddeeff");
+    }
+
+    #[test]
+    fn serializes_in_topic_format() {
+        assert_eq!(
+            serde_json::to_string(&EXAMPLE).unwrap(),
+            r#""aabbccddeeff""#
+        );
     }
 
     #[test]

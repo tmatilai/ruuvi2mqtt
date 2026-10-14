@@ -23,6 +23,7 @@
 
 - Add `publisher`, the MQTT client ID, to each reading, like the Linux app.
 - Include the git commit in the diagnostics' `firmware` version, when built from a git checkout.
+- Measure BLE reception in the diagnostics: per tag the strongest RSSI, the advertisements and when the first arrived, and the advertisements before and after Wi-Fi connected. Also add the client ID, the chip, a cycle count, the Wi-Fi channel and cache use, and the scan, Wi-Fi and MQTT times. `tags` is now an object keyed by MAC instead of a list.
 
 
 ## 1.5.1 / 2026-09-30
