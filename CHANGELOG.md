@@ -1,33 +1,30 @@
-## _Not released yet_
+## 1.6.0 / 2026-10-14
 
 ### ruuvi2mqtt
 
 #### Features
 
-- Pick the publish delay for each reading from its RSSI plus random jitter, so the instance closest to a tag usually publishes it. Instances no longer need different `mqtt.throttle` values to avoid duplicates.
-- Default `mqtt.throttle` to 60 seconds instead of a random 50–69 seconds. Use the same value on every instance.
-- Add `publisher`, the MQTT client ID, to each reading, so it shows which instance sent it.
-- Publish a retained status message to `<base_topic>/status/<client_id>`: `online` with the version on connect, and `offline` as the MQTT last will.
+- Delay each reading by its RSSI plus random jitter, so the instance closest to a tag usually publishes it. `mqtt.throttle` now defaults to 60 seconds instead of a random 50–69; use the same value on every instance.
+- Publish a retained status to `<base_topic>/status/<client_id>`: `online` with the version on connect, and `offline` as the MQTT last will.
+- Add `publisher`, the MQTT client ID, to each reading.
 - Add `--check-config` to validate the configuration file without connecting to MQTT or Bluetooth.
 - Include the git commit in the version, when built from a git checkout.
 
 #### Fixes
 
-- Read sensor data from BlueZ manufacturer data updates instead of RSSI updates. BlueZ after 5.86 sends RSSI updates only on changes of 8 dB or more, so most readings would be missed.
-- Start the throttle timer when publishing, not when the message comes back over MQTT. Two readings of a tag within one MQTT round trip were both published.
-- Skip the data BlueZ cached from an earlier scan at startup. It could be stale.
-- Exit with an error when the Bluetooth adapter powers off, e.g. when it goes away or BlueZ restarts. The app kept running without scanning: the 1.5.0 fix waited for the BLE event stream to end, which BlueZ doesn't do.
+- Exit with an error when the Bluetooth adapter powers off, e.g. on a controller disconnect or BlueZ restart, so a supervisor can restart the app. It kept running without scanning, as the 1.5.0 fix never triggered on BlueZ.
+- Fix duplicate and stale publishes: start the throttle timer when publishing instead of when the message comes back over MQTT, and skip the readings BlueZ cached before startup.
+- Read sensor data from BlueZ manufacturer data updates instead of RSSI updates. BlueZ after 5.86 sends RSSI updates only on changes of 8 dB or more, which would miss most readings.
 
 ### ruuvi2mqtt-esp32
 
 #### Features
 
+- Measure BLE reception in the diagnostics: per tag the strongest RSSI, the advertisement count and when the first arrived, plus the advertisements before and after Wi-Fi connected. `tags` is now an object keyed by MAC instead of a list.
+- Add `BLE_SCAN_MODE=sequential` to scan before Wi-Fi starts. Wi-Fi and BLE share one radio, so the scan gets it to itself, at the cost of a longer awake time.
 - Add `publisher`, the MQTT client ID, to each reading, like the Linux app.
-- Include the git commit in the diagnostics' `firmware` version, when built from a git checkout.
-- Measure BLE reception in the diagnostics: per tag the strongest RSSI, the advertisements and when the first arrived, and the advertisements before and after Wi-Fi connected. Also add the client ID, the chip, a cycle count, the Wi-Fi channel and cache use, and the scan, Wi-Fi and MQTT times. `tags` is now an object keyed by MAC instead of a list.
-- Add `BLE_SCAN_MODE=sequential` to scan before Wi-Fi starts. Wi-Fi and BLE share one radio, so the scan then has it to itself, at the cost of a longer awake time.
+- Add to the diagnostics the client ID, chip, cycle count, Wi-Fi channel and cache use, the scan, Wi-Fi and MQTT times, and the git commit in `firmware`.
 - Add `ANTENNA` to select the internal or external antenna on the Seeed XIAO ESP32-C6.
-
 
 ## 1.5.1 / 2026-09-30
 
