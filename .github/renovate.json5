@@ -80,6 +80,15 @@
       groupName: null,
       addLabels: ['breaking-risk'],
     },
+    {
+      // The Xtensa Rust toolchain in ruuvi2mqtt-esp32/Makefile. Tags look
+      // like v1.97.0.0. Renovate skips GitHub pre-releases, as `espup update`
+      // does.
+      matchDepNames: ['esp-rs/rust-build'],
+      extractVersion: '^v(?<version>.+)$',
+      versioning: 'loose',
+      addLabels: ['breaking-risk'],
+    },
   ],
 
   customManagers: [
