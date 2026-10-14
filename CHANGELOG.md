@@ -1,3 +1,6 @@
+## _Not released yet_
+
+
 ## 1.6.0 / 2026-10-14
 
 ### ruuvi2mqtt
