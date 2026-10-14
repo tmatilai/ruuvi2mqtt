@@ -16,6 +16,7 @@
 - Read sensor data from BlueZ manufacturer data updates instead of RSSI updates. BlueZ after 5.86 sends RSSI updates only on changes of 8 dB or more, so most readings would be missed.
 - Start the throttle timer when publishing, not when the message comes back over MQTT. Two readings of a tag within one MQTT round trip were both published.
 - Skip the data BlueZ cached from an earlier scan at startup. It could be stale.
+- Exit with an error when the Bluetooth adapter powers off, e.g. when it goes away or BlueZ restarts. The app kept running without scanning: the 1.5.0 fix waited for the BLE event stream to end, which BlueZ doesn't do.
 
 ### ruuvi2mqtt-esp32
 

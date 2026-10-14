@@ -89,7 +89,7 @@ async fn main() -> Result<()> {
                     }
                 }
             }
-            BleStopped => bail!("BLE event stream ended; exiting"),
+            BleStopped => bail!("BLE scanning stopped; exiting"),
         }
     }
     Ok(())
