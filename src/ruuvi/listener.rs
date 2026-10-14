@@ -12,8 +12,8 @@ use tokio::time::{Duration, sleep};
 
 use crate::Event::{BleStopped, RuuviUpdate};
 use crate::EventSender;
-use crate::ruuvi::SensorData;
 use crate::ruuvi::delay::{publish_delay, random_jitter};
+use crate::ruuvi::{BDAddr, SensorData};
 
 #[derive(Clone)]
 pub struct RuuviListener {
@@ -121,11 +121,7 @@ impl RuuviListener {
     ) -> Result<()> {
         log::trace!("BLE Peripheral: {peripheral:?}");
         log::trace!("Ruuvi event: {values:?}");
-        // Only data format 5 carries the MAC in the payload.
-        // Older formats use the advertiser address.
-        let address = values
-            .mac_address()
-            .map_or_else(|| peripheral.address(), Into::into);
+        let address = reading_address(&values, peripheral.address());
         let delay = publish_delay(rssi, random_jitter());
         log::debug!(
             "Reading from [{address}]: RSSI {}, delay {} ms",
@@ -147,6 +143,17 @@ fn parse_values(manufacturer_data: HashMap<u16, Vec<u8>>) -> Option<SensorValues
     manufacturer_data
         .into_iter()
         .find_map(|(id, data)| SensorValues::from_manufacturer_specific_data(id, data).ok())
+}
+
+/// Data formats 5 and E1 carry the full MAC. Format 6 carries only its
+/// lowest 3 bytes, which the crate pads with zeros. A Ruuvi's MAC is a
+/// random static address, so its top byte is never zero. Format 3 has no
+/// MAC.
+fn reading_address(values: &SensorValues, advertiser: BDAddr) -> BDAddr {
+    match values.mac_address() {
+        Some(mac) if mac[..3] != [0; 3] => mac.into(),
+        _ => advertiser,
+    }
 }
 
 /// A device `BlueZ` cached from an earlier scan has the payload it last saw,
@@ -177,7 +184,6 @@ mod tests {
     use super::*;
     use crate::Event::MqttDeviceUpdate;
     use crate::devices::{Devices, ThrottleResult};
-    use crate::ruuvi::BDAddr;
 
     fn sensor(address: BDAddr) -> SensorData {
         // Data format 3 has no MAC in the payload.
@@ -216,6 +222,45 @@ mod tests {
     #[test]
     fn skips_cached_device_without_rssi() {
         assert!(discovered_reading(ruuvi_properties(None)).is_none());
+    }
+
+    fn values(payload: &[u8]) -> SensorValues {
+        SensorValues::from_manufacturer_specific_data(0x0499, payload).unwrap()
+    }
+
+    fn advertiser() -> BDAddr {
+        BDAddr::from([0xC1, 0xC2, 0xC3, 0xC4, 0xC5, 0xC6])
+    }
+
+    #[test]
+    fn address_from_format_5_payload() {
+        let mut payload = [0; 24];
+        payload[0] = 5;
+        payload[18..].copy_from_slice(&[0xD1, 0xD2, 0xD3, 0xD4, 0xD5, 0xD6]);
+        assert_eq!(
+            reading_address(&values(&payload), advertiser()),
+            BDAddr::from([0xD1, 0xD2, 0xD3, 0xD4, 0xD5, 0xD6])
+        );
+    }
+
+    #[test]
+    fn address_from_advertiser_for_partial_format_6_mac() {
+        let mut payload = [0; 20];
+        payload[0] = 6;
+        payload[17..].copy_from_slice(&[0xC4, 0xC5, 0xC6]);
+        assert_eq!(
+            reading_address(&values(&payload), advertiser()),
+            advertiser()
+        );
+    }
+
+    #[test]
+    fn address_from_advertiser_without_payload_mac() {
+        let payload = [3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+        assert_eq!(
+            reading_address(&values(&payload), advertiser()),
+            advertiser()
+        );
     }
 
     #[test]
