@@ -46,10 +46,11 @@ ESP32-S3.
 A member of the root crate's workspace, so it shares the lockfile. The
 ESP32 crate is not a member. The checker watches a test bed's broker after
 a commit is deployed there. It checks the instances' statuses, readings and
-discovery configs. See `checker/README.md`.
+discovery configs, and the ESP32 boards' diagnostics. See `checker/README.md`.
 
 - `src/check.rs`: the checks, without MQTT. Has unit tests. `ENTITIES` and
-  `VALUES` mirror the app's payloads. Update them when the payloads change.
+  `VALUES` mirror the app's payloads, and `parse_diagnostics` the ESP32
+  diagnostics. Update them when the payloads change.
 - `src/main.rs`: the CLI and the MQTT loop.
 
 Commands: `cargo test -p ruuvi2mqtt-checker`; `make lint` and `make test`

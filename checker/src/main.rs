@@ -1,4 +1,4 @@
-//! Checks the Linux app on a test bed. See README.md.
+//! Checks the Linux app and the ESP32 boards on a test bed. See README.md.
 
 mod check;
 mod time;
@@ -43,6 +43,14 @@ struct Options {
     /// A Linux instance's MQTT client ID (repeat for each)
     #[arg(long = "instance", value_name = "CLIENT_ID", required = true)]
     instances: Vec<String>,
+    /// An ESP32 board's MQTT client ID (repeat for each). Its firmware and
+    /// cycle are checked. Boards that send diagnostics are reported without
+    /// it
+    #[arg(long = "board", value_name = "CLIENT_ID")]
+    boards: Vec<String>,
+    /// How often a board publishes: its deep sleep plus its awake time
+    #[arg(long, default_value = "67s", value_parser = time::parse)]
+    board_cycle: Duration,
     /// The MAC address of a tag that must be published (repeat for each)
     #[arg(long = "tag", value_name = "MAC", required = true, value_parser = parse_mac)]
     tags: Vec<String>,
@@ -71,6 +79,8 @@ impl Options {
             base_topic: self.base_topic.trim_end_matches('/').to_string(),
             commit: self.commit.clone(),
             instances: self.instances.clone(),
+            boards: self.boards.clone(),
+            board_cycle: self.board_cycle,
             tags: self.tags.clone(),
             first_reading: self.first_reading,
             max_gap: self.max_gap,
