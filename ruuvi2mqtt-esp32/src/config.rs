@@ -163,6 +163,20 @@ pub const BLE_SLEEP_DURATION: i32 = match option_env_non_empty!("BLE_SLEEP_DURAT
 pub const RUUVI_MANUFACTURER_ID: u16 = 0x0499;
 
 // ---------------------------------------------------------------------------
+// Antenna
+// ---------------------------------------------------------------------------
+
+/// The antenna of the Seeed XIAO ESP32-C6: `internal` (ceramic) or
+/// `external` (U.FL). Unset (default), the board uses the internal one.
+pub const ANTENNA: Option<&str> = option_env_non_empty!("ANTENNA");
+
+/// `ANTENNA=external`.
+pub const ANTENNA_EXTERNAL: bool = match ANTENNA {
+    Some(v) => konst::eq_str(v, "external"),
+    None => false,
+};
+
+// ---------------------------------------------------------------------------
 // LED
 // ---------------------------------------------------------------------------
 
@@ -233,6 +247,17 @@ const _: () = assert!(
 const _: () = assert!(
     BLE_SLEEP_DURATION > 0,
     "BLE_SLEEP_DURATION must be positive (seconds)"
+);
+const _: () = assert!(
+    match ANTENNA {
+        Some(v) => ANTENNA_EXTERNAL || konst::eq_str(v, "internal"),
+        None => true,
+    },
+    "ANTENNA must be internal or external"
+);
+const _: () = assert!(
+    ANTENNA.is_none() || konst::slice::eq_bytes(esp_idf_svc::sys::CONFIG_IDF_TARGET, b"esp32c6\0"),
+    "ANTENNA is only for the Seeed XIAO ESP32-C6"
 );
 const _: () = assert!(
     LED_GPIO < esp_idf_svc::sys::gpio_num_t_GPIO_NUM_MAX as u32,

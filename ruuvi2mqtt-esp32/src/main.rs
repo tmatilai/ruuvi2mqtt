@@ -10,6 +10,7 @@ use esp_idf_svc::{
 use log::{error, info, warn};
 use ruuvi2mqtt_esp32::diagnostics::{Diagnostics, Settings};
 
+mod antenna;
 mod ble;
 mod config;
 mod led;
@@ -94,6 +95,7 @@ const BROWNOUT_SLEEP_SECS: u64 = 4 * SLEEP_SECS;
 /// Enter deep sleep. On wake the chip reboots (`main()` runs fresh).
 /// Deep sleep draws ~5-10µA vs >100mA active.
 fn deep_sleep(secs: u64) -> ! {
+    antenna::power_off();
     info!("Entering deep sleep for {secs}s");
     unsafe { sys::esp_deep_sleep(secs * 1_000_000) }
 }
@@ -125,6 +127,8 @@ fn run(start: Instant, cycle: u32) -> anyhow::Result<()> {
     // ── LED ──────────────────────────────────────────────────────────────────
     let mut led = led::Led::new()?;
     led.apply_mode();
+
+    antenna::select();
 
     // ── BLE scan + Wi-Fi connect ─────────────────────────────────────────────
     // Wi-Fi and BLE share one 2.4 GHz radio. Scanning while Wi-Fi connects
@@ -175,6 +179,7 @@ fn run(start: Instant, cycle: u32) -> anyhow::Result<()> {
         settings: Settings {
             scan_mode: config::BLE_SCAN_MODE,
             scan_duration: config::BLE_SCAN_DURATION.unsigned_abs(),
+            antenna: config::ANTENNA,
         },
         wifi_rssi: ap_info.map(|(rssi, _)| rssi),
         wifi_channel: ap_info.map(|(_, channel)| channel),

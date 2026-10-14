@@ -25,6 +25,7 @@
 - Include the git commit in the diagnostics' `firmware` version, when built from a git checkout.
 - Measure BLE reception in the diagnostics: per tag the strongest RSSI, the advertisements and when the first arrived, and the advertisements before and after Wi-Fi connected. Also add the client ID, the chip, a cycle count, the Wi-Fi channel and cache use, and the scan, Wi-Fi and MQTT times. `tags` is now an object keyed by MAC instead of a list.
 - Add `BLE_SCAN_MODE=sequential` to scan before Wi-Fi starts. Wi-Fi and BLE share one radio, so the scan then has it to itself, at the cost of a longer awake time.
+- Add `ANTENNA` to select the internal or external antenna on the Seeed XIAO ESP32-C6.
 
 
 ## 1.5.1 / 2026-09-30

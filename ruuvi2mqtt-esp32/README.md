@@ -99,6 +99,7 @@ All settings are baked in at compile-time via environment variables.
 | `BLE_SCAN_DURATION` | — | `5` | BLE scan duration (seconds). Set close to your Wi-Fi + MQTT connect time (see boot log), min 3s |
 | `BLE_SCAN_MODE` | — | `parallel` | `parallel` scans while Wi-Fi connects. `sequential` scans first, then starts Wi-Fi |
 | `BLE_SLEEP_DURATION` | — | `60` | Deep sleep between cycles (seconds) |
+| `ANTENNA` | — | *(unset)* | Seeed XIAO ESP32-C6 only: `internal` or `external` antenna. See [Antenna](#antenna) |
 | `LED_MODE` | — | *(unset)* | `on` to light while awake, `off` to turn off at boot, or unset to do nothing |
 | `LED_TYPE` | — | `ws2812` | `ws2812` or `gpio` |
 | `LED_GPIO` | — | `15` | LED pin number |
@@ -115,6 +116,18 @@ per-device configuration files (see below).
 | Beetle ESP32 C6 Mini (DFRobot DFR1117) | `gpio` | `15` |
 | ESP32-S3 AI Camera (DFRobot DFR1154) | `gpio` | `3` |
 | ESP32-CAM | `ws2812` | `33` |
+
+#### Antenna
+
+The Seeed XIAO ESP32-C6 has an RF switch between its ceramic antenna and a
+U.FL connector ([Seeed wiki][xiao-c6]). `ANTENNA` selects one. The switch
+is powered off in deep sleep, since it draws more than the chip does.
+
+Without `ANTENNA`, the firmware doesn't touch the switch, and the XIAO uses
+its internal antenna. Other boards use its pins for other things, so the
+build fails if `ANTENNA` is set for any chip but the ESP32-C6.
+
+[xiao-c6]: https://wiki.seeedstudio.com/xiao_esp32c6_getting_started/
 
 ---
 
@@ -186,7 +199,7 @@ heard and when, so a missed tag can be traced to range or to the radio.
   "client_id": "ruuvi2mqtt-kitchen",
   "chip": "esp32c6",
   "cycle": 42,
-  "settings": { "scan_mode": "parallel", "scan_duration": 5 },
+  "settings": { "scan_mode": "parallel", "scan_duration": 5, "antenna": "external" },
   "wifi_rssi": -61,
   "wifi_channel": 6,
   "wifi_cache": "hit",
@@ -212,7 +225,7 @@ heard and when, so a missed tag can be traced to range or to the radio.
 | `client_id` | `MQTT_CLIENT_ID`, the `publisher` in the readings |
 | `chip` | ESP-IDF target |
 | `cycle` | Cycles since a cold boot or a crash, this one included. A gap means cycles without diagnostics |
-| `settings` | The build-time settings that A/B tests compare: `BLE_SCAN_MODE` and `BLE_SCAN_DURATION` |
+| `settings` | The build-time settings that A/B tests compare: `BLE_SCAN_MODE`, `BLE_SCAN_DURATION` and `ANTENNA` (left out when unset) |
 | `wifi_rssi`, `wifi_channel` | The access point's signal (dBm) and channel |
 | `wifi_cache` | `hit`: connected with the cached channel and BSSID. `miss`: nothing cached. `stale`: the cache failed, so a full scan |
 | `free_heap` | Free heap in bytes |

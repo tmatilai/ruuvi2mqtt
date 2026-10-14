@@ -50,6 +50,9 @@ pub struct Settings<'a> {
     pub scan_mode: &'a str,
     /// Seconds.
     pub scan_duration: u32,
+    /// `internal` or `external`. Left out when unset.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub antenna: Option<&'a str>,
 }
 
 /// How Wi-Fi used the channel and BSSID cached in NVS.
@@ -80,6 +83,7 @@ mod tests {
             settings: Settings {
                 scan_mode: "parallel",
                 scan_duration: 5,
+                antenna: None,
             },
             wifi_rssi: Some(-61),
             wifi_channel: Some(6),
@@ -117,8 +121,13 @@ mod tests {
     }
 
     #[test]
-    fn json_with_an_error() {
+    fn json_with_an_error_and_all_settings() {
         let diagnostics = Diagnostics {
+            settings: Settings {
+                scan_mode: "sequential",
+                scan_duration: 8,
+                antenna: Some("external"),
+            },
             wifi_rssi: None,
             wifi_channel: None,
             wifi_cache: CacheUse::Stale,
@@ -126,6 +135,9 @@ mod tests {
             ..diagnostics(ScanStats::default())
         };
         let json = diagnostics.to_json();
+        assert!(json.contains(
+            r#""settings":{"scan_mode":"sequential","scan_duration":8,"antenna":"external"},"#
+        ));
         assert!(json.contains(r#""wifi_rssi":null,"wifi_channel":null,"wifi_cache":"stale","#));
         assert!(json.contains(r#""tags":{},"#));
         assert!(json.ends_with(r#","error":"BLE scan thread panicked"}"#));
