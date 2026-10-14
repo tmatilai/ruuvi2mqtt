@@ -86,11 +86,14 @@ ESPFLASH_VERSION := 4.6.0
 ESPUP_VERSION := 0.18.0
 # renovate: datasource=crate depName=ldproxy
 LDPROXY_VERSION := 0.3.5
+# The Xtensa Rust toolchain (`+esp`). CI builds ESP32-S3 with it too.
+# renovate: datasource=github-releases depName=esp-rs/rust-build
+XTENSA_TOOLCHAIN_VERSION := 1.97.0.0
 
 .PHONY: setup
-setup: ## Install the pinned tools and the latest Xtensa toolchain
+setup: ## Install the pinned tools and Xtensa toolchain
 	cargo install espflash@$(ESPFLASH_VERSION) espup@$(ESPUP_VERSION) ldproxy@$(LDPROXY_VERSION)
-	espup update
+	espup install --toolchain-version $(XTENSA_TOOLCHAIN_VERSION) --skip-version-parse
 
 .PHONY: all
 all: lint test build ## Lint, test, and build

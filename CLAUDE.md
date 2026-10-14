@@ -38,7 +38,8 @@ compile-time via environment variables, see `ruuvi2mqtt-esp32/README.md`.
 
 esp-idf-svc is used by every module outside the lib, so an update to it
 touches the whole firmware. Commands: `make -C ruuvi2mqtt-esp32 lint|test|build`. The firmware
-build needs the ESP toolchain (`make setup`); CI builds it for ESP32-C6 only.
+build needs the ESP toolchain (`make setup`); CI builds it for ESP32-C6 and
+ESP32-S3.
 
 ## Test bed checker (`checker/`)
 
@@ -58,7 +59,8 @@ cover it.
 
 fmt and clippy (pedantic) for all three crates, the trycmd CLI tests, ESP32
 host-side unit tests for the pure-Rust modules, the checker's unit tests, the
-Linux binary for six targets, and a release firmware build for ESP32-C6.
+Linux binary for six targets, and release firmware builds for ESP32-C6 and
+ESP32-S3.
 
 Not covered: no MQTT broker, no Bluetooth hardware, and no ESP32 runtime.
 Runtime behavior in `mqtt.rs`, `ruuvi/listener.rs`, `wifi.rs`, and `ble.rs`,

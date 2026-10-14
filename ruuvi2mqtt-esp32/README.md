@@ -54,9 +54,9 @@ Install all required toolchains and tools:
 make setup
 ```
 
-This installs the pinned versions of `ldproxy`, `espflash`, and `espup`, and
-the latest Xtensa Rust toolchain. Renovate bumps the pins in the `Makefile`,
-so re-run it after pulling.
+This installs the pinned versions of `ldproxy`, `espflash`, `espup`, and the
+Xtensa Rust toolchain. Renovate bumps the pins in the `Makefile`, so re-run it
+after pulling.
 
 ---
 

@@ -54,6 +54,8 @@ jobs:
 
       - name: Setup | Cache
         uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Run clippy
         run: cargo clippy --locked --workspace --tests --all-targets --all-features -- -D clippy::all -W clippy::pedantic
@@ -87,6 +89,7 @@ jobs:
           workspaces: ruuvi2mqtt-esp32 -> target
           cache-directories: ~/.espressif
           shared-key: esp32c6-riscv-${{ steps.esp-idf.outputs.version }}
+          save-if: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Run clippy (ESP32-C6)
         run: cd ruuvi2mqtt-esp32 && cargo clippy --locked -- -D clippy::all -W clippy::pedantic
@@ -110,6 +113,7 @@ jobs:
         uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           workspaces: ruuvi2mqtt-esp32 -> target
+          save-if: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Run clippy (host tests)
         run: cd ruuvi2mqtt-esp32 && cargo +stable clippy --locked --target host-tuple --lib --tests -- -D clippy::all -W clippy::pedantic
@@ -118,9 +122,27 @@ jobs:
         run: make -C ruuvi2mqtt-esp32 test
 
   build-esp32:
-    name: Build (ESP32-C6)
+    name: Build (${{ matrix.name }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: ESP32-C6
+            chip: esp32c6
+            target: riscv32imac-esp-espidf
+            cache-key: esp32c6-riscv
+          # The Xtensa chips build with Espressif's Rust fork, which lags
+          # upstream. They also compile esp32-nimble's code for the older
+          # Bluetooth controller, which ESP32-C6 doesn't use.
+          - name: ESP32-S3
+            chip: esp32s3
+            target: xtensa-esp32s3-espidf
+            cache-key: esp32s3-xtensa
+            xtensa: true
     env:
+      MCU: ${{ matrix.chip }}
+      TARGET: ${{ matrix.target }}
       WIFI_SSID: dummy
       WIFI_PASS: dummy
       MQTT_SERVER: dummy
@@ -131,7 +153,21 @@ jobs:
           persist-credentials: false
 
       - name: Setup | Rust
+        if: ${{ !matrix.xtensa }}
         run: cd ruuvi2mqtt-esp32 && rustup toolchain install
+
+      - name: Setup | Rust (Xtensa)
+        if: ${{ matrix.xtensa }}
+        run: |
+          cargo install espup@0.18.0
+          version=$(grep -oP '^XTENSA_TOOLCHAIN_VERSION\s*:=\s*\K\S+' ruuvi2mqtt-esp32/Makefile)
+          # Skipping the version parse avoids GitHub API calls and their rate limit.
+          # --std leaves GCC to esp-idf-sys.
+          espup install --std --targets "$MCU" --toolchain-version "$version" --skip-version-parse
+          # RUSTUP_TOOLCHAIN also puts the toolchain version in the cache key.
+          echo "RUSTUP_TOOLCHAIN=esp" >> "$GITHUB_ENV"
+          # bindgen needs Espressif's libclang for Xtensa.
+          echo "LIBCLANG_PATH=$(grep -oP '^export LIBCLANG_PATH="\K[^"]+' ~/export-esp.sh)" >> "$GITHUB_ENV"
 
       - name: Setup | ldproxy
         run: cargo install ldproxy@0.3.5
@@ -145,10 +181,11 @@ jobs:
         with:
           workspaces: ruuvi2mqtt-esp32 -> target
           cache-directories: ~/.espressif
-          shared-key: esp32c6-riscv-${{ steps.esp-idf.outputs.version }}
+          shared-key: ${{ matrix.cache-key }}-${{ steps.esp-idf.outputs.version }}
+          save-if: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Build firmware
-        run: cd ruuvi2mqtt-esp32 && cargo build --release --locked
+        run: cd ruuvi2mqtt-esp32 && cargo build --release --locked --target "$TARGET"
 
   test-checker:
     name: Test (checker)
@@ -166,6 +203,8 @@ jobs:
 
       - name: Setup | Cache
         uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Run tests
         run: cargo test --locked -p ruuvi2mqtt-checker
@@ -206,6 +245,7 @@ jobs:
         uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           shared-key: ${{ matrix.target }}-${{ matrix.os }}-debug-build
+          save-if: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Setup | Cross
         if: env.USE_CROSS == 'true'
