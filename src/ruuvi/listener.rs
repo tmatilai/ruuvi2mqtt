@@ -2,7 +2,8 @@ use std::collections::HashMap;
 
 use anyhow::{Context, Result};
 use btleplug::api::{
-    Central, CentralEvent, Manager as _, Peripheral as _, PeripheralProperties, ScanFilter,
+    Central, CentralEvent, CentralState, Manager as _, Peripheral as _, PeripheralProperties,
+    ScanFilter,
 };
 use btleplug::platform::{Adapter, Manager, Peripheral, PeripheralId};
 use futures::stream::StreamExt;
@@ -46,6 +47,13 @@ impl RuuviListener {
         // Start BLE event loop
         tokio::spawn(async move {
             while let Some(event) = events.next().await {
+                // BlueZ powers the adapter off before it removes it, e.g. when
+                // the controller disconnects or BlueZ restarts. It doesn't
+                // restart our discovery when the adapter comes back.
+                if let CentralEvent::StateUpdate(CentralState::PoweredOff) = event {
+                    log::warn!("Bluetooth adapter powered off");
+                    break;
+                }
                 let ruuvi = self.clone();
                 tokio::spawn(async move {
                     log::trace!("BLE event: {event:?}");
@@ -54,10 +62,10 @@ impl RuuviListener {
                     }
                 });
             }
-            // The stream ends e.g. when BlueZ restarts or the adapter goes away.
+            // On BlueZ, the stream itself ends only with the D-Bus connection.
             // Tell main() so the daemon exits instead of running idle.
             if self.tx.send(BleStopped).await.is_err() {
-                log::error!("BLE event stream ended and main loop is gone");
+                log::error!("BLE scanning stopped and main loop is gone");
             }
         });
 

@@ -32,7 +32,7 @@ Configuration file is by default searched from the working directory, but the pa
 Example command to run in a Docker container:
 
 ```bash
-docker run --name ruuvi2mqtt --rm \
+docker run --name ruuvi2mqtt -d --restart=unless-stopped \
     -v /run/dbus/system_bus_socket:/run/dbus/system_bus_socket \
     -v "$PWD/ruuvi2mqtt.yaml:/ruuvi2mqtt.yaml" \
     ghcr.io/tmatilai/ruuvi2mqtt:v1.5.1 \
@@ -40,6 +40,9 @@ docker run --name ruuvi2mqtt --rm \
 ```
 
 The container runs as uid 65534 (`nobody`), so the mounted configuration file must be readable by that user, e.g. `chown 65534 ruuvi2mqtt.yaml`. The host needs BlueZ 5.51 or newer for non-root D-Bus access; on older hosts add `--user 0`.
+
+The app exits with an error when it loses Bluetooth, e.g. when the adapter goes away or BlueZ restarts.
+Run it under something that restarts it, such as systemd with `Restart=on-failure` or Docker with `--restart`.
 
 ### Status
 
