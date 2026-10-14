@@ -130,16 +130,27 @@ pub const MQTT_BASE_TOPIC: &str = match option_env_non_empty!("MQTT_BASE_TOPIC")
 // BLE scanning
 // ---------------------------------------------------------------------------
 
-/// Duration (seconds) of each BLE scan pass. BLE scanning runs in parallel
-/// with Wi-Fi connection, so increasing this does not necessarily add to the
-/// total active time. For best results, set this close to your typical
-/// Wi-Fi + MQTT connect time (check the boot log) but at least 3 seconds
-/// to have the chance to catch all RuuviTags (~2.5s advertisement interval).
+/// Duration (seconds) of each BLE scan pass. In the parallel scan mode, BLE
+/// scanning runs during the Wi-Fi connection, so increasing this does not
+/// necessarily add to the total active time. For best results, set this
+/// close to your typical Wi-Fi + MQTT connect time (check the boot log) but
+/// at least 3 seconds to have the chance to catch all RuuviTags (~2.5s
+/// advertisement interval).
 #[allow(clippy::doc_markdown)] // RuuviTag is a product name, not a code identifier
 pub const BLE_SCAN_DURATION: i32 = match option_env_non_empty!("BLE_SCAN_DURATION") {
     Some(v) => konst::result::unwrap!(i32::from_str_radix(v, 10)),
     None => 5,
 };
+
+/// When to scan: `parallel` (default) scans while Wi-Fi connects.
+/// `sequential` runs the full scan first and starts Wi-Fi after it.
+pub const BLE_SCAN_MODE: &str = match option_env_non_empty!("BLE_SCAN_MODE") {
+    Some(v) => v,
+    None => "parallel",
+};
+
+/// `BLE_SCAN_MODE=sequential`.
+pub const BLE_SCAN_SEQUENTIAL: bool = konst::eq_str(BLE_SCAN_MODE, "sequential");
 
 /// Deep sleep duration (seconds) between scan-publish cycles. The chip fully
 /// powers off (CPU, RAM, radios) and reboots on wake.
@@ -150,6 +161,20 @@ pub const BLE_SLEEP_DURATION: i32 = match option_env_non_empty!("BLE_SLEEP_DURAT
 
 /// Ruuvi manufacturer-specific data company identifier (little-endian 0x0499).
 pub const RUUVI_MANUFACTURER_ID: u16 = 0x0499;
+
+// ---------------------------------------------------------------------------
+// Antenna
+// ---------------------------------------------------------------------------
+
+/// The antenna of the Seeed XIAO ESP32-C6: `internal` (ceramic) or
+/// `external` (U.FL). Unset (default), the board uses the internal one.
+pub const ANTENNA: Option<&str> = option_env_non_empty!("ANTENNA");
+
+/// `ANTENNA=external`.
+pub const ANTENNA_EXTERNAL: bool = match ANTENNA {
+    Some(v) => konst::eq_str(v, "external"),
+    None => false,
+};
 
 // ---------------------------------------------------------------------------
 // LED
@@ -216,8 +241,23 @@ const _: () = assert!(
     "BLE_SCAN_DURATION must be positive (seconds)"
 );
 const _: () = assert!(
+    BLE_SCAN_SEQUENTIAL || konst::eq_str(BLE_SCAN_MODE, "parallel"),
+    "BLE_SCAN_MODE must be parallel or sequential"
+);
+const _: () = assert!(
     BLE_SLEEP_DURATION > 0,
     "BLE_SLEEP_DURATION must be positive (seconds)"
+);
+const _: () = assert!(
+    match ANTENNA {
+        Some(v) => ANTENNA_EXTERNAL || konst::eq_str(v, "internal"),
+        None => true,
+    },
+    "ANTENNA must be internal or external"
+);
+const _: () = assert!(
+    ANTENNA.is_none() || konst::slice::eq_bytes(esp_idf_svc::sys::CONFIG_IDF_TARGET, b"esp32c6\0"),
+    "ANTENNA is only for the Seeed XIAO ESP32-C6"
 );
 const _: () = assert!(
     LED_GPIO < esp_idf_svc::sys::gpio_num_t_GPIO_NUM_MAX as u32,

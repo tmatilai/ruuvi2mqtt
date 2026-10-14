@@ -40,6 +40,10 @@ pub struct Config {
     pub commit: String,
     /// The Linux instances' MQTT client IDs
     pub instances: Vec<String>,
+    /// The ESP32 boards' MQTT client IDs, to check their firmware and cycle
+    pub boards: Vec<String>,
+    /// How often a board publishes its diagnostics
+    pub board_cycle: Duration,
     /// The tags that must be published, as in their topics (lowercase hex)
     pub tags: Vec<String>,
     pub first_reading: Duration,
@@ -61,9 +65,11 @@ pub struct Watch {
     config: Config,
     statuses: BTreeMap<String, Vec<Status>>,
     tags: BTreeMap<String, Tag>,
+    /// The ESP32 boards' diagnostics, by client ID
+    boards: BTreeMap<String, Vec<Diagnostics>>,
     invalid_readings: Problems,
     invalid_discovery: Problems,
-    unknown_publishers: BTreeMap<String, usize>,
+    invalid_diagnostics: Problems,
     other_topics: usize,
 }
 
@@ -79,8 +85,42 @@ struct Tag {
     /// From the discovery configs
     name: Option<String>,
     entities: BTreeSet<&'static str>,
-    readings: Vec<Duration>,
+    /// When, and from which publisher
+    readings: Vec<(Duration, String)>,
     publishers: BTreeMap<String, usize>,
+}
+
+/// One cycle's diagnostics from an ESP32 board. The times are in ms from the
+/// start of the board's cycle.
+struct Diagnostics {
+    at: Duration,
+    hostname: String,
+    firmware: String,
+    chip: String,
+    /// The board's cycle counter, which restarts on a cold boot or crash
+    cycle: u64,
+    settings: String,
+    wifi_cache: String,
+    scan_start_ms: u64,
+    scan_end_ms: u64,
+    wifi_ms: u64,
+    mqtt_ms: u64,
+    cycle_ms: u64,
+    /// Tag ID to (the strongest RSSI, advertisements)
+    tags: BTreeMap<String, (i64, u64)>,
+    /// Ruuvi advertisements before and after Wi-Fi connected
+    ruuvi_adverts: [u64; 2],
+    /// Other advertisements, the same way
+    other_adverts: [u64; 2],
+    error: Option<String>,
+}
+
+impl Diagnostics {
+    /// The scan time in ms before and after Wi-Fi connected
+    fn scan_windows(&self) -> [u64; 2] {
+        let split = self.wifi_ms.clamp(self.scan_start_ms, self.scan_end_ms);
+        [split - self.scan_start_ms, self.scan_end_ms - split]
+    }
 }
 
 #[derive(Default)]
@@ -106,9 +146,10 @@ impl Watch {
             config,
             statuses: BTreeMap::new(),
             tags: BTreeMap::new(),
+            boards: BTreeMap::new(),
             invalid_readings: Problems::default(),
             invalid_discovery: Problems::default(),
-            unknown_publishers: BTreeMap::new(),
+            invalid_diagnostics: Problems::default(),
             other_topics: 0,
         }
     }
@@ -127,6 +168,9 @@ impl Watch {
         {
             if let Some(client_id) = rest.strip_prefix("status/") {
                 return self.on_status(at, client_id, payload, retained);
+            }
+            if let Some(hostname) = rest.strip_prefix("diagnostics/") {
+                return self.on_diagnostics(at, hostname, payload, retained);
             }
             if is_tag_id(rest) {
                 return self.on_reading(at, rest, payload, retained);
@@ -180,19 +224,36 @@ impl Watch {
         match result {
             Ok(publisher) => {
                 let tag = self.tags.entry(id.to_string()).or_default();
-                tag.readings.push(at);
-                if !self.config.instances.contains(&publisher) {
-                    *self
-                        .unknown_publishers
-                        .entry(publisher.clone())
-                        .or_default() += 1;
-                }
-                *tag.publishers.entry(publisher).or_default() += 1;
+                *tag.publishers.entry(publisher.clone()).or_default() += 1;
+                tag.readings.push((at, publisher));
                 None
             }
             Err(err) => self
                 .invalid_readings
                 .add(format!("+{} {id}: {err}", time::format(at))),
+        }
+    }
+
+    fn on_diagnostics(
+        &mut self,
+        at: Duration,
+        hostname: &str,
+        payload: &[u8],
+        retained: bool,
+    ) -> Option<String> {
+        let result = if retained {
+            Err("retained".to_string())
+        } else {
+            parse_diagnostics(at, hostname, payload)
+        };
+        match result {
+            Ok((client_id, cycle)) => {
+                self.boards.entry(client_id).or_default().push(cycle);
+                None
+            }
+            Err(err) => self
+                .invalid_diagnostics
+                .add(format!("+{} {hostname}: {err}", time::format(at))),
         }
     }
 
@@ -240,10 +301,15 @@ impl Watch {
             .iter()
             .filter(|id| self.tags.get(*id).is_some_and(|t| !t.readings.is_empty()))
             .count();
-        format!(
+        let mut progress = format!(
             "{readings} readings, {heard} of {} tags",
             self.config.tags.len()
-        )
+        );
+        let cycles: usize = self.boards.values().map(Vec::len).sum();
+        if cycles > 0 {
+            let _ = write!(progress, ", {cycles} ESP32 cycles");
+        }
+        progress
     }
 
     /// Checks what was collected. `end` is how long the checker watched.
@@ -257,6 +323,7 @@ impl Watch {
         let _ = writeln!(r.text, "Commit {short}, watched for {}", time::format(end));
         self.check_instances(&mut r);
         self.check_tags(&mut r, end);
+        self.check_boards(&mut r, end);
         self.check_messages(&mut r);
 
         if !r.failures.is_empty() {
@@ -325,26 +392,26 @@ impl Watch {
 
     fn check_tags(&self, r: &mut Report, end: Duration) {
         let c = &self.config;
+        let boards = self.board_ids();
         let _ = writeln!(r.text, "\nTags:");
         for id in &c.tags {
             let tag = self.tags.get(id);
             let label = self.label(id);
-            let readings = tag.map_or(&[][..], |t| &t.readings);
+            let readings: Vec<Duration> =
+                tag.map_or_else(Vec::new, |t| t.readings.iter().map(|(at, _)| *at).collect());
             let _ = write!(r.text, "  {label}: {} readings", readings.len());
-            if let (Some(&first), Some(&last)) = (readings.first(), readings.last()) {
-                let intervals: Vec<Duration> = readings
-                    .windows(2)
-                    .map(|w| w[1].saturating_sub(w[0]))
+            if let Some(&first) = readings.first() {
+                let max_gap = max_gap(&readings, end);
+                // The boards don't coordinate with the instances or each other
+                let throttled: Vec<Duration> = tag
+                    .iter()
+                    .flat_map(|t| &t.readings)
+                    .filter(|(_, publisher)| !boards.contains(publisher.as_str()))
+                    .map(|(at, _)| *at)
                     .collect();
-                let max_gap = intervals
-                    .iter()
-                    .copied()
-                    .chain(iter::once(end.saturating_sub(last)))
-                    .max()
-                    .unwrap_or_default();
-                let duplicates = intervals
-                    .iter()
-                    .filter(|&&i| i < c.throttle * 9 / 10)
+                let duplicates = throttled
+                    .windows(2)
+                    .filter(|w| w[1].saturating_sub(w[0]) < c.throttle * 9 / 10)
                     .count();
                 let _ = write!(
                     r.text,
@@ -362,10 +429,10 @@ impl Watch {
                     r.failures
                         .push(format!("{label}: no reading for {}", time::format(max_gap)));
                 }
-                if duplicates * 100 > usize::from(c.max_duplicates) * readings.len() {
+                if duplicates * 100 > usize::from(c.max_duplicates) * throttled.len() {
                     r.failures.push(format!(
                         "{label}: {duplicates} of {} readings within the throttle",
-                        readings.len()
+                        throttled.len()
                     ));
                 }
             } else {
@@ -418,13 +485,28 @@ impl Watch {
                 self.invalid_discovery.count
             ));
         }
-        for (publisher, n) in &self.unknown_publishers {
-            r.failures
-                .push(format!("{n} readings from {publisher}, not an instance"));
+        if self.invalid_diagnostics.count > 0 {
+            r.failures.push(format!(
+                "{} invalid diagnostics",
+                self.invalid_diagnostics.count
+            ));
+        }
+        let boards = self.board_ids();
+        let mut unknown_publishers: BTreeMap<&str, usize> = BTreeMap::new();
+        for (publisher, n) in self.tags.values().flat_map(|t| &t.publishers) {
+            if !self.config.instances.contains(publisher) && !boards.contains(publisher.as_str()) {
+                *unknown_publishers.entry(publisher).or_default() += n;
+            }
+        }
+        for (publisher, n) in unknown_publishers {
+            r.failures.push(format!(
+                "{n} readings from {publisher}, not an instance or a board"
+            ));
         }
         for (title, problems) in [
             ("Invalid readings", &self.invalid_readings),
             ("Invalid discovery configs", &self.invalid_discovery),
+            ("Invalid diagnostics", &self.invalid_diagnostics),
         ] {
             if problems.count > 0 {
                 let _ = writeln!(r.text, "\n{title} ({}):", problems.count);
@@ -435,6 +517,181 @@ impl Watch {
         }
         if self.other_topics > 0 {
             let _ = writeln!(r.text, "\n{} messages on other topics", self.other_topics);
+        }
+    }
+
+    /// The boards given with `--board`, and the ones that sent diagnostics
+    fn board_ids(&self) -> BTreeSet<&str> {
+        self.config
+            .boards
+            .iter()
+            .chain(self.boards.keys())
+            .map(String::as_str)
+            .collect()
+    }
+
+    /// The ESP32 section. The reception figures are only reported: what good
+    /// values are is still unknown. With `--board`, the firmware and the
+    /// cycle are checked.
+    fn check_boards(&self, r: &mut Report, end: Duration) {
+        let c = &self.config;
+        let ids = self.board_ids();
+        if ids.is_empty() {
+            return;
+        }
+        let _ = writeln!(r.text, "\nESP32 boards:");
+        for id in ids {
+            let checked = c.boards.iter().any(|b| b == id);
+            let cycles = self.boards.get(id).map_or(&[][..], Vec::as_slice);
+            let Some(last) = cycles.last() else {
+                let _ = writeln!(r.text, "  {id}: no diagnostics");
+                if checked {
+                    r.failures.push(format!("{id}: no diagnostics"));
+                }
+                continue;
+            };
+            let _ = writeln!(
+                r.text,
+                "  {id} ({}, {}): {} cycles, {}",
+                last.hostname,
+                last.chip,
+                cycles.len(),
+                last.firmware
+            );
+            self.report_board(r, cycles);
+            if checked {
+                check_board(r, id, cycles, c, end);
+            }
+        }
+    }
+
+    fn report_board(&self, r: &mut Report, cycles: &[Diagnostics]) {
+        let mut settings: BTreeMap<&str, usize> = BTreeMap::new();
+        for cycle in cycles {
+            *settings.entry(&cycle.settings).or_default() += 1;
+        }
+        let settings: Vec<String> = match settings.len() {
+            1 => settings.into_keys().map(str::to_string).collect(),
+            _ => settings
+                .iter()
+                .map(|(s, k)| format!("{s} ({k} cycles)"))
+                .collect(),
+        };
+        let _ = writeln!(r.text, "    settings: {}", settings.join("; "));
+        self.report_board_tags(r, cycles);
+
+        let windows = sum_pairs(cycles.iter().map(Diagnostics::scan_windows));
+        let ruuvi = sum_pairs(cycles.iter().map(|cy| cy.ruuvi_adverts));
+        let other = sum_pairs(cycles.iter().map(|cy| cy.other_adverts));
+        let _ = writeln!(
+            r.text,
+            "    adverts/s before Wi-Fi connected: Ruuvi {}, other {}; after: Ruuvi {}, other {}",
+            per_second(ruuvi[0], windows[0]),
+            per_second(other[0], windows[0]),
+            per_second(ruuvi[1], windows[1]),
+            per_second(other[1], windows[1]),
+        );
+
+        let ms = |f: fn(&Diagnostics) -> u64| -> i64 {
+            mean(
+                &cycles
+                    .iter()
+                    .map(|cy| i64::try_from(f(cy)).unwrap_or(i64::MAX))
+                    .collect::<Vec<_>>(),
+            )
+        };
+        let max_cycle_ms = cycles
+            .iter()
+            .map(|cy| cy.cycle_ms)
+            .max()
+            .unwrap_or_default();
+        let _ = writeln!(
+            r.text,
+            "    mean ms: Wi-Fi {}, MQTT {}, scan {}..{}, cycle {} (max {max_cycle_ms})",
+            ms(|cy| cy.wifi_ms),
+            ms(|cy| cy.mqtt_ms),
+            ms(|cy| cy.scan_start_ms),
+            ms(|cy| cy.scan_end_ms),
+            ms(|cy| cy.cycle_ms),
+        );
+
+        let mut caches: BTreeMap<&str, usize> = BTreeMap::new();
+        for cycle in cycles {
+            *caches.entry(&cycle.wifi_cache).or_default() += 1;
+        }
+        let caches: Vec<String> = caches.iter().map(|(k, n)| format!("{n} {k}")).collect();
+        let (missed, restarts) = missed_cycles(cycles);
+        let _ = writeln!(
+            r.text,
+            "    Wi-Fi cache {}; cycle counter: {missed} missed, {restarts} restarts",
+            caches.join(", ")
+        );
+        let errors: Vec<&Diagnostics> = cycles.iter().filter(|cy| cy.error.is_some()).collect();
+        if !errors.is_empty() {
+            let _ = writeln!(r.text, "    {} cycles with errors:", errors.len());
+            for cycle in errors.iter().take(MAX_EXAMPLES) {
+                let _ = writeln!(
+                    r.text,
+                    "      +{} {}",
+                    time::format(cycle.at),
+                    cycle.error.as_deref().unwrap_or_default()
+                );
+            }
+        }
+    }
+
+    /// The hit rate, and each expected tag's reception
+    fn report_board_tags(&self, r: &mut Report, cycles: &[Diagnostics]) {
+        let c = &self.config;
+        let n = cycles.len();
+        let heard: usize = cycles
+            .iter()
+            .map(|cycle| {
+                c.tags
+                    .iter()
+                    .filter(|t| cycle.tags.contains_key(*t))
+                    .count()
+            })
+            .sum();
+        let expected = c.tags.len() * n;
+        let _ = writeln!(
+            r.text,
+            "    hit rate {}% ({heard} of {expected} tag cycles)",
+            heard * 100 / expected.max(1)
+        );
+        for id in &c.tags {
+            let seen: Vec<(i64, u64)> = cycles
+                .iter()
+                .filter_map(|cy| cy.tags.get(id))
+                .copied()
+                .collect();
+            let _ = write!(
+                r.text,
+                "    {}: {} of {n} cycles",
+                self.label(id),
+                seen.len()
+            );
+            if !seen.is_empty() {
+                let rssi: Vec<i64> = seen.iter().map(|(rssi, _)| *rssi).collect();
+                let adverts: u64 = seen.iter().map(|(_, a)| a).sum();
+                let _ = write!(
+                    r.text,
+                    ", RSSI {} ({}..{}), {:.1} adverts per cycle heard",
+                    mean(&rssi),
+                    rssi.iter().min().unwrap_or(&0),
+                    rssi.iter().max().unwrap_or(&0),
+                    ratio(adverts, seen.len() as u64)
+                );
+            }
+            let _ = writeln!(r.text);
+        }
+        let others: BTreeSet<&String> = cycles
+            .iter()
+            .flat_map(|cy| cy.tags.keys())
+            .filter(|t| !c.tags.contains(t))
+            .collect();
+        if !others.is_empty() {
+            let _ = writeln!(r.text, "    {} other tags", others.len());
         }
     }
 
@@ -463,6 +720,164 @@ fn parse_discovery_topic(rest: &str) -> Option<(&str, &'static str)> {
 /// A tag's ID in its topics: the MAC as 12 lowercase hex digits
 fn is_tag_id(s: &str) -> bool {
     s.len() == 12 && s.bytes().all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f'))
+}
+
+/// The longest time without an event, the end included
+fn max_gap(times: &[Duration], end: Duration) -> Duration {
+    let Some(&last) = times.last() else {
+        return end;
+    };
+    times
+        .windows(2)
+        .map(|w| w[1].saturating_sub(w[0]))
+        .chain(iter::once(end.saturating_sub(last)))
+        .max()
+        .unwrap_or_default()
+}
+
+/// With `--board`: the board runs the commit under test, publishes about
+/// once per `board_cycle`, and never goes `max_gap` without diagnostics.
+fn check_board(r: &mut Report, id: &str, cycles: &[Diagnostics], c: &Config, end: Duration) {
+    if let Some(err) = cycles
+        .iter()
+        .find_map(|cy| check_version(&cy.firmware, &c.commit).err())
+    {
+        r.failures.push(format!("{id}: {err}"));
+    }
+    let times: Vec<Duration> = cycles.iter().map(|cy| cy.at).collect();
+    let gap = max_gap(&times, end).max(times[0]);
+    if gap > c.max_gap {
+        r.failures
+            .push(format!("{id}: no diagnostics for {}", time::format(gap)));
+    }
+    if let [first, .., last] = times[..] {
+        let interval =
+            last.saturating_sub(first) / u32::try_from(times.len() - 1).unwrap_or(u32::MAX);
+        let (low, high) = (c.board_cycle * 9 / 10, c.board_cycle * 11 / 10);
+        if !(low..=high).contains(&interval) {
+            r.failures.push(format!(
+                "{id}: a cycle every {}s, not {}s",
+                interval.as_secs(),
+                c.board_cycle.as_secs()
+            ));
+        }
+    }
+}
+
+/// Cycles missing from the counter, and how often it restarted
+fn missed_cycles(cycles: &[Diagnostics]) -> (u64, usize) {
+    let mut missed = 0;
+    let mut restarts = 0;
+    for w in cycles.windows(2) {
+        if w[1].cycle > w[0].cycle {
+            missed += w[1].cycle - w[0].cycle - 1;
+        } else {
+            restarts += 1;
+            missed += w[1].cycle.saturating_sub(1);
+        }
+    }
+    (missed, restarts)
+}
+
+fn sum_pairs(pairs: impl Iterator<Item = [u64; 2]>) -> [u64; 2] {
+    pairs.fold([0, 0], |acc, p| [acc[0] + p[0], acc[1] + p[1]])
+}
+
+#[allow(clippy::cast_precision_loss)] // counts are far below 2^52
+fn ratio(n: u64, d: u64) -> f64 {
+    n as f64 / d.max(1) as f64
+}
+
+/// Events per second over `ms`, or `-` without time
+fn per_second(n: u64, ms: u64) -> String {
+    if ms == 0 {
+        "-".to_string()
+    } else {
+        format!("{:.1}", ratio(n * 1000, ms))
+    }
+}
+
+/// The rounded mean, 0 for none
+fn mean(values: &[i64]) -> i64 {
+    let n = i64::try_from(values.len()).unwrap_or(i64::MAX).max(1);
+    let sum: i64 = values.iter().sum();
+    (sum + sum.signum() * n / 2) / n
+}
+
+/// Returns the board's client ID and its diagnostics.
+fn parse_diagnostics(
+    at: Duration,
+    hostname: &str,
+    payload: &[u8],
+) -> Result<(String, Diagnostics), String> {
+    let d: Value = serde_json::from_slice(payload).map_err(|err| format!("not JSON: {err}"))?;
+    let string = |key: &str| match &d[key] {
+        Value::String(s) if !s.is_empty() => Ok(s.clone()),
+        other => Err(format!("{key}: {other}")),
+    };
+    let number = |key: &str| number(&d, key);
+    let pair = |key: &str| {
+        Ok::<_, String>([
+            number(&format!("{key}_before_wifi"))?,
+            number(&format!("{key}_after_wifi"))?,
+        ])
+    };
+    let client_id = string("client_id")?;
+    let diagnostics = Diagnostics {
+        at,
+        hostname: hostname.to_string(),
+        firmware: string("firmware")?,
+        chip: string("chip")?,
+        cycle: number("cycle")?,
+        settings: parse_settings(&d["settings"])?,
+        wifi_cache: string("wifi_cache")?,
+        scan_start_ms: number("scan_start_ms")?,
+        scan_end_ms: number("scan_end_ms")?,
+        wifi_ms: number("wifi_ms")?,
+        mqtt_ms: number("mqtt_ms")?,
+        cycle_ms: number("cycle_ms")?,
+        tags: parse_board_tags(&d["tags"])?,
+        ruuvi_adverts: pair("adverts")?,
+        other_adverts: pair("other_adverts")?,
+        error: d["error"].as_str().map(str::to_string),
+    };
+    if diagnostics.scan_start_ms > diagnostics.scan_end_ms {
+        return Err(format!(
+            "scan_start_ms {} after scan_end_ms {}",
+            diagnostics.scan_start_ms, diagnostics.scan_end_ms
+        ));
+    }
+    Ok((client_id, diagnostics))
+}
+
+fn number(v: &Value, key: &str) -> Result<u64, String> {
+    v[key].as_u64().ok_or_else(|| format!("{key}: {}", v[key]))
+}
+
+/// `parallel 5s`, with `, external antenna` if set
+fn parse_settings(s: &Value) -> Result<String, String> {
+    let mode = s["scan_mode"]
+        .as_str()
+        .ok_or_else(|| format!("settings: {s}"))?;
+    let mut settings = format!("{mode} {}s", number(s, "scan_duration")?);
+    if let Some(antenna) = s["antenna"].as_str() {
+        let _ = write!(settings, ", {antenna} antenna");
+    }
+    Ok(settings)
+}
+
+fn parse_board_tags(tags: &Value) -> Result<BTreeMap<String, (i64, u64)>, String> {
+    let Value::Object(tags) = tags else {
+        return Err(format!("tags: {tags}"));
+    };
+    tags.iter()
+        .map(
+            |(id, tag)| match (tag["rssi"].as_i64(), tag["adverts"].as_u64()) {
+                (Some(rssi), Some(adverts)) if is_tag_id(id) => Ok((id.clone(), (rssi, adverts))),
+                _ => Err(format!("tag {id}: {tag}")),
+            },
+        )
+        .collect()
 }
 
 /// Returns the reading's publisher.
@@ -497,7 +912,11 @@ fn check_status(payload: &str, commit: &str) -> Result<(), String> {
     if status["state"] != "online" {
         return Err(format!("state {}", status["state"]));
     }
-    let version = status["version"].as_str().ok_or("no version")?;
+    check_version(status["version"].as_str().ok_or("no version")?, commit)
+}
+
+/// The version must be built from `commit` without local changes.
+fn check_version(version: &str, commit: &str) -> Result<(), String> {
     let revision = version
         .rsplit_once(" (")
         .and_then(|(_, r)| r.strip_suffix(')'))
@@ -525,6 +944,8 @@ mod tests {
             base_topic: "ruuvi2mqtt".into(),
             commit: COMMIT.into(),
             instances: vec![PANNU.into(), TALLI.into()],
+            boards: Vec::new(),
+            board_cycle: Duration::from_secs(67),
             tags: vec![TAG.into()],
             first_reading: Duration::from_mins(5),
             max_gap: Duration::from_mins(10),
@@ -762,7 +1183,7 @@ mod tests {
         let report = w.finish(Duration::from_mins(15));
         assert_eq!(
             report.summary,
-            "FAIL: 1 readings from esp32, not an instance"
+            "FAIL: 1 readings from esp32, not an instance or a board"
         );
     }
 
@@ -789,7 +1210,7 @@ mod tests {
             reading(PANNU).as_bytes(),
             false,
         );
-        w.on_message(secs(100), "ruuvi2mqtt/diagnostics/esp32", b"{}", false);
+        w.on_message(secs(100), "zigbee2mqtt/bridge/state", b"online", false);
         w.on_message(
             secs(0),
             "ruuvi2mqtt/status/conn-plain",
@@ -805,5 +1226,164 @@ mod tests {
         );
         assert!(report.text.contains("\nOther statuses:\n  conn-plain: "));
         assert!(report.text.contains("\n1 messages on other topics\n"));
+    }
+
+    const BOARD: &str = "ruuvi2mqtt-c6";
+
+    /// A board's diagnostics: Wi-Fi connects 1 s into the 5 s scan
+    fn diagnostics(firmware: &str, cycle: u64, tags: &str) -> String {
+        format!(
+            r#"{{"firmware":"ruuvi2mqtt-esp32 {firmware}","client_id":"{BOARD}","chip":"esp32c6","cycle":{cycle},"settings":{{"scan_mode":"parallel","scan_duration":5}},"wifi_rssi":-61,"wifi_channel":6,"wifi_cache":"hit","free_heap":151000,"scan_start_ms":200,"scan_end_ms":5200,"wifi_ms":1200,"mqtt_ms":2000,"cycle_ms":5300,"tags":{tags},"adverts_before_wifi":1,"adverts_after_wifi":8,"other_adverts_before_wifi":10,"other_adverts_after_wifi":80}}"#
+        )
+    }
+
+    /// `minutes` of healthy instances, and a board cycle every 67 s, each
+    /// with a reading of TAG right after TALLI's
+    fn with_board(watch: &mut Watch, minutes: u64, firmware: &str) {
+        healthy(watch, minutes);
+        let topic = format!("ruuvi2mqtt/{TAG}");
+        let tags = format!(r#"{{"{TAG}":{{"rssi":-74,"adverts":2,"first_ms":1210}}}}"#);
+        for n in 0..minutes * 60 / 67 {
+            let at = 31 + n * 67;
+            watch.on_message(secs(at), &topic, reading(BOARD).as_bytes(), false);
+            let payload = diagnostics(firmware, 10 + n, &tags);
+            watch.on_message(
+                secs(at),
+                "ruuvi2mqtt/diagnostics/ruuvitest-c6",
+                payload.as_bytes(),
+                false,
+            );
+        }
+    }
+
+    fn watch_board() -> Watch {
+        let mut w = watch();
+        w.config.boards = vec![BOARD.into()];
+        w
+    }
+
+    #[test]
+    fn board_is_reported_and_not_a_duplicate() {
+        let mut w = watch();
+        with_board(&mut w, 15, "1.5.2-dev (abcdef0)");
+        let report = w.finish(Duration::from_mins(15));
+        assert_eq!(report.failures, Vec::<String>::new(), "{}", report.text);
+        assert!(report.text.contains(concat!(
+            "\nESP32 boards:\n",
+            "  ruuvi2mqtt-c6 (ruuvitest-c6, esp32c6): 13 cycles, ruuvi2mqtt-esp32 1.5.2-dev (abcdef0)\n",
+            "    settings: parallel 5s\n",
+            "    hit rate 100% (13 of 13 tag cycles)\n",
+            "    Cellar (f817624e4c0b): 13 of 13 cycles, RSSI -74 (-74..-74), 2.0 adverts per cycle heard\n",
+            "    adverts/s before Wi-Fi connected: Ruuvi 1.0, other 10.0; after: Ruuvi 2.0, other 20.0\n",
+            "    mean ms: Wi-Fi 1200, MQTT 2000, scan 200..5200, cycle 5300 (max 5300)\n",
+            "    Wi-Fi cache 13 hit; cycle counter: 0 missed, 0 restarts\n",
+        )), "{}", report.text);
+        assert!(
+            report
+                .text
+                .contains("from ruuvi2mqtt-c6 13, ruuvi2mqtt_talli 15,")
+        );
+    }
+
+    #[test]
+    fn checked_board_passes() {
+        let mut w = watch_board();
+        with_board(&mut w, 15, "1.5.2-dev (6534f11)");
+        let report = w.finish(Duration::from_mins(15));
+        assert_eq!(report.failures, Vec::<String>::new(), "{}", report.text);
+    }
+
+    #[test]
+    fn checked_board_with_wrong_firmware_fails() {
+        let mut w = watch_board();
+        with_board(&mut w, 15, "1.5.2-dev (6534f11-dirty)");
+        let report = w.finish(Duration::from_mins(15));
+        assert_eq!(
+            report.summary,
+            "FAIL: ruuvi2mqtt-c6: ruuvi2mqtt-esp32 1.5.2-dev (6534f11-dirty) has local changes"
+        );
+    }
+
+    #[test]
+    fn checked_board_without_diagnostics_fails() {
+        let mut w = watch_board();
+        healthy(&mut w, 15);
+        let report = w.finish(Duration::from_mins(15));
+        assert_eq!(report.summary, "FAIL: ruuvi2mqtt-c6: no diagnostics");
+    }
+
+    #[test]
+    fn checked_board_with_a_gap_or_a_wrong_cycle_fails() {
+        let mut w = watch_board();
+        with_board(&mut w, 15, "1.5.2-dev (6534f11)");
+        let report = w.finish(Duration::from_mins(30));
+        assert_eq!(
+            report.failures.last().map(String::as_str),
+            Some("ruuvi2mqtt-c6: no diagnostics for 16:05")
+        );
+
+        let mut w = watch_board();
+        w.config.board_cycle = Duration::from_secs(30);
+        with_board(&mut w, 15, "1.5.2-dev (6534f11)");
+        let report = w.finish(Duration::from_mins(15));
+        assert_eq!(
+            report.summary,
+            "FAIL: ruuvi2mqtt-c6: a cycle every 67s, not 30s"
+        );
+    }
+
+    #[test]
+    fn missed_cycles_and_restarts_are_counted() {
+        let mut w = watch();
+        healthy(&mut w, 5);
+        let topic = "ruuvi2mqtt/diagnostics/ruuvitest-c6";
+        for (at, cycle) in [(0, 7), (67, 8), (201, 10), (268, 2)] {
+            let payload = diagnostics("1.5.2-dev (6534f11)", cycle, "{}");
+            w.on_message(secs(at), topic, payload.as_bytes(), false);
+        }
+        let report = w.finish(Duration::from_mins(5));
+        assert!(
+            report
+                .text
+                .contains("    hit rate 0% (0 of 4 tag cycles)\n")
+        );
+        assert!(
+            report
+                .text
+                .contains("cycle counter: 2 missed, 1 restarts\n"),
+            "{}",
+            report.text
+        );
+    }
+
+    #[test]
+    fn sequential_scan_has_no_time_after_wifi() {
+        let payload = diagnostics("1.5.2-dev", 1, "{}")
+            .replace(
+                r#""parallel","scan_duration":5"#,
+                r#""sequential","scan_duration":8,"antenna":"external""#,
+            )
+            .replace(r#""wifi_ms":1200"#, r#""wifi_ms":9500"#);
+        let (_, d) = parse_diagnostics(secs(0), "c6", payload.as_bytes()).unwrap();
+        assert_eq!(d.settings, "sequential 8s, external antenna");
+        assert_eq!(d.scan_windows(), [5000, 0]);
+        assert_eq!(per_second(0, 0), "-");
+    }
+
+    #[test]
+    fn invalid_diagnostics_fail() {
+        let mut w = watch();
+        healthy(&mut w, 15);
+        let topic = "ruuvi2mqtt/diagnostics/esp32";
+        let note = w.on_message(secs(100), topic, br#"{"firmware":"x"}"#, false);
+        assert_eq!(note.as_deref(), Some("+1:40 esp32: client_id: null"));
+        let bad_tag = diagnostics("1.5.2-dev", 1, r#"{"f817624e4c0b":{"rssi":"weak"}}"#);
+        let note = w.on_message(secs(160), topic, bad_tag.as_bytes(), false);
+        assert_eq!(
+            note.as_deref(),
+            Some(r#"+2:40 esp32: tag f817624e4c0b: {"rssi":"weak"}"#)
+        );
+        let report = w.finish(Duration::from_mins(15));
+        assert_eq!(report.summary, "FAIL: 2 invalid diagnostics");
     }
 }

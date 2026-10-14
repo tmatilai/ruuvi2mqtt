@@ -32,8 +32,8 @@ compile-time via environment variables, see `ruuvi2mqtt-esp32/README.md`.
 
 - `src/main.rs`: the wake cycle and logger setup.
 - `src/config.rs`: compile-time config from env vars (konst).
-- `src/wifi.rs`, `src/mqtt.rs`, `src/ble.rs`, `src/led.rs`, `src/diagnostics.rs`: one esp-idf-svc subsystem each; `ble.rs` uses esp32-nimble.
-- `src/lib.rs`: the pure-Rust modules, `mac.rs` (MAC addresses) and `payload.rs` (the reading's JSON). esp-idf-svc and esp32-nimble are espidf-only dependencies, so the lib's unit tests run on the host with stable Rust (`--target host-tuple`). The bin has `test = false`.
+- `src/wifi.rs`, `src/mqtt.rs`, `src/ble.rs`, `src/led.rs`: one esp-idf-svc subsystem each; `ble.rs` uses esp32-nimble. `src/system.rs` reads values for the diagnostics. `src/antenna.rs` drives the XIAO ESP32-C6's RF switch.
+- `src/lib.rs`: the pure-Rust modules, `mac.rs` (MAC addresses), `payload.rs` (the reading's JSON), `scan.rs` (BLE reception statistics) and `diagnostics.rs` (the diagnostics JSON). esp-idf-svc and esp32-nimble are espidf-only dependencies, so the lib's unit tests run on the host with stable Rust (`--target host-tuple`). The bin has `test = false`.
 - `build.rs`: embuild glue for ESP-IDF.
 
 esp-idf-svc is used by every module outside the lib, so an update to it
@@ -46,10 +46,11 @@ ESP32-S3.
 A member of the root crate's workspace, so it shares the lockfile. The
 ESP32 crate is not a member. The checker watches a test bed's broker after
 a commit is deployed there. It checks the instances' statuses, readings and
-discovery configs. See `checker/README.md`.
+discovery configs, and the ESP32 boards' diagnostics. See `checker/README.md`.
 
 - `src/check.rs`: the checks, without MQTT. Has unit tests. `ENTITIES` and
-  `VALUES` mirror the app's payloads. Update them when the payloads change.
+  `VALUES` mirror the app's payloads, and `parse_diagnostics` the ESP32
+  diagnostics. Update them when the payloads change.
 - `src/main.rs`: the CLI and the MQTT loop.
 
 Commands: `cargo test -p ruuvi2mqtt-checker`; `make lint` and `make test`

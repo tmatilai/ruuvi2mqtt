@@ -13,7 +13,7 @@ use crate::config;
 
 /// Events forwarded from the event-loop thread to [`Mqtt`].
 enum Event {
-    Connected,
+    Connected(Instant),
     Published(MessageId),
 }
 
@@ -21,7 +21,8 @@ enum Event {
 pub struct Mqtt {
     client: EspMqttClient<'static>,
     events: mpsc::Receiver<Event>,
-    connected: bool,
+    /// When the broker first accepted the connection.
+    connected_at: Option<Instant>,
     /// Publishes not yet acknowledged by the broker.
     pending: Vec<MessageId>,
 }
@@ -75,20 +76,17 @@ impl Mqtt {
         Ok(Self {
             client,
             events,
-            connected: false,
+            connected_at: None,
             pending: Vec::new(),
         })
     }
 
-    /// Wait until the broker has accepted the connection.
-    pub fn wait_connected(&mut self, timeout: Duration) -> anyhow::Result<()> {
-        let connected = self.wait(timeout, |mqtt| mqtt.connected)?;
-        ensure!(
-            connected,
-            "MQTT connect timed out after {}s",
-            timeout.as_secs()
-        );
-        Ok(())
+    /// Wait until the broker has accepted the connection, and return when
+    /// it did.
+    pub fn wait_connected(&mut self, timeout: Duration) -> anyhow::Result<Instant> {
+        self.wait(timeout, |mqtt| mqtt.connected_at.is_some())?;
+        self.connected_at
+            .with_context(|| format!("MQTT connect timed out after {}s", timeout.as_secs()))
     }
 
     /// Publish `payload` at least once. Acknowledgement is checked in
@@ -119,7 +117,9 @@ impl Mqtt {
         while !done(self) {
             let remaining = deadline.saturating_duration_since(Instant::now());
             match self.events.recv_timeout(remaining) {
-                Ok(Event::Connected) => self.connected = true,
+                Ok(Event::Connected(at)) => {
+                    self.connected_at.get_or_insert(at);
+                }
                 Ok(Event::Published(id)) => self.pending.retain(|&p| p != id),
                 Err(RecvTimeoutError::Timeout) => return Ok(false),
                 Err(RecvTimeoutError::Disconnected) => bail!("MQTT event loop ended"),
@@ -160,7 +160,9 @@ fn run_event_loop(mut connection: EspMqttConnection, events: &mpsc::Sender<Event
         let event = match event.payload() {
             EventPayload::Connected(_) => {
                 info!("Connected to MQTT");
-                Event::Connected
+                // The main thread may be waiting for the scan, so it
+                // processes the event later.
+                Event::Connected(Instant::now())
             }
             EventPayload::Published(id) => Event::Published(id),
             other => {
