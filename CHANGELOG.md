@@ -1,5 +1,10 @@
 ## _Not released yet_
 
+### ruuvi2mqtt
+
+#### Fixes
+
+- Publish Ruuvi Air readings under the tag's MAC. Data format 6 carries only the lowest 3 bytes of the MAC, so they were published under `00:00:00:xx:yy:zz`.
 
 ## 1.6.0 / 2026-10-14
 
