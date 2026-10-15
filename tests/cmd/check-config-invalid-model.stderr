@@ -1,0 +1,5 @@
+...
+Error: Failed to load ruuvi2mqtt.yaml
+
+Caused by:
+    devices.AA:12:BB:34:CC:56.model: unknown variant `station`, expected `tag` or `air` at line 6 column 12

@@ -52,8 +52,16 @@ struct Options {
     #[arg(long, default_value = "67s", value_parser = time::parse)]
     board_cycle: Duration,
     /// The MAC address of a tag that must be published (repeat for each)
-    #[arg(long = "tag", value_name = "MAC", required = true, value_parser = parse_mac)]
+    #[arg(
+        long = "tag",
+        value_name = "MAC",
+        required_unless_present = "airs",
+        value_parser = parse_mac
+    )]
     tags: Vec<String>,
+    /// The MAC address of a Ruuvi Air that must be published (repeat for each)
+    #[arg(long = "air", value_name = "MAC", value_parser = parse_mac)]
+    airs: Vec<String>,
     /// How long to watch, e.g. 1h, 15m or 90s
     #[arg(long, default_value = "1h", value_parser = time::parse)]
     duration: Duration,
@@ -81,7 +89,8 @@ impl Options {
             instances: self.instances.clone(),
             boards: self.boards.clone(),
             board_cycle: self.board_cycle,
-            tags: self.tags.clone(),
+            tags: self.tags.iter().chain(&self.airs).cloned().collect(),
+            airs: self.airs.clone(),
             first_reading: self.first_reading,
             max_gap: self.max_gap,
             throttle: self.throttle,

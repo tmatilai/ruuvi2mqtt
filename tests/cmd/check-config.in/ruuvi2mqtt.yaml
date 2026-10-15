@@ -7,3 +7,6 @@ mqtt:
 devices:
   AA:12:BB:34:CC:56:
     name: Indoors
+  DD:78:EE:90:FF:12:
+    name: Living room
+    model: air

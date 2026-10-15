@@ -9,9 +9,9 @@ use serde_json::Value;
 
 use crate::time;
 
-/// Each tag's Home Assistant entities, as `src/homeassistant.rs` publishes
+/// A tag's Home Assistant entities, as `src/homeassistant.rs` publishes
 /// them: (component, entity).
-const ENTITIES: [(&str, &str); 6] = [
+const TAG_ENTITIES: [(&str, &str); 6] = [
     ("sensor", "temperature"),
     ("sensor", "humidity"),
     ("sensor", "pressure"),
@@ -20,25 +20,65 @@ const ENTITIES: [(&str, &str); 6] = [
     ("sensor", "tx_power"),
 ];
 
-/// The values in a reading: (key, min, max, required). The ranges are the
-/// sensors'. Some tags have no humidity or pressure sensor. Data formats
-/// before 5 have no TX power. Only Ruuvi Air has the air quality values, and
-/// luminosity's range is data format E1's.
-const VALUES: [(&str, f64, f64, bool); 13] = [
-    ("temperature", -40.0, 85.0, true),
-    ("humidity", 0.0, 100.0, false),
-    ("pressure", 500.0, 1155.0, false),
-    ("battery", 1.6, 3.7, true),
-    ("tx_power", -40.0, 20.0, false),
-    ("co2", 0.0, 40_000.0, false),
-    ("pm1", 0.0, 1000.0, false),
-    ("pm2_5", 0.0, 1000.0, false),
-    ("pm4", 0.0, 1000.0, false),
-    ("pm10", 0.0, 1000.0, false),
-    ("voc", 1.0, 500.0, false),
-    ("nox", 1.0, 500.0, false),
-    ("luminosity", 0.0, 167_772.14, false),
+/// A Ruuvi Air's entities, the same way
+const AIR_ENTITIES: [(&str, &str); 11] = [
+    ("sensor", "temperature"),
+    ("sensor", "humidity"),
+    ("sensor", "pressure"),
+    ("sensor", "co2"),
+    ("sensor", "pm1"),
+    ("sensor", "pm2_5"),
+    ("sensor", "pm4"),
+    ("sensor", "pm10"),
+    ("sensor", "voc"),
+    ("sensor", "nox"),
+    ("sensor", "luminosity"),
 ];
+
+#[derive(Clone, Copy, PartialEq)]
+enum Presence {
+    Required,
+    Optional,
+    Absent,
+}
+
+use Presence::{Absent, Optional, Required};
+
+/// The values in a reading: (key, min, max, in a tag's, in an Air's). The
+/// ranges are the sensors'. Some tags have no humidity or pressure sensor.
+/// Data formats before 5 have no TX power. An Air has no battery and no TX
+/// power, and sends PM1, PM4 and PM10 only in data format E1. Luminosity's
+/// range is data format E1's.
+const VALUES: [(&str, f64, f64, Presence, Presence); 13] = [
+    ("temperature", -40.0, 85.0, Required, Required),
+    ("humidity", 0.0, 100.0, Optional, Optional),
+    ("pressure", 500.0, 1155.0, Optional, Optional),
+    ("battery", 1.6, 3.7, Required, Absent),
+    ("tx_power", -40.0, 20.0, Optional, Absent),
+    ("co2", 0.0, 40_000.0, Absent, Optional),
+    ("pm1", 0.0, 1000.0, Absent, Optional),
+    ("pm2_5", 0.0, 1000.0, Absent, Optional),
+    ("pm4", 0.0, 1000.0, Absent, Optional),
+    ("pm10", 0.0, 1000.0, Absent, Optional),
+    ("voc", 1.0, 500.0, Absent, Optional),
+    ("nox", 1.0, 500.0, Absent, Optional),
+    ("luminosity", 0.0, 167_772.14, Absent, Optional),
+];
+
+#[derive(Clone, Copy, PartialEq)]
+enum Model {
+    Tag,
+    Air,
+}
+
+impl Model {
+    fn entities(self) -> &'static [(&'static str, &'static str)] {
+        match self {
+            Self::Tag => &TAG_ENTITIES,
+            Self::Air => &AIR_ENTITIES,
+        }
+    }
+}
 
 /// How many examples of a problem the report lists
 const MAX_EXAMPLES: usize = 5;
@@ -53,13 +93,27 @@ pub struct Config {
     pub boards: Vec<String>,
     /// How often a board publishes its diagnostics
     pub board_cycle: Duration,
-    /// The tags that must be published, as in their topics (lowercase hex)
+    /// The tags that must be published, as in their topics (lowercase hex),
+    /// the Airs included
     pub tags: Vec<String>,
+    /// Which of the tags are Ruuvi Airs. Any other device is validated as a
+    /// tag.
+    pub airs: Vec<String>,
     pub first_reading: Duration,
     pub max_gap: Duration,
     pub throttle: Duration,
     /// Percentage of a tag's readings that may be duplicates
     pub max_duplicates: u8,
+}
+
+impl Config {
+    fn model(&self, id: &str) -> Model {
+        if self.airs.iter().any(|a| a == id) {
+            Model::Air
+        } else {
+            Model::Tag
+        }
+    }
 }
 
 pub struct Report {
@@ -228,7 +282,7 @@ impl Watch {
         let result = if retained {
             Err("retained".to_string())
         } else {
-            validate_reading(payload)
+            validate_reading(payload, self.config.model(id))
         };
         match result {
             Ok(publisher) => {
@@ -455,12 +509,24 @@ impl Watch {
                     .collect();
                 let _ = write!(r.text, ", from {}", publishers.join(", "));
             }
-            let entities = tag.map_or(0, |t| t.entities.len());
-            let _ = writeln!(r.text, ", discovery {entities}/{}", ENTITIES.len());
-            if entities < ENTITIES.len() {
+            let expected = c.model(id).entities();
+            let (entities, unexpected): (Vec<&str>, Vec<&str>) = tag
+                .iter()
+                .flat_map(|t| &t.entities)
+                .partition(|e| expected.iter().any(|(_, x)| x == *e));
+            let _ = writeln!(r.text, ", discovery {}/{}", entities.len(), expected.len());
+            if entities.len() < expected.len() {
                 r.failures.push(format!(
-                    "{label}: {entities} of {} discovery configs",
-                    ENTITIES.len()
+                    "{label}: {} of {} discovery configs",
+                    entities.len(),
+                    expected.len()
+                ));
+            }
+            // Retained configs from another model stay in Home Assistant
+            if !unexpected.is_empty() {
+                r.failures.push(format!(
+                    "{label}: unexpected discovery configs: {}",
+                    unexpected.join(", ")
                 ));
             }
         }
@@ -720,8 +786,9 @@ fn parse_discovery_topic(rest: &str) -> Option<(&str, &'static str)> {
         return None;
     };
     let id = object.strip_prefix("ruuvi_").filter(|id| is_tag_id(id))?;
-    let &(_, entity) = ENTITIES
+    let &(_, entity) = TAG_ENTITIES
         .iter()
+        .chain(&AIR_ENTITIES)
         .find(|(c, e)| *c == component && *e == entity)?;
     Some((id, entity))
 }
@@ -890,23 +957,28 @@ fn parse_board_tags(tags: &Value) -> Result<BTreeMap<String, (i64, u64)>, String
 }
 
 /// Returns the reading's publisher.
-fn validate_reading(payload: &[u8]) -> Result<String, String> {
+fn validate_reading(payload: &[u8], model: Model) -> Result<String, String> {
     let reading: Value =
         serde_json::from_slice(payload).map_err(|err| format!("not JSON: {err}"))?;
-    for (key, min, max, required) in VALUES {
+    for (key, min, max, tag, air) in VALUES {
+        let presence = match model {
+            Model::Tag => tag,
+            Model::Air => air,
+        };
         match &reading[key] {
-            Value::Number(n) => {
+            Value::Number(n) if presence != Absent => {
                 let value = n.as_f64().unwrap_or(f64::NAN);
                 if !(min..=max).contains(&value) {
                     return Err(format!("{key} {value} out of range"));
                 }
             }
-            Value::Null if !required => {}
+            Value::Null if presence != Required => {}
             other => return Err(format!("{key}: {other}")),
         }
     }
-    if !reading["battery_low"].is_boolean() {
-        return Err(format!("battery_low: {}", reading["battery_low"]));
+    let battery_low = &reading["battery_low"];
+    if battery_low.is_boolean() != (model == Model::Tag) {
+        return Err(format!("battery_low: {battery_low}"));
     }
     match &reading["publisher"] {
         Value::String(publisher) if !publisher.is_empty() => Ok(publisher.clone()),
@@ -956,6 +1028,7 @@ mod tests {
             boards: Vec::new(),
             board_cycle: Duration::from_secs(67),
             tags: vec![TAG.into()],
+            airs: Vec::new(),
             first_reading: Duration::from_mins(5),
             max_gap: Duration::from_mins(10),
             throttle: Duration::from_mins(1),
@@ -989,19 +1062,23 @@ mod tests {
                 true,
             );
         }
-        for (component, entity) in ENTITIES {
-            let topic = format!("homeassistant/{component}/ruuvi_{TAG}/{entity}/config");
-            let config = format!(
-                r#"{{"state_topic":"ruuvi2mqtt/{TAG}","unique_id":"ruuvi_{TAG}_{entity}","device":{{"name":"Cellar"}}}}"#
-            );
-            watch.on_message(secs(0), &topic, config.as_bytes(), true);
-        }
+        discovery(watch, TAG, "Cellar", &TAG_ENTITIES);
         let topic = format!("ruuvi2mqtt/{TAG}");
         for m in 0..minutes {
             watch.on_message(secs(30 + m * 60), &topic, reading(TALLI).as_bytes(), false);
             if m < duplicates {
                 watch.on_message(secs(31 + m * 60), &topic, reading(PANNU).as_bytes(), false);
             }
+        }
+    }
+
+    fn discovery(watch: &mut Watch, id: &str, name: &str, entities: &[(&str, &str)]) {
+        for (component, entity) in entities {
+            let topic = format!("homeassistant/{component}/ruuvi_{id}/{entity}/config");
+            let config = format!(
+                r#"{{"state_topic":"ruuvi2mqtt/{id}","unique_id":"ruuvi_{id}_{entity}","device":{{"name":"{name}"}}}}"#
+            );
+            watch.on_message(secs(0), &topic, config.as_bytes(), true);
         }
     }
 
@@ -1158,25 +1235,82 @@ mod tests {
     #[test]
     fn readings_validate() {
         assert_eq!(
-            validate_reading(reading(PANNU).as_bytes()),
+            validate_reading(reading(PANNU).as_bytes(), Model::Tag),
             Ok(PANNU.to_string())
         );
         // A tag without the pressure sensor, in an old data format
         let no_pressure = reading(PANNU)
             .replace("1003.2", "null")
             .replace(r#""tx_power":4"#, r#""tx_power":null"#);
-        assert!(validate_reading(no_pressure.as_bytes()).is_ok());
+        assert!(validate_reading(no_pressure.as_bytes(), Model::Tag).is_ok());
         let no_temperature = reading(PANNU).replace("21.3", "null");
         assert_eq!(
-            validate_reading(no_temperature.as_bytes()),
+            validate_reading(no_temperature.as_bytes(), Model::Tag),
             Err("temperature: null".into())
         );
         let no_publisher = reading(PANNU).replace(r#","publisher":"ruuvi2mqtt_pannu""#, "");
         assert_eq!(
-            validate_reading(no_publisher.as_bytes()),
+            validate_reading(no_publisher.as_bytes(), Model::Tag),
             Err("publisher: null".into())
         );
-        assert!(validate_reading(b"21.3").is_err());
+        assert!(validate_reading(b"21.3", Model::Tag).is_err());
+        assert_eq!(
+            validate_reading(air_reading(PANNU).as_bytes(), Model::Tag),
+            Err("battery: null".into())
+        );
+    }
+
+    const AIR: &str = "c4d2a1b3e5f6";
+
+    /// A format 6 reading: no PM1, PM4 or PM10
+    fn air_reading(publisher: &str) -> String {
+        format!(
+            r#"{{"humidity":55.3,"pressure":1011.02,"temperature":29.5,"battery":null,"battery_low":null,"tx_power":null,"co2":201,"pm2_5":11.2,"voc":5,"nox":1,"luminosity":13026.67,"publisher":"{publisher}"}}"#
+        )
+    }
+
+    #[test]
+    fn air_readings_validate() {
+        assert_eq!(
+            validate_reading(air_reading(PANNU).as_bytes(), Model::Air),
+            Ok(PANNU.to_string())
+        );
+        assert_eq!(
+            validate_reading(reading(PANNU).as_bytes(), Model::Air),
+            Err("battery: 2.9".into())
+        );
+        let battery_low =
+            air_reading(PANNU).replace(r#""battery_low":null"#, r#""battery_low":false"#);
+        assert_eq!(
+            validate_reading(battery_low.as_bytes(), Model::Air),
+            Err("battery_low: false".into())
+        );
+    }
+
+    #[test]
+    fn healthy_air_passes() {
+        let mut w = watch();
+        w.config.tags.push(AIR.into());
+        w.config.airs.push(AIR.into());
+        healthy(&mut w, 15);
+        discovery(&mut w, AIR, "Living room", &AIR_ENTITIES);
+        let topic = format!("ruuvi2mqtt/{AIR}");
+        for m in 0..15 {
+            w.on_message(
+                secs(40 + m * 60),
+                &topic,
+                air_reading(TALLI).as_bytes(),
+                false,
+            );
+        }
+        let report = w.finish(Duration::from_mins(15));
+        assert_eq!(report.failures, Vec::<String>::new(), "{}", report.text);
+        assert!(
+            report
+                .text
+                .contains("Living room (c4d2a1b3e5f6): 15 readings")
+        );
+        assert!(report.text.contains(", discovery 11/11\n"));
     }
 
     #[test]
@@ -1206,6 +1340,18 @@ mod tests {
         assert_eq!(
             report.summary,
             "FAIL: Cellar (f817624e4c0b): 5 of 6 discovery configs"
+        );
+    }
+
+    #[test]
+    fn unexpected_discovery_fails() {
+        let mut w = watch();
+        healthy(&mut w, 15);
+        discovery(&mut w, TAG, "Cellar", &[("sensor", "co2")]);
+        let report = w.finish(Duration::from_mins(15));
+        assert_eq!(
+            report.summary,
+            "FAIL: Cellar (f817624e4c0b): unexpected discovery configs: co2"
         );
     }
 

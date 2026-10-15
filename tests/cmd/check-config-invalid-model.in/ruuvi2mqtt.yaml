@@ -1,0 +1,6 @@
+mqtt:
+  server: localhost
+devices:
+  AA:12:BB:34:CC:56:
+    name: Indoors
+    model: station
