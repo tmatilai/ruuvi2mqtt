@@ -10,16 +10,19 @@ default 1 hour). Then it checks that:
 - Each instance (`--instance <client_id>`) was online at the start and
   stayed online.
 - Each instance runs `--commit`, without local changes.
-- Each tag (`--tag <MAC>`) has its first reading within `--first-reading`
-  (5 minutes).
+- Each tag (`--tag <MAC>`) and Ruuvi Air (`--air <MAC>`) has its first
+  reading within `--first-reading` (5 minutes).
 - No tag goes `--max-gap` (10 minutes) without a reading.
-- The readings have values in the sensors' ranges.
+- The readings have values in the sensors' ranges. A tag's readings have
+  a battery and no air quality values. An Air's have no battery and no TX
+  power. Devices not given are checked as tags.
 - Each reading's `publisher` is one of the instances or one of the boards.
 - Few readings are duplicates (`--max-duplicates`, 10 %). A duplicate comes
   less than 90 % of `--throttle` after the previous reading. Two instances
   with a similar signal sometimes both publish. The boards' readings don't
   count, since the boards don't coordinate.
-- Each tag has all its Home Assistant discovery configs.
+- Each tag has all its Home Assistant discovery configs, and none of
+  another model's.
 - The ESP32 diagnostics are valid.
 - Each board (`--board <client_id>`) runs `--commit`, without local
   changes, in every cycle. Flash the boards before the watch starts.

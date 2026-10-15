@@ -21,5 +21,7 @@ mqtt:
 devices:
   AA:12:BB:34:CC:56:
     name: Ruuvi Indoors
+    # The Home Assistant entities: tag (default, RuuviTag) or air (Ruuvi Air)
+    #model: tag
   AB:CD:EF:98:76:54:
     name: Ruuvi Outdoors

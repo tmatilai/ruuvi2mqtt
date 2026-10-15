@@ -55,6 +55,18 @@ impl Mqtt {
 #[derive(Clone, Debug, Deserialize)]
 pub struct Device {
     pub name: String,
+    /// Picks the Home Assistant entities. Discovery is published before any
+    /// reading, so it can't come from the data format.
+    #[serde(default)]
+    pub model: Model,
+}
+
+#[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum Model {
+    #[default]
+    Tag,
+    Air,
 }
 
 #[derive(Debug, Parser)]
