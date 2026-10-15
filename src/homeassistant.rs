@@ -78,6 +78,8 @@ pub struct SensorData {
     luminosity: Option<f32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     iaqs: Option<u8>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    calibrating: Option<bool>,
     /// MQTT client ID, so a reading can be traced to the instance that sent it.
     publisher: String,
 }
@@ -138,6 +140,7 @@ impl SensorData {
             nox: data.nox(),
             luminosity: data.luminosity(),
             iaqs: data.iaqs(),
+            calibrating: data.calibrating(),
             publisher: config.client_id.clone(),
         }
     }
@@ -237,7 +240,7 @@ static TAG_TYPES: [DeviceType; 6] = [
 ];
 
 // An Air has no battery and no TX power.
-static AIR_TYPES: [DeviceType; 12] = [
+static AIR_TYPES: [DeviceType; 13] = [
     TEMPERATURE,
     HUMIDITY,
     PRESSURE,
@@ -260,6 +263,10 @@ static AIR_TYPES: [DeviceType; 12] = [
         .unit("lx"),
     // Not the aqi device class: a higher AQI is worse, a higher score better.
     DeviceType::sensor("Indoor Air Quality Score", "iaqs").icon("mdi:gauge"),
+    // The air quality values may be off while the sensors calibrate.
+    DeviceType::binary_sensor("Calibrating", "calibrating")
+        .diagnostic()
+        .icon("mdi:progress-wrench"),
 ];
 
 impl PayloadInfo {
@@ -326,7 +333,7 @@ mod tests {
         ]);
         assert_eq!(
             json,
-            r#"{"humidity":55.3,"pressure":1011.02,"temperature":29.5,"battery":null,"battery_low":null,"tx_power":null,"co2":201,"pm2_5":11.2,"voc":5,"nox":1,"luminosity":13026.67,"iaqs":81,"publisher":"test"}"#
+            r#"{"humidity":55.3,"pressure":1011.02,"temperature":29.5,"battery":null,"battery_low":null,"tx_power":null,"co2":201,"pm2_5":11.2,"voc":5,"nox":1,"luminosity":13026.67,"iaqs":81,"calibrating":false,"publisher":"test"}"#
         );
     }
 
@@ -396,6 +403,7 @@ mod tests {
                 "sensor/ruuvi_aa12bb34cc56/nox",
                 "sensor/ruuvi_aa12bb34cc56/luminosity",
                 "sensor/ruuvi_aa12bb34cc56/iaqs",
+                "binary_sensor/ruuvi_aa12bb34cc56/calibrating",
             ]
         );
         assert_eq!(

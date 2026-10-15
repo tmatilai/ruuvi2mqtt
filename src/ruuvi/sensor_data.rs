@@ -1,6 +1,7 @@
 use ruuvi_sensor_protocol::{
-    BatteryPotential, CarbonDioxide, Humidity, Luminosity, NitrogenOxides, ParticulateMatter,
-    Pressure, SensorValues, Temperature, TransmitterPower, VolatileOrganicCompounds,
+    BatteryPotential, Calibration, CarbonDioxide, Humidity, Luminosity, NitrogenOxides,
+    ParticulateMatter, Pressure, SensorValues, Temperature, TransmitterPower,
+    VolatileOrganicCompounds,
 };
 
 use crate::ruuvi::BDAddr;
@@ -101,6 +102,10 @@ impl SensorData {
     pub fn iaqs(&self) -> Option<u8> {
         Some(iaqs(self.pm2_5()?, self.co2()?))
     }
+
+    pub fn calibrating(&self) -> Option<bool> {
+        self.values.calibration_in_progress()
+    }
 }
 
 /// Ruuvi's indoor air quality score, 0–100, rounded like Ruuvi's apps.
@@ -174,6 +179,7 @@ mod tests {
         assert_eq!(s.nox(), Some(2));
         assert_eq!(s.luminosity(), Some(13027.0));
         assert_eq!(s.iaqs(), Some(81));
+        assert_eq!(s.calibrating(), Some(true));
     }
 
     #[test]
@@ -189,6 +195,7 @@ mod tests {
         assert_eq!(s.pm10(), None);
         assert_eq!(s.luminosity(), Some(13026.67));
         assert_eq!(s.iaqs(), Some(81));
+        assert_eq!(s.calibrating(), Some(false));
     }
 
     // Computed from the formula; Ruuvi publishes no test vectors.
@@ -212,6 +219,7 @@ mod tests {
         assert_eq!(s.nox(), None);
         assert_eq!(s.luminosity(), None);
         assert_eq!(s.iaqs(), None);
+        assert_eq!(s.calibrating(), None);
     }
 
     #[test]

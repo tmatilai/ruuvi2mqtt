@@ -14,8 +14,8 @@ default 1 hour). Then it checks that:
   reading within `--first-reading` (5 minutes).
 - No tag goes `--max-gap` (10 minutes) without a reading.
 - The readings have values in the sensors' ranges. A tag's readings have
-  a battery and no air quality values. An Air's have no battery and no TX
-  power. Devices not given are checked as tags.
+  a battery and no air quality values. An Air's have a calibration flag
+  and no battery or TX power. Devices not given are checked as tags.
 - Each reading's `publisher` is one of the instances or one of the boards.
 - Few readings are duplicates (`--max-duplicates`, 10 %). A duplicate comes
   less than 90 % of `--throttle` after the previous reading. Two instances

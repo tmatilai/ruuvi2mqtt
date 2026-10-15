@@ -21,7 +21,7 @@ const TAG_ENTITIES: [(&str, &str); 6] = [
 ];
 
 /// A Ruuvi Air's entities, the same way
-const AIR_ENTITIES: [(&str, &str); 12] = [
+const AIR_ENTITIES: [(&str, &str); 13] = [
     ("sensor", "temperature"),
     ("sensor", "humidity"),
     ("sensor", "pressure"),
@@ -34,6 +34,7 @@ const AIR_ENTITIES: [(&str, &str); 12] = [
     ("sensor", "nox"),
     ("sensor", "luminosity"),
     ("sensor", "iaqs"),
+    ("binary_sensor", "calibrating"),
 ];
 
 #[derive(Clone, Copy, PartialEq)]
@@ -982,6 +983,10 @@ fn validate_reading(payload: &[u8], model: Model) -> Result<String, String> {
     if battery_low.is_boolean() != (model == Model::Tag) {
         return Err(format!("battery_low: {battery_low}"));
     }
+    let calibrating = &reading["calibrating"];
+    if calibrating.is_boolean() != (model == Model::Air) {
+        return Err(format!("calibrating: {calibrating}"));
+    }
     match &reading["publisher"] {
         Value::String(publisher) if !publisher.is_empty() => Ok(publisher.clone()),
         other => Err(format!("publisher: {other}")),
@@ -1267,7 +1272,7 @@ mod tests {
     /// A format 6 reading: no PM1, PM4 or PM10
     fn air_reading(publisher: &str) -> String {
         format!(
-            r#"{{"humidity":55.3,"pressure":1011.02,"temperature":29.5,"battery":null,"battery_low":null,"tx_power":null,"co2":201,"pm2_5":11.2,"voc":5,"nox":1,"luminosity":13026.67,"iaqs":81,"publisher":"{publisher}"}}"#
+            r#"{{"humidity":55.3,"pressure":1011.02,"temperature":29.5,"battery":null,"battery_low":null,"tx_power":null,"co2":201,"pm2_5":11.2,"voc":5,"nox":1,"luminosity":13026.67,"iaqs":81,"calibrating":false,"publisher":"{publisher}"}}"#
         )
     }
 
@@ -1286,6 +1291,11 @@ mod tests {
         assert_eq!(
             validate_reading(battery_low.as_bytes(), Model::Air),
             Err("battery_low: false".into())
+        );
+        let calibrating = air_reading(PANNU).replace(r#""calibrating":false,"#, "");
+        assert_eq!(
+            validate_reading(calibrating.as_bytes(), Model::Air),
+            Err("calibrating: null".into())
         );
     }
 
@@ -1312,7 +1322,7 @@ mod tests {
                 .text
                 .contains("Living room (c4d2a1b3e5f6): 15 readings")
         );
-        assert!(report.text.contains(", discovery 12/12\n"));
+        assert!(report.text.contains(", discovery 13/13\n"));
     }
 
     #[test]
