@@ -38,6 +38,8 @@ struct SensorPayload<'a> {
     nox: Option<u16>,
     #[serde(skip_serializing_if = "Option::is_none")]
     luminosity: Option<f32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    iaqs: Option<u8>,
     publisher: &'a str,
 }
 
@@ -69,6 +71,8 @@ pub fn encode(v: &SensorValues, publisher: &str) -> String {
     };
 
     let micrograms = |ng: u32| ng as f32 / 1000.0;
+    let pm2_5 = v.pm2_5_as_nanograms_per_cubic_meter().map(micrograms);
+    let co2 = v.carbon_dioxide_as_ppm();
 
     let payload = SensorPayload {
         temperature,
@@ -77,18 +81,30 @@ pub fn encode(v: &SensorValues, publisher: &str) -> String {
         battery,
         battery_low,
         tx_power: v.tx_power_as_dbm(),
-        co2: v.carbon_dioxide_as_ppm(),
+        co2,
         pm1: v.pm1_0_as_nanograms_per_cubic_meter().map(micrograms),
-        pm2_5: v.pm2_5_as_nanograms_per_cubic_meter().map(micrograms),
+        pm2_5,
         pm4: v.pm4_0_as_nanograms_per_cubic_meter().map(micrograms),
         pm10: v.pm10_0_as_nanograms_per_cubic_meter().map(micrograms),
         voc: v.voc_index(),
         nox: v.nox_index(),
         luminosity: v.luminosity_as_millilux().map(|mlx| mlx as f32 / 1000.0),
+        iaqs: pm2_5.zip(co2).map(|(pm2_5, co2)| iaqs(pm2_5, co2)),
         publisher,
     };
 
     serde_json::to_string(&payload).unwrap()
+}
+
+/// Ruuvi's indoor air quality score, 0–100, rounded like Ruuvi's apps.
+/// Formula from
+/// <https://docs.ruuvi.com/ruuvi-air-firmware/ruuvi-indoor-air-quality-score-iaqs>
+#[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)] // clamped to 0–100
+fn iaqs(pm2_5: f32, co2: u16) -> u8 {
+    let pm2_5 = pm2_5.clamp(0.0, 60.0);
+    let co2 = f32::from(co2).clamp(420.0, 2300.0);
+    let distance = (pm2_5 * 100.0 / 60.0).hypot((co2 - 420.0) * 100.0 / 1880.0);
+    (100.0 - distance).clamp(0.0, 100.0).round() as u8
 }
 
 #[cfg(test)]
@@ -132,7 +148,7 @@ mod tests {
         ];
         assert_eq!(
             encode_raw(&data),
-            r#"{"temperature":29.5,"humidity":55.3,"pressure":1011.02,"co2":201,"pm1":10.1,"pm2_5":11.2,"pm4":121.3,"pm10":455.4,"voc":10,"nox":2,"luminosity":13027.0,"publisher":"esp32-test"}"#
+            r#"{"temperature":29.5,"humidity":55.3,"pressure":1011.02,"co2":201,"pm1":10.1,"pm2_5":11.2,"pm4":121.3,"pm10":455.4,"voc":10,"nox":2,"luminosity":13027.0,"iaqs":81,"publisher":"esp32-test"}"#
         );
     }
 
@@ -144,8 +160,20 @@ mod tests {
         ];
         assert_eq!(
             encode_raw(&data),
-            r#"{"temperature":29.5,"humidity":55.3,"pressure":1011.02,"co2":201,"pm2_5":11.2,"voc":5,"nox":1,"luminosity":13026.67,"publisher":"esp32-test"}"#
+            r#"{"temperature":29.5,"humidity":55.3,"pressure":1011.02,"co2":201,"pm2_5":11.2,"voc":5,"nox":1,"luminosity":13026.67,"iaqs":81,"publisher":"esp32-test"}"#
         );
+    }
+
+    // Computed from the formula; Ruuvi publishes no test vectors.
+    #[test]
+    fn iaqs_values() {
+        assert_eq!(iaqs(0.0, 420), 100);
+        assert_eq!(iaqs(60.0, 420), 0);
+        assert_eq!(iaqs(0.0, 2300), 0);
+        assert_eq!(iaqs(6.0, 600), 86);
+        assert_eq!(iaqs(11.2, 201), 81);
+        assert_eq!(iaqs(11.4, 886), 69);
+        assert_eq!(iaqs(100.0, 5000), 0);
     }
 
     #[test]

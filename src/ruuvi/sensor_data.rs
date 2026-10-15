@@ -97,6 +97,21 @@ impl SensorData {
             .luminosity_as_millilux()
             .map(|v| v as f32 / 1000.0)
     }
+
+    pub fn iaqs(&self) -> Option<u8> {
+        Some(iaqs(self.pm2_5()?, self.co2()?))
+    }
+}
+
+/// Ruuvi's indoor air quality score, 0–100, rounded like Ruuvi's apps.
+/// Formula from
+/// <https://docs.ruuvi.com/ruuvi-air-firmware/ruuvi-indoor-air-quality-score-iaqs>
+#[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)] // clamped to 0–100
+fn iaqs(pm2_5: f32, co2: u16) -> u8 {
+    let pm2_5 = pm2_5.clamp(0.0, 60.0);
+    let co2 = f32::from(co2).clamp(420.0, 2300.0);
+    let distance = (pm2_5 * 100.0 / 60.0).hypot((co2 - 420.0) * 100.0 / 1880.0);
+    (100.0 - distance).clamp(0.0, 100.0).round() as u8
 }
 
 #[allow(clippy::cast_precision_loss)]
@@ -108,7 +123,7 @@ fn micrograms(nanograms: u32) -> f32 {
 mod tests {
     use ruuvi_sensor_protocol::SensorValues;
 
-    use super::SensorData;
+    use super::{SensorData, iaqs};
     use crate::ruuvi::BDAddr;
 
     /// Builds a `SensorData` from optional temperature (millicelsius) and battery (millivolts)
@@ -158,6 +173,7 @@ mod tests {
         assert_eq!(s.voc(), Some(10));
         assert_eq!(s.nox(), Some(2));
         assert_eq!(s.luminosity(), Some(13027.0));
+        assert_eq!(s.iaqs(), Some(81));
     }
 
     #[test]
@@ -172,6 +188,19 @@ mod tests {
         assert_eq!(s.pm4(), None);
         assert_eq!(s.pm10(), None);
         assert_eq!(s.luminosity(), Some(13026.67));
+        assert_eq!(s.iaqs(), Some(81));
+    }
+
+    // Computed from the formula; Ruuvi publishes no test vectors.
+    #[test]
+    fn iaqs_values() {
+        assert_eq!(iaqs(0.0, 420), 100);
+        assert_eq!(iaqs(60.0, 420), 0);
+        assert_eq!(iaqs(0.0, 2300), 0);
+        assert_eq!(iaqs(6.0, 600), 86);
+        assert_eq!(iaqs(11.2, 201), 81);
+        assert_eq!(iaqs(11.4, 886), 69);
+        assert_eq!(iaqs(100.0, 5000), 0);
     }
 
     #[test]
@@ -182,6 +211,7 @@ mod tests {
         assert_eq!(s.voc(), None);
         assert_eq!(s.nox(), None);
         assert_eq!(s.luminosity(), None);
+        assert_eq!(s.iaqs(), None);
     }
 
     #[test]
