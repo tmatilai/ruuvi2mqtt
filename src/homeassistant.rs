@@ -76,6 +76,8 @@ pub struct SensorData {
     nox: Option<u16>,
     #[serde(skip_serializing_if = "Option::is_none")]
     luminosity: Option<f32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    iaqs: Option<u8>,
     /// MQTT client ID, so a reading can be traced to the instance that sent it.
     publisher: String,
 }
@@ -135,6 +137,7 @@ impl SensorData {
             voc: data.voc(),
             nox: data.nox(),
             luminosity: data.luminosity(),
+            iaqs: data.iaqs(),
             publisher: config.client_id.clone(),
         }
     }
@@ -234,7 +237,7 @@ static TAG_TYPES: [DeviceType; 6] = [
 ];
 
 // An Air has no battery and no TX power.
-static AIR_TYPES: [DeviceType; 11] = [
+static AIR_TYPES: [DeviceType; 12] = [
     TEMPERATURE,
     HUMIDITY,
     PRESSURE,
@@ -255,6 +258,8 @@ static AIR_TYPES: [DeviceType; 11] = [
     DeviceType::sensor("Illuminance", "luminosity")
         .class("illuminance")
         .unit("lx"),
+    // Not the aqi device class: a higher AQI is worse, a higher score better.
+    DeviceType::sensor("Indoor Air Quality Score", "iaqs").icon("mdi:gauge"),
 ];
 
 impl PayloadInfo {
@@ -321,7 +326,7 @@ mod tests {
         ]);
         assert_eq!(
             json,
-            r#"{"humidity":55.3,"pressure":1011.02,"temperature":29.5,"battery":null,"battery_low":null,"tx_power":null,"co2":201,"pm2_5":11.2,"voc":5,"nox":1,"luminosity":13026.67,"publisher":"test"}"#
+            r#"{"humidity":55.3,"pressure":1011.02,"temperature":29.5,"battery":null,"battery_low":null,"tx_power":null,"co2":201,"pm2_5":11.2,"voc":5,"nox":1,"luminosity":13026.67,"iaqs":81,"publisher":"test"}"#
         );
     }
 
@@ -390,6 +395,7 @@ mod tests {
                 "sensor/ruuvi_aa12bb34cc56/voc",
                 "sensor/ruuvi_aa12bb34cc56/nox",
                 "sensor/ruuvi_aa12bb34cc56/luminosity",
+                "sensor/ruuvi_aa12bb34cc56/iaqs",
             ]
         );
         assert_eq!(

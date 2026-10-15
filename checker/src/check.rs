@@ -21,7 +21,7 @@ const TAG_ENTITIES: [(&str, &str); 6] = [
 ];
 
 /// A Ruuvi Air's entities, the same way
-const AIR_ENTITIES: [(&str, &str); 11] = [
+const AIR_ENTITIES: [(&str, &str); 12] = [
     ("sensor", "temperature"),
     ("sensor", "humidity"),
     ("sensor", "pressure"),
@@ -33,6 +33,7 @@ const AIR_ENTITIES: [(&str, &str); 11] = [
     ("sensor", "voc"),
     ("sensor", "nox"),
     ("sensor", "luminosity"),
+    ("sensor", "iaqs"),
 ];
 
 #[derive(Clone, Copy, PartialEq)]
@@ -48,8 +49,8 @@ use Presence::{Absent, Optional, Required};
 /// ranges are the sensors'. Some tags have no humidity or pressure sensor.
 /// Data formats before 5 have no TX power. An Air has no battery and no TX
 /// power, and sends PM1, PM4 and PM10 only in data format E1. Luminosity's
-/// range is data format E1's.
-const VALUES: [(&str, f64, f64, Presence, Presence); 13] = [
+/// range is data format E1's. The air quality score needs PM2.5 and CO₂.
+const VALUES: [(&str, f64, f64, Presence, Presence); 14] = [
     ("temperature", -40.0, 85.0, Required, Required),
     ("humidity", 0.0, 100.0, Optional, Optional),
     ("pressure", 500.0, 1155.0, Optional, Optional),
@@ -63,6 +64,7 @@ const VALUES: [(&str, f64, f64, Presence, Presence); 13] = [
     ("voc", 1.0, 500.0, Absent, Optional),
     ("nox", 1.0, 500.0, Absent, Optional),
     ("luminosity", 0.0, 167_772.14, Absent, Optional),
+    ("iaqs", 0.0, 100.0, Absent, Optional),
 ];
 
 #[derive(Clone, Copy, PartialEq)]
@@ -1265,7 +1267,7 @@ mod tests {
     /// A format 6 reading: no PM1, PM4 or PM10
     fn air_reading(publisher: &str) -> String {
         format!(
-            r#"{{"humidity":55.3,"pressure":1011.02,"temperature":29.5,"battery":null,"battery_low":null,"tx_power":null,"co2":201,"pm2_5":11.2,"voc":5,"nox":1,"luminosity":13026.67,"publisher":"{publisher}"}}"#
+            r#"{{"humidity":55.3,"pressure":1011.02,"temperature":29.5,"battery":null,"battery_low":null,"tx_power":null,"co2":201,"pm2_5":11.2,"voc":5,"nox":1,"luminosity":13026.67,"iaqs":81,"publisher":"{publisher}"}}"#
         )
     }
 
@@ -1310,7 +1312,7 @@ mod tests {
                 .text
                 .contains("Living room (c4d2a1b3e5f6): 15 readings")
         );
-        assert!(report.text.contains(", discovery 11/11\n"));
+        assert!(report.text.contains(", discovery 12/12\n"));
     }
 
     #[test]
