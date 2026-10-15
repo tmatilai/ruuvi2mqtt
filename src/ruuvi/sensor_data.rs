@@ -1,5 +1,6 @@
 use ruuvi_sensor_protocol::{
-    BatteryPotential, Humidity, Pressure, SensorValues, Temperature, TransmitterPower,
+    BatteryPotential, CarbonDioxide, Humidity, Luminosity, NitrogenOxides, ParticulateMatter,
+    Pressure, SensorValues, Temperature, TransmitterPower, VolatileOrganicCompounds,
 };
 
 use crate::ruuvi::BDAddr;
@@ -53,6 +54,54 @@ impl SensorData {
     pub fn tx_power(&self) -> Option<i8> {
         self.values.tx_power_as_dbm()
     }
+
+    pub fn co2(&self) -> Option<u16> {
+        self.values.carbon_dioxide_as_ppm()
+    }
+
+    pub fn pm1(&self) -> Option<f32> {
+        self.values
+            .pm1_0_as_nanograms_per_cubic_meter()
+            .map(micrograms)
+    }
+
+    pub fn pm2_5(&self) -> Option<f32> {
+        self.values
+            .pm2_5_as_nanograms_per_cubic_meter()
+            .map(micrograms)
+    }
+
+    pub fn pm4(&self) -> Option<f32> {
+        self.values
+            .pm4_0_as_nanograms_per_cubic_meter()
+            .map(micrograms)
+    }
+
+    pub fn pm10(&self) -> Option<f32> {
+        self.values
+            .pm10_0_as_nanograms_per_cubic_meter()
+            .map(micrograms)
+    }
+
+    pub fn voc(&self) -> Option<u16> {
+        self.values.voc_index()
+    }
+
+    pub fn nox(&self) -> Option<u16> {
+        self.values.nox_index()
+    }
+
+    #[allow(clippy::cast_precision_loss)]
+    pub fn luminosity(&self) -> Option<f32> {
+        self.values
+            .luminosity_as_millilux()
+            .map(|v| v as f32 / 1000.0)
+    }
+}
+
+#[allow(clippy::cast_precision_loss)]
+fn micrograms(nanograms: u32) -> f32 {
+    nanograms as f32 / 1000.0
 }
 
 #[cfg(test)]
@@ -85,6 +134,54 @@ mod tests {
         ];
         let values = SensorValues::from_manufacturer_specific_data(0x0499, payload).unwrap();
         SensorData::new(BDAddr::from([0u8; 6]), values)
+    }
+
+    fn decode(payload: &[u8]) -> SensorData {
+        let values = SensorValues::from_manufacturer_specific_data(0x0499, payload).unwrap();
+        SensorData::new(BDAddr::from([0u8; 6]), values)
+    }
+
+    // Test vectors from the Ruuvi data format E1 and 6 specifications.
+    #[test]
+    fn format_e1_air_quality() {
+        #[rustfmt::skip]
+        let s = decode(&[
+            0xE1, 0x17, 0x0C, 0x56, 0x68, 0xC7, 0x9E, 0x00, 0x65, 0x00, 0x70, 0x04, 0xBD, 0x11,
+            0xCA, 0x00, 0xC9, 0x0A, 0x02, 0x13, 0xE0, 0xAC, 0x00, 0x00, 0x00, 0xDE, 0xCD, 0xEE,
+            0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0xCB, 0xB8, 0x33, 0x4C, 0x88, 0x4F,
+        ]);
+        assert_eq!(s.co2(), Some(201));
+        assert_eq!(s.pm1(), Some(10.1));
+        assert_eq!(s.pm2_5(), Some(11.2));
+        assert_eq!(s.pm4(), Some(121.3));
+        assert_eq!(s.pm10(), Some(455.4));
+        assert_eq!(s.voc(), Some(10));
+        assert_eq!(s.nox(), Some(2));
+        assert_eq!(s.luminosity(), Some(13027.0));
+    }
+
+    #[test]
+    fn format_6_has_only_pm2_5() {
+        #[rustfmt::skip]
+        let s = decode(&[
+            0x06, 0x17, 0x0C, 0x56, 0x68, 0xC7, 0x9E, 0x00, 0x70, 0x00, 0xC9, 0x05, 0x01, 0xD9,
+            0x00, 0xCD, 0x00, 0x4C, 0x88, 0x4F,
+        ]);
+        assert_eq!(s.pm1(), None);
+        assert_eq!(s.pm2_5(), Some(11.2));
+        assert_eq!(s.pm4(), None);
+        assert_eq!(s.pm10(), None);
+        assert_eq!(s.luminosity(), Some(13026.67));
+    }
+
+    #[test]
+    fn format_5_has_no_air_quality() {
+        let s = make_sensor(Some(20_000), Some(3000));
+        assert_eq!(s.co2(), None);
+        assert_eq!(s.pm2_5(), None);
+        assert_eq!(s.voc(), None);
+        assert_eq!(s.nox(), None);
+        assert_eq!(s.luminosity(), None);
     }
 
     #[test]

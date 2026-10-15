@@ -1,5 +1,6 @@
 use ruuvi_sensor_protocol::{
-    BatteryPotential, Humidity, Pressure, SensorValues, Temperature, TransmitterPower,
+    BatteryPotential, CarbonDioxide, Humidity, Luminosity, NitrogenOxides, ParticulateMatter,
+    Pressure, SensorValues, Temperature, TransmitterPower, VolatileOrganicCompounds,
 };
 use serde::Serialize;
 
@@ -21,6 +22,22 @@ struct SensorPayload<'a> {
     battery_low: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     tx_power: Option<i8>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    co2: Option<u16>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pm1: Option<f32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pm2_5: Option<f32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pm4: Option<f32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pm10: Option<f32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    voc: Option<u16>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    nox: Option<u16>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    luminosity: Option<f32>,
     publisher: &'a str,
 }
 
@@ -51,7 +68,7 @@ pub fn encode(v: &SensorValues, publisher: &str) -> String {
         _ => None,
     };
 
-    let tx_power = v.tx_power_as_dbm();
+    let micrograms = |ng: u32| ng as f32 / 1000.0;
 
     let payload = SensorPayload {
         temperature,
@@ -59,7 +76,15 @@ pub fn encode(v: &SensorValues, publisher: &str) -> String {
         pressure,
         battery,
         battery_low,
-        tx_power,
+        tx_power: v.tx_power_as_dbm(),
+        co2: v.carbon_dioxide_as_ppm(),
+        pm1: v.pm1_0_as_nanograms_per_cubic_meter().map(micrograms),
+        pm2_5: v.pm2_5_as_nanograms_per_cubic_meter().map(micrograms),
+        pm4: v.pm4_0_as_nanograms_per_cubic_meter().map(micrograms),
+        pm10: v.pm10_0_as_nanograms_per_cubic_meter().map(micrograms),
+        voc: v.voc_index(),
+        nox: v.nox_index(),
+        luminosity: v.luminosity_as_millilux().map(|mlx| mlx as f32 / 1000.0),
         publisher,
     };
 
@@ -95,6 +120,32 @@ mod tests {
             0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
         ];
         assert_eq!(encode_raw(&data), r#"{"publisher":"esp32-test"}"#);
+    }
+
+    // Test vectors from the Ruuvi data format E1 and 6 specifications.
+    #[test]
+    fn format_e1_air_quality() {
+        let data = [
+            0xE1, 0x17, 0x0C, 0x56, 0x68, 0xC7, 0x9E, 0x00, 0x65, 0x00, 0x70, 0x04, 0xBD, 0x11,
+            0xCA, 0x00, 0xC9, 0x0A, 0x02, 0x13, 0xE0, 0xAC, 0x00, 0x00, 0x00, 0xDE, 0xCD, 0xEE,
+            0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0xCB, 0xB8, 0x33, 0x4C, 0x88, 0x4F,
+        ];
+        assert_eq!(
+            encode_raw(&data),
+            r#"{"temperature":29.5,"humidity":55.3,"pressure":1011.02,"co2":201,"pm1":10.1,"pm2_5":11.2,"pm4":121.3,"pm10":455.4,"voc":10,"nox":2,"luminosity":13027.0,"publisher":"esp32-test"}"#
+        );
+    }
+
+    #[test]
+    fn format_6_has_only_pm2_5() {
+        let data = [
+            0x06, 0x17, 0x0C, 0x56, 0x68, 0xC7, 0x9E, 0x00, 0x70, 0x00, 0xC9, 0x05, 0x01, 0xD9,
+            0x00, 0xCD, 0x00, 0x4C, 0x88, 0x4F,
+        ];
+        assert_eq!(
+            encode_raw(&data),
+            r#"{"temperature":29.5,"humidity":55.3,"pressure":1011.02,"co2":201,"pm2_5":11.2,"voc":5,"nox":1,"luminosity":13026.67,"publisher":"esp32-test"}"#
+        );
     }
 
     #[test]
