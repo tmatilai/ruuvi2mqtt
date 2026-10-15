@@ -1,6 +1,7 @@
 use ruuvi_sensor_protocol::{
-    BatteryPotential, CarbonDioxide, Humidity, Luminosity, NitrogenOxides, ParticulateMatter,
-    Pressure, SensorValues, Temperature, TransmitterPower, VolatileOrganicCompounds,
+    BatteryPotential, Calibration, CarbonDioxide, Humidity, Luminosity, NitrogenOxides,
+    ParticulateMatter, Pressure, SensorValues, Temperature, TransmitterPower,
+    VolatileOrganicCompounds,
 };
 use serde::Serialize;
 
@@ -40,6 +41,8 @@ struct SensorPayload<'a> {
     luminosity: Option<f32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     iaqs: Option<u8>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    calibrating: Option<bool>,
     publisher: &'a str,
 }
 
@@ -90,6 +93,7 @@ pub fn encode(v: &SensorValues, publisher: &str) -> String {
         nox: v.nox_index(),
         luminosity: v.luminosity_as_millilux().map(|mlx| mlx as f32 / 1000.0),
         iaqs: pm2_5.zip(co2).map(|(pm2_5, co2)| iaqs(pm2_5, co2)),
+        calibrating: v.calibration_in_progress(),
         publisher,
     };
 
@@ -148,7 +152,7 @@ mod tests {
         ];
         assert_eq!(
             encode_raw(&data),
-            r#"{"temperature":29.5,"humidity":55.3,"pressure":1011.02,"co2":201,"pm1":10.1,"pm2_5":11.2,"pm4":121.3,"pm10":455.4,"voc":10,"nox":2,"luminosity":13027.0,"iaqs":81,"publisher":"esp32-test"}"#
+            r#"{"temperature":29.5,"humidity":55.3,"pressure":1011.02,"co2":201,"pm1":10.1,"pm2_5":11.2,"pm4":121.3,"pm10":455.4,"voc":10,"nox":2,"luminosity":13027.0,"iaqs":81,"calibrating":true,"publisher":"esp32-test"}"#
         );
     }
 
@@ -160,7 +164,7 @@ mod tests {
         ];
         assert_eq!(
             encode_raw(&data),
-            r#"{"temperature":29.5,"humidity":55.3,"pressure":1011.02,"co2":201,"pm2_5":11.2,"voc":5,"nox":1,"luminosity":13026.67,"iaqs":81,"publisher":"esp32-test"}"#
+            r#"{"temperature":29.5,"humidity":55.3,"pressure":1011.02,"co2":201,"pm2_5":11.2,"voc":5,"nox":1,"luminosity":13026.67,"iaqs":81,"calibrating":false,"publisher":"esp32-test"}"#
         );
     }
 
