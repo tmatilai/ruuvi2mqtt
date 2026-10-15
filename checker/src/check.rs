@@ -22,13 +22,22 @@ const ENTITIES: [(&str, &str); 6] = [
 
 /// The values in a reading: (key, min, max, required). The ranges are the
 /// sensors'. Some tags have no humidity or pressure sensor. Data formats
-/// before 5 have no TX power.
-const VALUES: [(&str, f64, f64, bool); 5] = [
+/// before 5 have no TX power. Only Ruuvi Air has the air quality values, and
+/// luminosity's range is data format E1's.
+const VALUES: [(&str, f64, f64, bool); 13] = [
     ("temperature", -40.0, 85.0, true),
     ("humidity", 0.0, 100.0, false),
     ("pressure", 500.0, 1155.0, false),
     ("battery", 1.6, 3.7, true),
     ("tx_power", -40.0, 20.0, false),
+    ("co2", 0.0, 40_000.0, false),
+    ("pm1", 0.0, 1000.0, false),
+    ("pm2_5", 0.0, 1000.0, false),
+    ("pm4", 0.0, 1000.0, false),
+    ("pm10", 0.0, 1000.0, false),
+    ("voc", 1.0, 500.0, false),
+    ("nox", 1.0, 500.0, false),
+    ("luminosity", 0.0, 167_772.14, false),
 ];
 
 /// How many examples of a problem the report lists
