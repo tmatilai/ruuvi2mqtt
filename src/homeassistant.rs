@@ -110,15 +110,44 @@ impl<'a> Device<'a> {
                     payload_info: PayloadInfo::from(device_type),
                     device_type: *device_type,
                     device: DeviceInfo::new(device.name.clone(), *bdaddr),
-                    topic: format!(
-                        "homeassistant/{}/ruuvi_{}/{}/config",
-                        device_type.component, id, key
-                    ),
+                    topic: discovery_topic(device_type, &id),
                 });
             }
         }
         devices
     }
+}
+
+/// The discovery topics of the entities that only the other models have.
+/// A device whose model changed keeps those configs retained on the broker,
+/// and in Home Assistant, until they are cleared.
+pub fn stale_topics(config: &config::Config) -> Vec<String> {
+    let mut topics = Vec::new();
+    for (bdaddr, device) in &config.devices {
+        let id = bdaddr.to_string_no_delim();
+        let current = DeviceType::for_model(device.model);
+        for model in config::Model::ALL
+            .into_iter()
+            .filter(|&m| m != device.model)
+        {
+            for device_type in DeviceType::for_model(model) {
+                if !current
+                    .iter()
+                    .any(|t| t.component == device_type.component && t.key == device_type.key)
+                {
+                    topics.push(discovery_topic(device_type, &id));
+                }
+            }
+        }
+    }
+    topics
+}
+
+fn discovery_topic(device_type: &DeviceType, id: &str) -> String {
+    format!(
+        "homeassistant/{}/ruuvi_{id}/{}/config",
+        device_type.component, device_type.key
+    )
 }
 
 impl SensorData {
@@ -337,17 +366,21 @@ mod tests {
         );
     }
 
-    /// The discovery topics and payloads for one device
-    fn discovery(model: config::Model) -> Vec<(String, String)> {
+    /// A config with one device
+    fn config(model: config::Model) -> config::Config {
         let device = config::Device {
             name: String::from("Office"),
             model,
         };
-        let config = config::Config {
+        config::Config {
             mqtt: mqtt(),
             devices: [(BDAddr::from([0xaa, 0x12, 0xbb, 0x34, 0xcc, 0x56]), device)].into(),
-        };
-        Device::all(&config)
+        }
+    }
+
+    /// The discovery topics and payloads for one device
+    fn discovery(model: config::Model) -> Vec<(String, String)> {
+        Device::all(&config(model))
             .into_iter()
             .map(|d| (d.topic.clone(), serde_json::to_string(&d).unwrap()))
             .collect()
@@ -382,6 +415,24 @@ mod tests {
         assert_eq!(
             discovery[4].1,
             r#"{"name":"Office Battery Low","unique_id":"ruuvi_aa12bb34cc56_battery_low","state_class":"measurement","state_topic":"ruuvi2mqtt/aa12bb34cc56","json_attributes_topic":"ruuvi2mqtt/aa12bb34cc56","value_template":"{{ value_json.battery_low }}","payload_on":true,"payload_off":false,"device_class":"battery","entity_category":"diagnostic","device":{"name":"Office","identifiers":["AA:12:BB:34:CC:56"],"manufacturer":"Ruuvi"}}"#
+        );
+    }
+
+    #[test]
+    fn stale_topics_are_the_other_models() {
+        assert_eq!(
+            stale_topics(&config(config::Model::Air)),
+            [
+                "homeassistant/sensor/ruuvi_aa12bb34cc56/battery/config",
+                "homeassistant/binary_sensor/ruuvi_aa12bb34cc56/battery_low/config",
+                "homeassistant/sensor/ruuvi_aa12bb34cc56/tx_power/config",
+            ]
+        );
+        let tag = stale_topics(&config(config::Model::Tag));
+        assert_eq!(tag.len(), 10);
+        assert_eq!(
+            tag.last().unwrap(),
+            "homeassistant/binary_sensor/ruuvi_aa12bb34cc56/calibrating/config"
         );
     }
 

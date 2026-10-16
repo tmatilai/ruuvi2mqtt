@@ -69,6 +69,10 @@ pub enum Model {
     Air,
 }
 
+impl Model {
+    pub const ALL: [Self; 2] = [Self::Tag, Self::Air];
+}
+
 #[derive(Debug, Parser)]
 #[command(version = VERSION)]
 pub struct CliOptions {

@@ -58,6 +58,9 @@ async fn main() -> Result<()> {
                 for device in homeassistant::Device::all(&config) {
                     mqtt.publish_device(device);
                 }
+                for topic in homeassistant::stale_topics(&config) {
+                    mqtt.clear_retained(topic);
+                }
             }
             MqttDeviceUpdate(bdaddr) => {
                 if let Some(device) = devices.mark_published(&bdaddr) {
