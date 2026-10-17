@@ -525,7 +525,8 @@ impl Watch {
                     expected.len()
                 ));
             }
-            // Retained configs from another model stay in Home Assistant
+            // The app clears another model's configs. One left retained
+            // stays in Home Assistant.
             if !unexpected.is_empty() {
                 r.failures.push(format!(
                     "{label}: unexpected discovery configs: {}",

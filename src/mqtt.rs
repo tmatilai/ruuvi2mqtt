@@ -179,6 +179,20 @@ impl Mqtt {
         });
     }
 
+    /// An empty retained message deletes the retained one.
+    pub fn clear_retained(&mut self, topic: String) {
+        let client = self.client.clone();
+        tokio::spawn(async move {
+            log::debug!("Clearing: {topic}");
+            if let Err(err) = client
+                .publish(topic, QoS::AtLeastOnce, true, Vec::new())
+                .await
+            {
+                log::error!("Failed to clear: {err}");
+            }
+        });
+    }
+
     /// Sensor data is periodic, so it is dropped instead of queued when the
     /// request channel is full (e.g. during a broker outage). Awaiting
     /// `publish()` would pile up blocked tasks and flush stale readings on
