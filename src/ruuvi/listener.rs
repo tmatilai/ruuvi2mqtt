@@ -91,8 +91,8 @@ impl RuuviListener {
                 let Some(properties) = peripheral.properties().await? else {
                     return Ok(());
                 };
-                if let Some((values, rssi)) = discovered_reading(properties) {
-                    self.send_reading(&peripheral, values, Some(rssi)).await?;
+                if let Some((payload, rssi)) = discovered_reading(properties) {
+                    self.send_reading(&peripheral, payload, Some(rssi)).await?;
                 }
             }
             CentralEvent::ManufacturerDataAdvertisement {
@@ -100,10 +100,10 @@ impl RuuviListener {
                 manufacturer_data,
             } => {
                 // Parse first to skip the D-Bus lookups for other devices.
-                if let Some(values) = parse_values(manufacturer_data) {
+                if let Some(payload) = parse_payload(manufacturer_data) {
                     let peripheral = self.find_peripheral(&id).await?;
                     let rssi = peripheral.properties().await?.and_then(|p| p.rssi);
-                    self.send_reading(&peripheral, values, rssi).await?;
+                    self.send_reading(&peripheral, payload, rssi).await?;
                 }
             }
             _ => {}
@@ -116,11 +116,11 @@ impl RuuviListener {
     async fn send_reading(
         &self,
         peripheral: &Peripheral,
-        values: SensorValues,
+        Payload { format, values }: Payload,
         rssi: Option<i16>,
     ) -> Result<()> {
         log::trace!("BLE Peripheral: {peripheral:?}");
-        log::trace!("Ruuvi event: {values:?}");
+        log::trace!("Ruuvi event: format {format:#04x}, {values:?}");
         let address = reading_address(&values, peripheral.address());
         let delay = publish_delay(rssi, random_jitter());
         log::debug!(
@@ -128,7 +128,8 @@ impl RuuviListener {
             rssi.map_or_else(|| "unknown".to_string(), |r| format!("{r} dBm")),
             delay.as_millis(),
         );
-        send_delayed(&self.tx, SensorData::new(address, values), delay).await
+        let data = SensorData::new(address, format, values);
+        send_delayed(&self.tx, data, delay).await
     }
 
     async fn find_peripheral(&self, id: &PeripheralId) -> Result<Peripheral> {
@@ -139,10 +140,19 @@ impl RuuviListener {
     }
 }
 
-fn parse_values(manufacturer_data: HashMap<u16, Vec<u8>>) -> Option<SensorValues> {
-    manufacturer_data
-        .into_iter()
-        .find_map(|(id, data)| SensorValues::from_manufacturer_specific_data(id, data).ok())
+/// `SensorValues` doesn't tell the data format, so it's kept from the
+/// payload's first byte.
+struct Payload {
+    format: u8,
+    values: SensorValues,
+}
+
+fn parse_payload(manufacturer_data: HashMap<u16, Vec<u8>>) -> Option<Payload> {
+    manufacturer_data.into_iter().find_map(|(id, data)| {
+        let format = *data.first()?;
+        let values = SensorValues::from_manufacturer_specific_data(id, data).ok()?;
+        Some(Payload { format, values })
+    })
 }
 
 /// Data formats 5 and E1 carry the full MAC. Format 6 carries only its
@@ -160,13 +170,13 @@ fn reading_address(values: &SensorValues, advertiser: BDAddr) -> BDAddr {
 /// which may be stale. `BlueZ` clears the RSSI when discovery stops, so a
 /// device without RSSI hasn't been heard since. Its next advertisement
 /// arrives as `ManufacturerDataAdvertisement` within about a second.
-fn discovered_reading(properties: PeripheralProperties) -> Option<(SensorValues, i16)> {
-    let values = parse_values(properties.manufacturer_data)?;
+fn discovered_reading(properties: PeripheralProperties) -> Option<(Payload, i16)> {
+    let payload = parse_payload(properties.manufacturer_data)?;
     let Some(rssi) = properties.rssi else {
         log::debug!("Skipping cached reading from [{}]", properties.address);
         return None;
     };
-    Some((values, rssi))
+    Some((payload, rssi))
 }
 
 /// The main loop checks the throttle only when the reading arrives, so a
@@ -189,7 +199,7 @@ mod tests {
         // Data format 3 has no MAC in the payload.
         let payload = [3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
         let values = SensorValues::from_manufacturer_specific_data(0x0499, payload).unwrap();
-        SensorData::new(address, values)
+        SensorData::new(address, 3, values)
     }
 
     #[test]
@@ -199,7 +209,7 @@ mod tests {
             (0x004c, vec![0x02, 0x15]),
             (0x0499, vec![3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
         ]);
-        assert!(parse_values(data).is_some());
+        assert_eq!(parse_payload(data).map(|p| p.format), Some(3));
     }
 
     fn ruuvi_properties(rssi: Option<i16>) -> PeripheralProperties {
@@ -266,7 +276,7 @@ mod tests {
     #[test]
     fn ignores_other_manufacturer_data() {
         let data = HashMap::from([(0x004c, vec![0x02, 0x15])]);
-        assert!(parse_values(data).is_none());
+        assert!(parse_payload(data).is_none());
     }
 
     #[tokio::test]

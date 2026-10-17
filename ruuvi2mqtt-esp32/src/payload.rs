@@ -100,6 +100,19 @@ pub fn encode(v: &SensorValues, publisher: &str) -> String {
     serde_json::to_string(&payload).unwrap()
 }
 
+/// Data format 6, an Air's legacy advertisement
+const FORMAT_6: u8 = 6;
+/// Data format E1, an Air's extended advertisement
+const FORMAT_E1: u8 = 0xE1;
+
+/// Whether a reading in data format `format` replaces one in `previous`
+/// from the same device. An Air sends formats 6 and E1. Only E1 has PM1,
+/// PM4 and PM10, so Ruuvi says to drop format 6 when both arrive.
+#[must_use]
+pub fn replaces(format: u8, previous: u8) -> bool {
+    !(format == FORMAT_6 && previous == FORMAT_E1)
+}
+
 /// Ruuvi's indoor air quality score, 0–100, rounded like Ruuvi's apps.
 /// Formula from
 /// <https://docs.ruuvi.com/ruuvi-air-firmware/ruuvi-indoor-air-quality-score-iaqs>
@@ -166,6 +179,15 @@ mod tests {
             encode_raw(&data),
             r#"{"temperature":29.5,"humidity":55.3,"pressure":1011.02,"co2":201,"pm2_5":11.2,"voc":5,"nox":1,"luminosity":13026.67,"iaqs":81,"calibrating":false,"publisher":"esp32-test"}"#
         );
+    }
+
+    #[test]
+    fn format_6_does_not_replace_e1() {
+        assert!(!replaces(FORMAT_6, FORMAT_E1));
+        assert!(replaces(FORMAT_E1, FORMAT_6));
+        assert!(replaces(FORMAT_6, FORMAT_6));
+        assert!(replaces(FORMAT_E1, FORMAT_E1));
+        assert!(replaces(5, 5));
     }
 
     // Computed from the formula; Ruuvi publishes no test vectors.

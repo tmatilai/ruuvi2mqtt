@@ -14,6 +14,7 @@ publishes Home Assistant MQTT discovery. Released for Linux; the optional
 - `src/config.rs`: CLI (clap) and YAML config (serde_norway, serde_with), version info (sysinfo).
 - `src/ruuvi/listener.rs`: BLE scanning with btleplug, sends `Event::RuuviUpdate` after a per-reading delay.
 - `src/ruuvi/delay.rs`: maps RSSI plus random jitter to that delay, so the closest instance publishes first. Has unit tests.
+- `src/ruuvi/formats.rs`: drops an Air's format 6 readings while its E1 ones arrive. Has unit tests.
 - `src/ruuvi/sensor_data.rs`: decodes ruuvi-sensor-protocol payloads into the JSON published to MQTT. Has unit tests.
 - `src/mqtt.rs`: rumqttc client and event loop, TLS via rustls-native-certs, the status topic and its last will.
 - `src/homeassistant.rs`: Home Assistant discovery payloads and topics.

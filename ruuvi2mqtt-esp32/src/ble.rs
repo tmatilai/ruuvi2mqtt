@@ -17,6 +17,8 @@ use crate::config;
 #[derive(Debug, Clone)]
 pub struct RuuviReading {
     pub mac: Mac,
+    /// The data format, the payload's first byte
+    pub format: u8,
     /// JSON payload matching the `homeassistant::SensorData` field names used
     /// by the Linux ruuvi2mqtt app.
     pub payload: String,
@@ -47,7 +49,8 @@ struct State {
 
 /// Run one BLE scan pass and return decoded Ruuvi readings.
 ///
-/// Each MAC is reported at most once per scan (last advertisement wins).
+/// Each MAC is reported at most once per scan. The last advertisement wins,
+/// except that an Air's format 6 doesn't replace its E1.
 pub fn scan(start: Instant) -> anyhow::Result<Scan> {
     let ble_device = BLEDevice::take();
     let mut ble_scan = BLEScan::new();
@@ -90,6 +93,7 @@ pub fn scan(start: Instant) -> anyhow::Result<Scan> {
                     state.stats.ruuvi(mac, device.rssi(), at_ms, wifi_connected);
 
                     // Parse with the ruuvi-sensor-protocol crate.
+                    let format = mfr_data.payload.first().copied()?;
                     let values = match SensorValues::from_manufacturer_specific_data(
                         mfr_data.company_identifier,
                         mfr_data.payload,
@@ -104,8 +108,18 @@ pub fn scan(start: Instant) -> anyhow::Result<Scan> {
                     let payload = payload::encode(&values, config::MQTT_CLIENT_ID);
                     debug!("Ruuvi data: [{mac}] {} dBm -> {payload}", device.rssi());
 
-                    // Deduplicate by MAC: last advertisement wins.
-                    state.readings.insert(mac, RuuviReading { mac, payload });
+                    if state
+                        .readings
+                        .get(&mac)
+                        .is_none_or(|r| payload::replaces(format, r.format))
+                    {
+                        let reading = RuuviReading {
+                            mac,
+                            format,
+                            payload,
+                        };
+                        state.readings.insert(mac, reading);
+                    }
                     None
                 },
             )
