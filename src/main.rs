@@ -11,7 +11,7 @@ use crate::config::{CliOptions, Config};
 use crate::devices::{Devices, ThrottleResult};
 use crate::homeassistant::SensorData;
 use crate::mqtt::Mqtt;
-use crate::ruuvi::{BDAddr, RuuviListener};
+use crate::ruuvi::{BDAddr, FormatFilter, RuuviListener};
 
 type EventSender = mpsc::Sender<crate::Event>;
 
@@ -42,6 +42,7 @@ async fn main() -> Result<()> {
     }
 
     let mut devices = Devices::new(&config.devices, config.mqtt.throttle);
+    let mut formats = FormatFilter::default();
 
     let (tx, mut rx) = mpsc::channel(32);
     let mut mqtt = Mqtt::init(tx.clone(), &config.mqtt)?;
@@ -68,6 +69,10 @@ async fn main() -> Result<()> {
                 }
             }
             RuuviUpdate(sensor) => {
+                if !formats.keep(&sensor) {
+                    log::debug!("Dropped format 6 after E1: [{}]", sensor.bdaddr);
+                    continue;
+                }
                 let result = devices.try_publish(&sensor.bdaddr);
                 let device_name = devices.get(&sensor.bdaddr).map(|d| d.name.as_str());
                 match result {

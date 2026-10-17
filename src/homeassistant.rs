@@ -335,7 +335,7 @@ mod tests {
     fn reading(payload: &[u8]) -> String {
         let config = mqtt();
         let values = SensorValues::from_manufacturer_specific_data(0x0499, payload).unwrap();
-        let data = ruuvi::SensorData::new(BDAddr::from([0u8; 6]), values);
+        let data = ruuvi::SensorData::new(BDAddr::from([0u8; 6]), payload[0], values);
         serde_json::to_string(&SensorData::new(&data, &config)).unwrap()
     }
 
