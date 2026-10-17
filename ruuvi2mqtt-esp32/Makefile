@@ -92,7 +92,7 @@ XTENSA_TOOLCHAIN_VERSION := 1.97.0.0
 
 .PHONY: setup
 setup: ## Install the pinned tools and Xtensa toolchain
-	cargo install espflash@$(ESPFLASH_VERSION) espup@$(ESPUP_VERSION) ldproxy@$(LDPROXY_VERSION)
+	cargo install --locked espflash@$(ESPFLASH_VERSION) espup@$(ESPUP_VERSION) ldproxy@$(LDPROXY_VERSION)
 	espup install --toolchain-version $(XTENSA_TOOLCHAIN_VERSION) --skip-version-parse
 
 .PHONY: all
