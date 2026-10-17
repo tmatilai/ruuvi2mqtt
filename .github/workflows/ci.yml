@@ -77,7 +77,7 @@ jobs:
         run: cd ruuvi2mqtt-esp32 && rustup toolchain install
 
       - name: Setup | ldproxy
-        run: cargo install ldproxy@0.3.5
+        run: cargo install --locked ldproxy@0.3.5
 
       - name: Setup | ESP-IDF version
         id: esp-idf
@@ -159,7 +159,11 @@ jobs:
       - name: Setup | Rust (Xtensa)
         if: ${{ matrix.xtensa }}
         run: |
-          cargo install espup@0.18.0
+          # The prebuilt espup saves compiling it. The Makefile pins its version.
+          espup_version=$(grep -oP '^ESPUP_VERSION\s*:=\s*\K\S+' ruuvi2mqtt-esp32/Makefile)
+          curl -fsSL -o ~/.cargo/bin/espup \
+            "https://github.com/esp-rs/espup/releases/download/v${espup_version}/espup-x86_64-unknown-linux-gnu"
+          chmod +x ~/.cargo/bin/espup
           version=$(grep -oP '^XTENSA_TOOLCHAIN_VERSION\s*:=\s*\K\S+' ruuvi2mqtt-esp32/Makefile)
           # Skipping the version parse avoids GitHub API calls and their rate limit.
           # --std leaves GCC to esp-idf-sys.
@@ -170,7 +174,7 @@ jobs:
           echo "LIBCLANG_PATH=$(grep -oP '^export LIBCLANG_PATH="\K[^"]+' ~/export-esp.sh)" >> "$GITHUB_ENV"
 
       - name: Setup | ldproxy
-        run: cargo install ldproxy@0.3.5
+        run: cargo install --locked ldproxy@0.3.5
 
       - name: Setup | ESP-IDF version
         id: esp-idf
@@ -250,7 +254,7 @@ jobs:
       - name: Setup | Cross
         if: env.USE_CROSS == 'true'
         run: |
-          cargo install --bins cross@0.2.5
+          cargo install --locked --bins cross@0.2.5
           echo "CARGO=cross" >> "$GITHUB_ENV"
 
       - name: Setup | Install build dependencies
