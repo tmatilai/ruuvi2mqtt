@@ -467,9 +467,9 @@ dependencies = [
 
 [[package]]
 name = "embuild"
-version = "0.33.5"
+version = "0.33.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2c41359cdde377dfd2e8aa34c09f9798a3ff9b6e4a9de81167c32d6b289521ed"
+checksum = "ca49ff53738cb8d2ce280d1141bab29a0332f791cdf3a07acc9a5c6d2847d462"
 dependencies = [
  "anyhow",
  "bindgen",
