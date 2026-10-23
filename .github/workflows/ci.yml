@@ -53,7 +53,7 @@ jobs:
           components: clippy
 
       - name: Setup | Cache
-        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           save-if: ${{ github.ref == 'refs/heads/main' }}
 
@@ -84,7 +84,7 @@ jobs:
         run: echo "version=$(grep -oP 'ESP_IDF_VERSION\s*=\s*"\K[^"]+' ruuvi2mqtt-esp32/.cargo/config.toml)" >> "$GITHUB_OUTPUT"
 
       - name: Setup | Cache
-        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           workspaces: ruuvi2mqtt-esp32 -> target
           cache-directories: ~/.espressif
@@ -110,7 +110,7 @@ jobs:
           components: clippy
 
       - name: Setup | Cache
-        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           workspaces: ruuvi2mqtt-esp32 -> target
           save-if: ${{ github.ref == 'refs/heads/main' }}
@@ -181,7 +181,7 @@ jobs:
         run: echo "version=$(grep -oP 'ESP_IDF_VERSION\s*=\s*"\K[^"]+' ruuvi2mqtt-esp32/.cargo/config.toml)" >> "$GITHUB_OUTPUT"
 
       - name: Setup | Cache
-        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           workspaces: ruuvi2mqtt-esp32 -> target
           cache-directories: ~/.espressif
@@ -206,7 +206,7 @@ jobs:
           toolchain: stable
 
       - name: Setup | Cache
-        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           save-if: ${{ github.ref == 'refs/heads/main' }}
 
@@ -246,7 +246,7 @@ jobs:
           toolchain: stable
 
       - name: Setup | Cache
-        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           shared-key: ${{ matrix.target }}-${{ matrix.os }}-debug-build
           save-if: ${{ github.ref == 'refs/heads/main' }}
