@@ -33,7 +33,7 @@ esp-idf-svc = "=0.53.0"
 esp32-nimble = "=0.13.0"
 
 [build-dependencies]
-embuild = { version = "=0.33.6", features = ["espidf"] }
+embuild = { version = "=0.33.7", features = ["espidf"] }
 
 # ESP-IDF 6.0 moved the MQTT client out of the core into a managed component.
 [[package.metadata.esp-idf-sys.extra_components]]
