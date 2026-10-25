@@ -128,13 +128,17 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          - name: ESP32-C5
+            chip: esp32c5
+            target: riscv32imac-esp-espidf
+            cache-key: esp32c5-riscv
           - name: ESP32-C6
             chip: esp32c6
             target: riscv32imac-esp-espidf
             cache-key: esp32c6-riscv
           # The Xtensa chips build with Espressif's Rust fork, which lags
           # upstream. They also compile esp32-nimble's code for the older
-          # Bluetooth controller, which ESP32-C6 doesn't use.
+          # Bluetooth controller, which the RISC-V chips don't use.
           - name: ESP32-S3
             chip: esp32s3
             target: xtensa-esp32s3-espidf

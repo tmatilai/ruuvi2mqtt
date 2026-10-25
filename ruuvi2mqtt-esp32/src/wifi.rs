@@ -90,6 +90,7 @@ pub fn connect(
     }))?;
 
     wifi.start()?;
+    set_band()?;
     info!("Connecting to Wi-Fi '{}'...", config::WIFI_SSID);
 
     // A fast reconnect fails as soon as the driver gives up on the cached AP.
@@ -130,6 +131,18 @@ pub fn connect(
     update_wifi_cache(cached.as_ref());
 
     Ok((wifi, cache_use))
+}
+
+/// Restrict Wi-Fi to `WIFI_BAND`. The default band mode uses both.
+fn set_band() -> anyhow::Result<()> {
+    let mode = match config::WIFI_BAND {
+        Some("2.4") => sys::wifi_band_mode_t_WIFI_BAND_MODE_2G_ONLY,
+        Some(_) => sys::wifi_band_mode_t_WIFI_BAND_MODE_5G_ONLY,
+        None => return Ok(()),
+    };
+    sys::esp!(unsafe { sys::esp_wifi_set_band_mode(mode) })?;
+    info!("Wi-Fi band: {} GHz", config::WIFI_BAND.unwrap_or_default());
+    Ok(())
 }
 
 /// How long to wait for the cached AP. `BlockingWifi` also waits 15 s.

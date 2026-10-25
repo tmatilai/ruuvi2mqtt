@@ -36,11 +36,14 @@ endif
 
 # Target chip (default: esp32c6).
 # Override: make build CHIP=esp32  or set CHIP in a device .mk file.
-# Supported: esp32c6, esp32c3, esp32, esp32s3
+# Supported: esp32c5, esp32c6, esp32c3, esp32, esp32s3
 CHIP ?= esp32c6
 
 # --- Derive target triple and toolchain from CHIP ---
-ifeq ($(CHIP),esp32c6)
+ifeq ($(CHIP),esp32c5)
+  TARGET := riscv32imac-esp-espidf
+  TOOLCHAIN :=
+else ifeq ($(CHIP),esp32c6)
   TARGET := riscv32imac-esp-espidf
   TOOLCHAIN :=
 else ifeq ($(CHIP),esp32c3)
@@ -53,10 +56,17 @@ else ifeq ($(CHIP),esp32s3)
   TARGET := xtensa-esp32s3-espidf
   TOOLCHAIN := +esp
 else
-  $(error Unsupported CHIP=$(CHIP). Use: esp32c6, esp32c3, esp32, esp32s3)
+  $(error Unsupported CHIP=$(CHIP). Use: esp32c5, esp32c6, esp32c3, esp32, esp32s3)
 endif
 
 export MCU := $(CHIP)
+# A target directory per chip: the C6 and C5 share a Rust target, but
+# ESP-IDF's build can't switch chips in place. A directory set in the
+# environment wins, e.g. the test bed's. esp-idf-sys looks for the crate
+# (sdkconfig.defaults) next to the target directory unless
+# CARGO_WORKSPACE_DIR says where it is.
+export CARGO_TARGET_DIR ?= target/$(CHIP)
+export CARGO_WORKSPACE_DIR ?= $(CURDIR)
 CARGO := cargo $(TOOLCHAIN)
 
 # The lib holds the pure-Rust modules. ESP-IDF is an espidf-only dependency,

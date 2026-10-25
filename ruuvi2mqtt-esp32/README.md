@@ -46,10 +46,14 @@ Makefile variable:
 
 | Chip | Architecture | `CHIP` value |
 |------|-------------|--------------|
+| ESP32-C5 | RISC-V | `esp32c5` |
 | ESP32-C6 | RISC-V | `esp32c6` (default) |
 | ESP32-C3 | RISC-V | `esp32c3` |
 | ESP32 | Xtensa | `esp32` |
 | ESP32-S3 | Xtensa | `esp32s3` |
+
+Each chip builds in its own target directory, `target/<chip>/`, unless
+`CARGO_TARGET_DIR` is set.
 
 ---
 
@@ -87,6 +91,7 @@ All settings are baked in at compile-time via environment variables.
 | `WIFI_GATEWAY` | — | — | Gateway (required when `WIFI_IP` is set) |
 | `WIFI_NETMASK` | — | `255.255.255.0` | Subnet mask for static IP |
 | `WIFI_DNS` | — | *gateway* | DNS server for static IP |
+| `WIFI_BAND` | — | *(both)* | Dual-band chips only (ESP32-C5): `2.4` or `5` GHz. On the C5, a full scan of 2.4 GHz takes about 2.5 s, of both bands about 13 s |
 | `DEVICE_HOSTNAME` | — | `ruuvi2mqtt-esp32` | Hostname (DHCP + default MQTT client ID) |
 | `MQTT_PORT` | `mqtt.port` | `1883` / `8883` | MQTT broker port (default depends on TLS) |
 | `MQTT_TLS` | `mqtt.tls` | `false` | Set to `true` to enable TLS (`mqtts://`) |
@@ -113,6 +118,7 @@ per-device configuration files (see below).
 
 | Board | `LED_TYPE` | `LED_GPIO` |
 |---|---|---|
+| ESP32-C5-DevKitC-1 | `ws2812` | `27` |
 | Seeed XIAO-ESP32-C6 | `ws2812` | `15` |
 | Beetle ESP32 C6 Mini (DFRobot DFR1117) | `gpio` | `15` |
 | ESP32-S3 AI Camera (DFRobot DFR1154) | `gpio` | `3` |
