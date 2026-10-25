@@ -88,6 +88,7 @@ All settings are baked in at compile-time via environment variables.
 | `WIFI_GATEWAY` | — | — | Gateway (required when `WIFI_IP` is set) |
 | `WIFI_NETMASK` | — | `255.255.255.0` | Subnet mask for static IP |
 | `WIFI_DNS` | — | *gateway* | DNS server for static IP |
+| `WIFI_BAND` | — | *(both)* | Dual-band chips only (ESP32-C5): `2.4` or `5` GHz. On the C5, a full scan of 2.4 GHz takes about 2.5 s, of both bands about 13 s |
 | `DEVICE_HOSTNAME` | — | `ruuvi2mqtt-esp32` | Hostname (DHCP + default MQTT client ID) |
 | `MQTT_PORT` | `mqtt.port` | `1883` / `8883` | MQTT broker port (default depends on TLS) |
 | `MQTT_TLS` | `mqtt.tls` | `false` | Set to `true` to enable TLS (`mqtts://`) |

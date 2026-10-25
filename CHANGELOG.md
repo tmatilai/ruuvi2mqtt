@@ -16,6 +16,7 @@
 
 - Support the ESP32-C5: `CHIP=esp32c5`.
 - Add `LED_COLOR` for the WS2812 LED. It defaults to a dim blue instead of a glaring full white.
+- Add `WIFI_BAND` to keep a dual-band chip, such as the ESP32-C5, on 2.4 or 5 GHz.
 
 #### Fixes
 

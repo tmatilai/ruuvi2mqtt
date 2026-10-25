@@ -38,6 +38,10 @@ pub const WIFI_NETMASK: Option<&str> = option_env_non_empty!("WIFI_NETMASK");
 /// DNS server for static IP. Defaults to `WIFI_GATEWAY` when not set.
 pub const WIFI_DNS: Option<&str> = option_env_non_empty!("WIFI_DNS");
 
+/// Wi-Fi band on dual-band chips such as the ESP32-C5: `2.4` or `5`.
+/// Unset uses both.
+pub const WIFI_BAND: Option<&str> = option_env_non_empty!("WIFI_BAND");
+
 /// Device hostname. Used as the default MQTT client ID and announced via
 /// DHCP (has no network effect when using static IP).
 pub const DEVICE_HOSTNAME: &str = match option_env_non_empty!("DEVICE_HOSTNAME") {
@@ -246,6 +250,17 @@ const _: () = assert!(
 const _: () = assert!(
     is_ip4_or_unset(WIFI_DNS),
     "WIFI_DNS is not a valid IPv4 address"
+);
+const _: () = assert!(
+    match WIFI_BAND {
+        Some(v) => konst::eq_str(v, "2.4") || konst::eq_str(v, "5"),
+        None => true,
+    },
+    "WIFI_BAND must be 2.4 or 5"
+);
+const _: () = assert!(
+    WIFI_BAND.is_none() || cfg!(esp_idf_soc_wifi_support_5g),
+    "WIFI_BAND is only for dual-band chips such as the ESP32-C5"
 );
 const _: () = assert!(
     BLE_SCAN_DURATION > 0 && BLE_SCAN_DURATION <= i32::MAX / 1000,
