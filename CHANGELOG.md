@@ -16,6 +16,10 @@
 
 - Add `LED_COLOR` for the WS2812 LED. It defaults to a dim blue instead of a glaring full white.
 
+#### Fixes
+
+- Fall back to a full Wi-Fi scan as soon as the cached access point fails, instead of after 15 seconds. The scan could run out of the cycle's time.
+
 ## 1.6.0 / 2026-10-14
 
 ### ruuvi2mqtt
