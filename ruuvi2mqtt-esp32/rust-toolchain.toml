@@ -1,5 +1,5 @@
 [toolchain]
-# RISC-V targets (ESP32-C5, ESP32-C6, ESP32-C3) need nightly for build-std.
+# RISC-V targets (ESP32-C3, ESP32-C5, ESP32-C6) need nightly for build-std.
 # Xtensa targets (ESP32, ESP32-S3) require the Espressif fork: cargo +esp
 # Install with: cargo install espup && espup install
 # Pinned: a new nightly can break the build. Renovate bumps it.

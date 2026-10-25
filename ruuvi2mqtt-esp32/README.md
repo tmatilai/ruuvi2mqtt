@@ -46,10 +46,10 @@ Makefile variable:
 
 | Chip | Architecture | `CHIP` value |
 |------|-------------|--------------|
+| ESP32 | Xtensa | `esp32` |
+| ESP32-C3 | RISC-V | `esp32c3` |
 | ESP32-C5 | RISC-V | `esp32c5` |
 | ESP32-C6 | RISC-V | `esp32c6` (default) |
-| ESP32-C3 | RISC-V | `esp32c3` |
-| ESP32 | Xtensa | `esp32` |
 | ESP32-S3 | Xtensa | `esp32s3` |
 
 Each chip builds in its own target directory, `target/<chip>/`, unless
@@ -118,11 +118,12 @@ per-device configuration files (see below).
 
 | Board | `LED_TYPE` | `LED_GPIO` |
 |---|---|---|
-| ESP32-C5-DevKitC-1 | `ws2812` | `27` |
-| Seeed XIAO-ESP32-C6 | `ws2812` | `15` |
 | Beetle ESP32 C6 Mini (DFRobot DFR1117) | `gpio` | `15` |
-| ESP32-S3 AI Camera (DFRobot DFR1154) | `gpio` | `3` |
+| ESP32-C5-DevKitC-1 | `ws2812` | `27` |
+| ESP32-C6-DevKitC-1 | `ws2812` | `8` |
 | ESP32-CAM | `ws2812` | `33` |
+| ESP32-S3 AI Camera (DFRobot DFR1154) | `gpio` | `3` |
+| Seeed XIAO-ESP32-C6 | `ws2812` | `15` |
 
 #### Antenna
 
