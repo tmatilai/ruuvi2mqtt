@@ -193,11 +193,22 @@ pub const LED_TYPE: &str = match option_env_non_empty!("LED_TYPE") {
     None => "ws2812",
 };
 
-/// GPIO pin number for the LED. Default: `15`.
-pub const LED_GPIO: u32 = match option_env_non_empty!("LED_GPIO") {
-    Some(v) => konst::result::unwrap!(u32::from_str_radix(v, 10)),
-    None => 15,
+/// GPIO pin number for the LED. Required with `LED_MODE`: the pin depends
+/// on the board, and a wrong one may drive something else.
+pub const LED_GPIO: Option<u32> = match option_env_non_empty!("LED_GPIO") {
+    Some(v) => Some(konst::result::unwrap!(u32::from_str_radix(v, 10))),
+    None => None,
 };
+
+/// WS2812 color while on, as hex `RRGGBB`. Low values keep it dim.
+/// Default: `000020`, a dim blue.
+const LED_COLOR_HEX: &str = match option_env_non_empty!("LED_COLOR") {
+    Some(v) => v,
+    None => "000020",
+};
+
+/// `LED_COLOR` as `0xRRGGBB`.
+pub const LED_COLOR: u32 = konst::result::unwrap!(u32::from_str_radix(LED_COLOR_HEX, 16));
 
 // ---------------------------------------------------------------------------
 // Logging
@@ -260,8 +271,19 @@ const _: () = assert!(
     "ANTENNA is only for the Seeed XIAO ESP32-C6"
 );
 const _: () = assert!(
-    LED_GPIO < esp_idf_svc::sys::gpio_num_t_GPIO_NUM_MAX as u32,
+    LED_MODE.is_none() || LED_GPIO.is_some(),
+    "LED_GPIO must be set when LED_MODE is set"
+);
+const _: () = assert!(
+    match LED_GPIO {
+        Some(gpio) => gpio < esp_idf_svc::sys::gpio_num_t_GPIO_NUM_MAX as u32,
+        None => true,
+    },
     "LED_GPIO is not a valid GPIO number for this chip"
+);
+const _: () = assert!(
+    LED_COLOR_HEX.len() == 6,
+    "LED_COLOR must be six hex digits, RRGGBB"
 );
 
 /// True when `v` is unset or a dotted-decimal IPv4 address.

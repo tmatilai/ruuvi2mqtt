@@ -6,6 +6,16 @@
 
 - Publish Ruuvi Air readings under the tag's MAC. Data format 6 carries only the lowest 3 bytes of the MAC, so they were published under `00:00:00:xx:yy:zz`.
 
+### ruuvi2mqtt-esp32
+
+#### Breaking changes
+
+- `LED_GPIO` is required with `LED_MODE`. It defaulted to 15, the Seeed XIAO ESP32-C6's pin, which may be wired to something else on other boards.
+
+#### Features
+
+- Add `LED_COLOR` for the WS2812 LED. It defaults to a dim blue instead of a glaring full white.
+
 ## 1.6.0 / 2026-10-14
 
 ### ruuvi2mqtt
