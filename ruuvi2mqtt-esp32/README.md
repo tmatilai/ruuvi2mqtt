@@ -102,7 +102,8 @@ All settings are baked in at compile-time via environment variables.
 | `ANTENNA` | — | *(unset)* | Seeed XIAO ESP32-C6 only: `internal` or `external` antenna. See [Antenna](#antenna) |
 | `LED_MODE` | — | *(unset)* | `on` to light while awake, `off` to turn off at boot, or unset to do nothing |
 | `LED_TYPE` | — | `ws2812` | `ws2812` or `gpio` |
-| `LED_GPIO` | — | `15` | LED pin number |
+| `LED_GPIO` | — | — | LED pin number. Required with `LED_MODE` |
+| `LED_COLOR` | — | `000020` | WS2812 color as hex `RRGGBB`. Low values keep it dim |
 | `LOG_LEVEL` | — | `info` | Log level for app code (library code stays at info) |
 
 These can be set in the environment, in `.envrc` (with direnv), or in

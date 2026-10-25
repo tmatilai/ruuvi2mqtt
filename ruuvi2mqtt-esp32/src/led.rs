@@ -27,21 +27,23 @@ impl Led {
     ///
     /// Returns a no-op controller when `LED_MODE` is unset.
     pub fn new() -> anyhow::Result<Self> {
-        if config::LED_MODE.is_none() {
+        let (Some(mode), Some(gpio)) = (config::LED_MODE, config::LED_GPIO) else {
+            // config.rs fails the build when LED_MODE is set without LED_GPIO.
             return Ok(Self { inner: Inner::Noop });
-        }
+        };
 
         info!(
-            "LED: type={}, gpio={}, mode={}",
+            "LED: type={}, gpio={}, color={:06x}, mode={}",
             config::LED_TYPE,
-            config::LED_GPIO,
-            config::LED_MODE.unwrap_or("none"),
+            gpio,
+            config::LED_COLOR,
+            mode,
         );
 
         let inner = match config::LED_TYPE {
             "ws2812" => {
                 #[allow(clippy::cast_possible_truncation)] // GPIO numbers always fit in u8
-                let pin = unsafe { AnyOutputPin::steal(config::LED_GPIO as u8) };
+                let pin = unsafe { AnyOutputPin::steal(gpio as u8) };
                 let tx_config = TxChannelConfig {
                     resolution: 10.MHz().into(),
                     ..Default::default()
@@ -51,7 +53,7 @@ impl Led {
             }
             "gpio" => {
                 #[allow(clippy::cast_possible_wrap)] // GPIO numbers are always positive
-                let pin = config::LED_GPIO as i32;
+                let pin = gpio as i32;
                 unsafe {
                     esp_idf_svc::sys::gpio_set_direction(
                         pin,
@@ -78,13 +80,13 @@ impl Led {
         }
     }
 
-    /// Turn the LED on (using `LED_COLOR` for WS2812, high for GPIO).
+    /// Turn the LED on (`LED_COLOR` for WS2812, high for GPIO).
     pub fn on(&mut self) {
         match &mut self.inner {
             Inner::Noop => {}
             Inner::Ws2812(tx) => {
-                // WS2812 expects GRB byte order; use white.
-                if let Err(e) = ws2812_send(tx, [255, 255, 255]) {
+                let [_, r, g, b] = config::LED_COLOR.to_be_bytes();
+                if let Err(e) = ws2812_send(tx, [g, r, b]) {
                     log::warn!("LED on failed: {e}");
                 }
             }

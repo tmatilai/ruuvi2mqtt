@@ -20,3 +20,4 @@
 # export LED_MODE = off
 # export LED_TYPE = gpio
 # export LED_GPIO = 15
+# export LED_COLOR = 000020
