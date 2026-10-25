@@ -1,7 +1,7 @@
 # Bluetooth — NimBLE stack (required by esp32-nimble)
 CONFIG_BT_ENABLED=y
 # Dual-mode controller BLE-only — applies to ESP32 (Xtensa); silently ignored
-# on RISC-V chips (ESP32-C5, ESP32-C6, ESP32-C3) that only support BLE.
+# on RISC-V chips (ESP32-C3, ESP32-C5, ESP32-C6) that only support BLE.
 CONFIG_BTDM_CTRL_MODE_BLE_ONLY=y
 CONFIG_BT_NIMBLE_ENABLED=y
 
