@@ -60,6 +60,13 @@ else
 endif
 
 export MCU := $(CHIP)
+# A target directory per chip: the C6 and C5 share a Rust target, but
+# ESP-IDF's build can't switch chips in place. A directory set in the
+# environment wins, e.g. the test bed's. esp-idf-sys looks for the crate
+# (sdkconfig.defaults) next to the target directory unless
+# CARGO_WORKSPACE_DIR says where it is.
+export CARGO_TARGET_DIR ?= target/$(CHIP)
+export CARGO_WORKSPACE_DIR ?= $(CURDIR)
 CARGO := cargo $(TOOLCHAIN)
 
 # The lib holds the pure-Rust modules. ESP-IDF is an espidf-only dependency,

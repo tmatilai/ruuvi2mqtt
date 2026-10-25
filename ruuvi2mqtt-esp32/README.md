@@ -52,6 +52,9 @@ Makefile variable:
 | ESP32 | Xtensa | `esp32` |
 | ESP32-S3 | Xtensa | `esp32s3` |
 
+Each chip builds in its own target directory, `target/<chip>/`, unless
+`CARGO_TARGET_DIR` is set.
+
 ---
 
 ## Setup
