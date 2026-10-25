@@ -36,11 +36,14 @@ endif
 
 # Target chip (default: esp32c6).
 # Override: make build CHIP=esp32  or set CHIP in a device .mk file.
-# Supported: esp32c6, esp32c3, esp32, esp32s3
+# Supported: esp32c5, esp32c6, esp32c3, esp32, esp32s3
 CHIP ?= esp32c6
 
 # --- Derive target triple and toolchain from CHIP ---
-ifeq ($(CHIP),esp32c6)
+ifeq ($(CHIP),esp32c5)
+  TARGET := riscv32imac-esp-espidf
+  TOOLCHAIN :=
+else ifeq ($(CHIP),esp32c6)
   TARGET := riscv32imac-esp-espidf
   TOOLCHAIN :=
 else ifeq ($(CHIP),esp32c3)
@@ -53,7 +56,7 @@ else ifeq ($(CHIP),esp32s3)
   TARGET := xtensa-esp32s3-espidf
   TOOLCHAIN := +esp
 else
-  $(error Unsupported CHIP=$(CHIP). Use: esp32c6, esp32c3, esp32, esp32s3)
+  $(error Unsupported CHIP=$(CHIP). Use: esp32c5, esp32c6, esp32c3, esp32, esp32s3)
 endif
 
 export MCU := $(CHIP)
