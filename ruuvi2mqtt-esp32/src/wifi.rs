@@ -4,12 +4,19 @@ use esp_idf_svc::{
     handle::RawHandle,
     nvs::EspDefaultNvsPartition,
     sys,
-    wifi::{AuthMethod, BlockingWifi, ClientConfiguration, Configuration, EspWifi, ScanMethod},
+    wifi::{
+        AuthMethod, BlockingWifi, ClientConfiguration, Configuration, EspWifi, ScanMethod,
+        WifiEvent,
+    },
 };
 use log::info;
 use ruuvi2mqtt_esp32::diagnostics::CacheUse;
 use ruuvi2mqtt_esp32::mac::Mac;
 use std::ffi::CString;
+use std::sync::atomic::{AtomicU16, Ordering};
+use std::sync::Arc;
+use std::thread;
+use std::time::{Duration, Instant};
 
 use crate::config;
 
@@ -44,6 +51,8 @@ pub fn connect(
         configure_static_ip(esp_wifi.sta_netif().handle(), ip)?;
     }
 
+    // For connect_cached, which watches for disconnects.
+    let events = sysloop.clone();
     let mut wifi = BlockingWifi::wrap(esp_wifi, sysloop)?;
 
     let auth = if config::WIFI_PASS.is_empty() {
@@ -83,7 +92,14 @@ pub fn connect(
     wifi.start()?;
     info!("Connecting to Wi-Fi '{}'...", config::WIFI_SSID);
 
-    let cache_use = match wifi.connect() {
+    // A fast reconnect fails as soon as the driver gives up on the cached AP.
+    // A full scan moves on to the next AP itself, so it waits for the result.
+    let result = if cached.is_some() {
+        connect_cached(&mut wifi, &events)
+    } else {
+        wifi.connect().map_err(Into::into)
+    };
+    let cache_use = match result {
         Ok(()) if cached.is_some() => CacheUse::Hit,
         Ok(()) => CacheUse::Miss,
         Err(e) if cached.is_some() => {
@@ -102,7 +118,7 @@ pub fn connect(
             wifi.connect()?;
             CacheUse::Stale
         }
-        Err(e) => return Err(e.into()),
+        Err(e) => return Err(e),
     };
 
     if config::WIFI_IP.is_none() {
@@ -114,6 +130,44 @@ pub fn connect(
     update_wifi_cache(cached.as_ref());
 
     Ok((wifi, cache_use))
+}
+
+/// How long to wait for the cached AP. `BlockingWifi` also waits 15 s.
+const CACHED_CONNECT_TIMEOUT: Duration = Duration::from_secs(15);
+
+/// Connect to the cached AP, but fail on the first disconnect.
+///
+/// `BlockingWifi::connect` waits out its whole timeout after the driver has
+/// given up, e.g. when the cached AP isn't heard. That leaves too little of
+/// the cycle for the full scan.
+fn connect_cached(
+    wifi: &mut BlockingWifi<EspWifi<'static>>,
+    sysloop: &EspSystemEventLoop,
+) -> anyhow::Result<()> {
+    // The disconnect reason, or 0 while none was seen.
+    let reason = Arc::new(AtomicU16::new(0));
+    let reason_tx = reason.clone();
+    let _subscription = sysloop.subscribe::<WifiEvent, _>(move |event| {
+        if let WifiEvent::StaDisconnected(d) = event {
+            reason_tx.store(d.reason().max(1), Ordering::Relaxed);
+        }
+    })?;
+
+    let start = Instant::now();
+    wifi.wifi_mut().connect()?;
+    while !wifi.is_connected()? {
+        match reason.load(Ordering::Relaxed) {
+            0 if start.elapsed() < CACHED_CONNECT_TIMEOUT => {
+                thread::sleep(Duration::from_millis(50));
+            }
+            0 => anyhow::bail!("timed out after {}s", CACHED_CONNECT_TIMEOUT.as_secs()),
+            r => anyhow::bail!(
+                "disconnected after {}ms, reason {r}",
+                start.elapsed().as_millis()
+            ),
+        }
+    }
+    Ok(())
 }
 
 /// Configure static IP on the STA netif, bypassing DHCP.
