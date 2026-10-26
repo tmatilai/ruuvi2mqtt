@@ -34,6 +34,9 @@ jobs:
       - name: Run fmt (esp32)
         run: cargo fmt --manifest-path ruuvi2mqtt-esp32/Cargo.toml -- --check
 
+      - name: Run fmt (Air simulator)
+        run: cargo fmt --manifest-path air-simulator/Cargo.toml -- --check
+
       - name: Check the version
         run: script/check-version
 
@@ -112,7 +115,9 @@ jobs:
       - name: Setup | Cache
         uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
-          workspaces: ruuvi2mqtt-esp32 -> target
+          workspaces: |
+            ruuvi2mqtt-esp32 -> target
+            air-simulator -> target
           save-if: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Run clippy (host tests)
@@ -120,6 +125,12 @@ jobs:
 
       - name: Run tests
         run: make -C ruuvi2mqtt-esp32 test
+
+      - name: Run clippy (Air simulator host tests)
+        run: cd air-simulator && cargo +stable clippy --locked --target host-tuple --lib --tests -- -D clippy::all -W clippy::pedantic
+
+      - name: Run tests (Air simulator)
+        run: make -C air-simulator test
 
   build-esp32:
     name: Build (${{ matrix.name }})

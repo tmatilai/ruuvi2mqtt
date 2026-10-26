@@ -16,12 +16,14 @@
 #   boards.sh log SECS         the serial output of ESPFLASH_PORT for SECS
 #
 # ESPFLASH_PORT limits detect, only-port and register to that port. WAIT
-# is how long to wait for a port, in seconds (default 75).
+# is how long to wait for a port, in seconds (default 75). BOARDS_CONF is
+# the registry (default devices/devices.conf), for callers in other
+# directories.
 set -euo pipefail
 # Also exit on errors inside $(...). Bash 4.4 and later.
 shopt -s inherit_errexit 2>/dev/null || true
 
-CONF=devices/devices.conf
+CONF=${BOARDS_CONF:-devices/devices.conf}
 WAIT=${WAIT:-75}
 
 die() {

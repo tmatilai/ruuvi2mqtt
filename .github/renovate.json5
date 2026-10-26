@@ -13,7 +13,7 @@
   // Keep in sync with global-min-publish-age in .cargo/config.toml.
   minimumReleaseAge: '3 days',
 
-  // Refresh transitive deps in both Cargo.lock files.
+  // Refresh transitive deps in every Cargo.lock.
   lockFileMaintenance: {
     enabled: true,
     // Don't rebuild the PR while it waits out minimumReleaseAge. A rebuild
@@ -39,7 +39,8 @@
     },
     {
       matchManagers: ['cargo'],
-      matchFileNames: ['ruuvi2mqtt-esp32/Cargo.toml'],
+      // The Air simulator pins the same versions as the firmware
+      matchFileNames: ['air-simulator/Cargo.toml', 'ruuvi2mqtt-esp32/Cargo.toml'],
       matchUpdateTypes: ['minor', 'patch'],
       groupName: 'ESP32 crates (minor and patch)',
     },

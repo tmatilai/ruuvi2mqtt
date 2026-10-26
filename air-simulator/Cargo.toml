@@ -1,0 +1,35 @@
+[package]
+name = "air-simulator"
+version = "0.1.0"
+authors = ["Teemu Matilainen <teemu.matilainen@iki.fi>"]
+license = "MIT"
+repository = "https://github.com/tmatilai/ruuvi2mqtt"
+edition = "2024"
+publish = false
+
+[[bin]]
+name = "air-simulator"
+harness = false # required: ESP-IDF entry point is not compatible with the test harness
+test = false # needs ESP-IDF; the host tests are in the lib
+
+[profile.release]
+opt-level = "s"
+
+[profile.dev]
+debug = true
+opt-level = "z"
+
+[dependencies]
+anyhow = "=1.0.104"
+log = "=0.4.34"
+
+# Only on the ESP32, so the lib builds and tests on the host.
+[target.'cfg(target_os = "espidf")'.dependencies]
+esp-idf-svc = "=0.53.0"
+esp32-nimble = "=0.13.0"
+
+[dev-dependencies]
+ruuvi-sensor-protocol = "=0.7.0"
+
+[build-dependencies]
+embuild = { version = "=0.33.7", features = ["espidf"] }

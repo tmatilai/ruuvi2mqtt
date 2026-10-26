@@ -1,0 +1,10 @@
+CONFIG_BT_ENABLED=y
+CONFIG_BT_NIMBLE_ENABLED=y
+CONFIG_BT_NIMBLE_EXT_ADV=y
+# One advertising instance per set (legacy, extended, coded). Both the
+# host and the controller count instances beyond the first.
+CONFIG_BT_NIMBLE_MAX_EXT_ADV_INSTANCES=2
+CONFIG_BT_LE_MAX_EXT_ADV_INSTANCES=2
+
+CONFIG_ESP_MAIN_TASK_STACK_SIZE=8192
+CONFIG_LOG_DEFAULT_LEVEL_INFO=y
