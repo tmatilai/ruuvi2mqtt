@@ -1,26 +1,34 @@
 # --- Device configuration --------------------------------------------------
 # Set DEVICE explicitly (e.g. `make flash DEVICE=kitchen`) or let Make
-# auto-detect from the connected board's MAC address via devices/devices.conf.
-# Set DEVICE to empty to skip auto-detection (e.g. `make flash DEVICE=`).
+# auto-detect the only attached board from its MAC address via
+# devices/devices.conf. Set DEVICE to empty to skip auto-detection (e.g.
+# `make flash DEVICE=`). boards.sh finds the boards and their ports.
 #
-# Auto-detection runs `espflash board-info` only for targets that need it
-# and only when devices/devices.conf exists.
-DEVICE_TARGETS := all lint build flash monitor
+# Auto-detection runs only for targets that need it and only when
+# devices/devices.conf exists. ESPFLASH_PORT limits it to one port.
+DEVICE_TARGETS := all lint build flash monitor log
+# The targets that talk to the board. They get its port in ESPFLASH_PORT.
+PORT_TARGETS := flash monitor log
+BOARDS = ESPFLASH_PORT='$(ESPFLASH_PORT)' WAIT='$(WAIT)' ./boards.sh
+
+# Seconds to wait for a board's port. In deep sleep, the chip's own USB
+# port is off.
+WAIT ?= 75
+
+ESPFLASH_MISSING = $(if $(shell command -v espflash 2>/dev/null),,$(error espflash not found. Run 'make setup' first))
 
 ifneq ($(filter $(DEVICE_TARGETS),$(MAKECMDGOALS)),)
   # Auto-detect device when DEVICE is not set at all
   ifeq ($(origin DEVICE),undefined)
     ifneq ($(wildcard devices/devices.conf),)
-      ifeq ($(shell command -v espflash 2>/dev/null),)
-        $(error espflash not found — cannot auto-detect device. Run 'make setup' first, set DEVICE, or set DEVICE= to skip.)
-      else
-        $(info Auto-detecting device from connected board...)
-        DEVICE := $(shell mac=$$(espflash board-info 2>&1 | sed -n 's/.*MAC address: *//p'); \
-          [ -n "$$mac" ] && awk -v m="$$mac" '!/^[[:space:]]*\#/ && NF>=2 && $$1==m {print $$2; exit}' devices/devices.conf)
-        ifeq ($(DEVICE),)
-          $(error Device not recognised. Register it with 'make register DEVICE=<name>', set DEVICE, or set DEVICE= to skip.)
-        endif
+      $(ESPFLASH_MISSING)
+      $(info Auto-detecting device from the attached board...)
+      DETECTED := $(shell $(BOARDS) detect)
+      ifeq ($(DETECTED),)
+        $(error Auto-detection failed, see above)
       endif
+      DEVICE := $(word 1,$(DETECTED))
+      ESPFLASH_PORT := $(word 2,$(DETECTED))
     endif
   endif
 
@@ -32,6 +40,26 @@ ifneq ($(filter $(DEVICE_TARGETS),$(MAKECMDGOALS)),)
     endif
     include devices/$(DEVICE).mk
   endif
+
+  # Find the board's port
+  ifneq ($(filter $(PORT_TARGETS),$(MAKECMDGOALS)),)
+    $(ESPFLASH_MISSING)
+    ifeq ($(ESPFLASH_PORT),)
+      # A registered DEVICE never falls back to another board.
+      ifneq ($(and $(DEVICE),$(wildcard devices/devices.conf)),)
+        ESPFLASH_PORT := $(shell $(BOARDS) port $(DEVICE))
+      else
+        ESPFLASH_PORT := $(shell $(BOARDS) only-port)
+      endif
+      ifeq ($(ESPFLASH_PORT),)
+        $(error No port for the board, see above)
+      endif
+    endif
+    $(info Using port: $(ESPFLASH_PORT))
+  endif
+endif
+ifneq ($(ESPFLASH_PORT),)
+  export ESPFLASH_PORT
 endif
 
 # Target chip (default: esp32c6).
@@ -84,9 +112,11 @@ help: ## Show this help
 	@echo ''
 	@echo 'Override target chip: make <target> CHIP=esp32  (default: esp32c6)'
 	@echo ''
-	@echo 'Device config: auto-detected from connected board MAC (see devices/),'
-	@echo '               or override: make <target> DEVICE=kitchen'
+	@echo 'Device config: auto-detected from the attached board (see devices/),'
+	@echo '               or choose:   make <target> DEVICE=kitchen'
 	@echo '               or skip:     make <target> DEVICE='
+	@echo 'Serial port:   found from DEVICE, or set ESPFLASH_PORT=<port>'
+	@echo '               (`make boards` lists the attached boards)'
 
 # --- Toolchain setup -------------------------------------------------------
 # Tool versions are bumped by Renovate. Re-run `make setup` after pulling.
@@ -123,45 +153,30 @@ build: ## Build the firmware (release)
 	$(CARGO) build --release --target $(TARGET)
 
 .PHONY: flash
-flash: ## Build and flash the firmware, then open the serial monitor
-	$(CARGO) run --release --target $(TARGET)
+flash: build ## Build and flash the firmware (`make flash monitor` to watch it)
+	espflash flash --non-interactive $(CARGO_TARGET_DIR)/$(TARGET)/release/ruuvi2mqtt-esp32
 
 .PHONY: monitor
-monitor: ## Open the serial monitor (no build/flash)
+monitor: ## Open the interactive serial monitor
 	espflash monitor
 
+# Seconds of serial output for `make log`, a bit over one cycle by default
+SECS ?= 70
+
+.PHONY: log
+log: ## Print the serial output for SECS seconds, without prompts
+	$(BOARDS) log $(SECS)
+
+.PHONY: boards
+boards: ## List the attached boards (resets unknown ones behind a USB-UART bridge)
+	@$(BOARDS) list
+
 .PHONY: register
-register: ## Register the connected board as DEVICE (e.g. make register DEVICE=kitchen)
+register: ## Register the attached board as DEVICE (e.g. make register DEVICE=kitchen)
 ifndef DEVICE
 	$(error DEVICE is required. Usage: make register DEVICE=kitchen)
 endif
-	@echo "Reading board info from connected device..."
-	@info=$$(espflash board-info 2>&1); \
-	mac=$$(echo "$$info" | sed -n 's/.*MAC address: *//p'); \
-	if [ -z "$$mac" ]; then \
-		echo "Error: could not detect MAC address. Is a board connected?" >&2; \
-		exit 1; \
-	fi; \
-	chip=$$(echo "$$info" | sed -n 's/.*Chip type: *\([^ ]*\).*/\1/p'); \
-	if [ ! -f devices/devices.conf ]; then \
-		printf '# MAC-to-device-name mapping for auto-detection.\n# Format: MAC_ADDRESS  device-name\n\n' > devices/devices.conf; \
-	fi; \
-	if grep -q "$$mac" devices/devices.conf 2>/dev/null; then \
-		echo "MAC $$mac is already registered in devices/devices.conf"; \
-	else \
-		printf '%s  %s\n' "$$mac" "$(DEVICE)" >> devices/devices.conf; \
-		echo "Registered $$mac as $(DEVICE) in devices/devices.conf"; \
-	fi; \
-	if [ ! -f devices/$(DEVICE).mk ]; then \
-		cp devices/device.mk.example devices/$(DEVICE).mk; \
-		if [ -n "$$chip" ] && [ "$$chip" != "esp32c6" ]; then \
-			sed "s/^# CHIP = .*/CHIP = $$chip/" devices/$(DEVICE).mk > devices/$(DEVICE).mk.tmp \
-				&& mv devices/$(DEVICE).mk.tmp devices/$(DEVICE).mk; \
-		fi; \
-		echo "Created devices/$(DEVICE).mk from template (chip: $${chip:-unknown}) — edit it to set IP, hostname, etc."; \
-	else \
-		echo "devices/$(DEVICE).mk already exists"; \
-	fi
+	@$(BOARDS) register $(DEVICE)
 
 .PHONY: clean
 clean: ## Remove build artefacts

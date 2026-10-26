@@ -36,11 +36,18 @@ compile-time via environment variables, see `ruuvi2mqtt-esp32/README.md`.
 - `src/wifi.rs`, `src/mqtt.rs`, `src/ble.rs`, `src/led.rs`: one esp-idf-svc subsystem each; `ble.rs` uses esp32-nimble. `src/system.rs` reads values for the diagnostics. `src/antenna.rs` drives the XIAO ESP32-C6's RF switch.
 - `src/lib.rs`: the pure-Rust modules, `mac.rs` (MAC addresses), `payload.rs` (the reading's JSON), `scan.rs` (BLE reception statistics) and `diagnostics.rs` (the diagnostics JSON). esp-idf-svc and esp32-nimble are espidf-only dependencies, so the lib's unit tests run on the host with stable Rust (`--target host-tuple`). The bin has `test = false`.
 - `build.rs`: embuild glue for ESP-IDF.
+- `boards.sh`: finds the attached boards and their serial ports for the Makefile, from macOS `ioreg` or Linux udev.
 
 esp-idf-svc is used by every module outside the lib, so an update to it
 touches the whole firmware. Commands: `make -C ruuvi2mqtt-esp32 lint|test|build`. The firmware
 build needs the ESP toolchain (`make setup`); CI builds it for ESP32-C5,
 ESP32-C6 and ESP32-S3.
+
+Attached boards: `make boards` lists them, `make flash DEVICE=<name>`
+flashes one, and `make log DEVICE=<name> SECS=70` prints its serial
+output. `make monitor` is interactive, so don't use it. Identifying an
+unregistered board behind a USB-UART bridge resets it, so ask before
+touching boards that may be running tests.
 
 ## Test bed checker (`checker/`)
 
