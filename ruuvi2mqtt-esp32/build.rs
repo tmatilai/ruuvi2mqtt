@@ -12,6 +12,8 @@ fn main() {
     println!("cargo:rustc-check-cfg=cfg(mqtt_ca_file)");
     // Set by esp-idf-sys on chips with 5 GHz Wi-Fi. config.rs checks WIFI_BAND with it.
     println!("cargo:rustc-check-cfg=cfg(esp_idf_soc_wifi_support_5g)");
+    // Set by esp-idf-sys on chips with a USB port of their own. main.rs checks it.
+    println!("cargo:rustc-check-cfg=cfg(esp_idf_soc_usb_serial_jtag_supported)");
 
     // If MQTT_CA_FILE is set, copy the CA certificate into OUT_DIR so that
     // the source code can embed it with `include_bytes!`.
