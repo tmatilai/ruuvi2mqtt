@@ -1,13 +1,11 @@
 # MAC-to-device-name mapping for auto-detection.
 #
-# When DEVICE is not set on the command line, Make queries the connected
-# board's MAC address via `espflash board-info` and looks it up here.
+# `make register DEVICE=<name>` adds the attached board. `make boards` lists
+# the attached boards and their names.
 #
-# Format: MAC_ADDRESS  device-name
+# Format: MAC_ADDRESS  device-name  [USB-UART bridge serial number]
 # The device-name must match a file in this directory: <device-name>.mk
-#
-# Tip: run `espflash board-info` to find the MAC of the connected board,
-# then add a line here and create the corresponding .mk file.
+# The serial number finds a board behind a USB-UART bridge without a reset.
 
 # aa:bb:cc:dd:ee:f0  kitchen
-# aa:bb:cc:dd:ee:f1  garage
+# aa:bb:cc:dd:ee:f1  garage  0123456789abcdef0123456789abcdef

@@ -156,7 +156,7 @@ make flash CHIP=esp32
 When managing multiple boards, each device can have its own configuration file
 and be auto-detected by MAC address.
 
-**Register a device** by connecting it and running:
+**Register a device** by attaching it and running:
 
 ```sh
 make register DEVICE=kitchen
@@ -164,19 +164,39 @@ make register DEVICE=kitchen
 
 This records the board's MAC address in `devices/devices.conf` and creates a
 `devices/kitchen.mk` file from the template. Edit the `.mk` file to
-set device-specific overrides (static IP, hostname, chip type, etc.).
+set device-specific overrides (static IP, hostname, chip type, etc.). With
+several boards attached, choose one with `ESPFLASH_PORT=<port>`.
 
-**Auto-detection:** when you run `make flash` (or `build`, `lint`, `monitor`)
-without specifying `DEVICE`, the Makefile queries the connected board's MAC
-address via `espflash board-info` and looks it up in `devices/devices.conf`.
-If found, the matching `.mk` file is loaded automatically.
+**List the attached boards** with `make boards`:
 
-To target a registered device explicitly, or to skip auto-detection:
+```
+PORT                     USB    MAC               DEVICE
+/dev/cu.usbmodem1101     native aa:bb:cc:dd:ee:f0 kitchen
+/dev/cu.usbserial-210    uart   aa:bb:cc:dd:ee:f1 garage
+```
+
+`native` is the chip's own USB port, `uart` a USB-UART bridge. A board on
+its own port reports its MAC as the USB serial number. For a board behind a
+bridge, `make register` records the bridge's serial number. Registered
+boards are found without touching them. An unknown board behind a bridge is
+identified with `espflash board-info`, which resets it. That happens in
+`make boards`, and when looking for a board registered without the serial
+number. Run `make register` again to add it.
+
+**Auto-detection:** when you run `make flash` (or `build`, `lint`,
+`monitor`, `log`) without `DEVICE`, the Makefile identifies the attached
+board and loads its `.mk` file. With several boards attached, it lists
+them and asks for `DEVICE`. A target that talks to the board finds its
+port from `DEVICE`, and never uses another board.
 
 ```sh
-make flash DEVICE=kitchen   # use a specific device config
-make flash DEVICE=           # skip auto-detection, use env vars only
+make flash DEVICE=kitchen                 # flash the board named kitchen
+make flash DEVICE=                        # skip auto-detection, use env vars only
+make flash ESPFLASH_PORT=/dev/cu.usbserial-210   # the board on this port
 ```
+
+The Makefile waits up to `WAIT` seconds (default 75) for a sleeping board
+to wake.
 
 > Device config files are git-ignored — only the examples are committed.
 
@@ -185,10 +205,15 @@ make flash DEVICE=           # skip auto-detection, use env vars only
 ## Build & flash
 
 ```sh
-make flash               # build, flash, and open serial monitor (first build is slow — ESP-IDF is compiled from source)
+make flash               # build and flash (first build is slow — ESP-IDF is compiled from source)
+make flash monitor       # build, flash, and open the serial monitor
 make build               # build only
-make monitor             # open serial monitor (no build/flash)
+make monitor             # open the interactive serial monitor
+make log SECS=70         # print the serial output for 70 s, without prompts
 ```
+
+All but `make monitor` run without prompts, so scripts and agents can use
+them.
 
 Deep sleep turns off the USB port built into the ESP32-C3, -C5, -C6, and -S3.
 While a computer is connected to that port, the board waits awake between
