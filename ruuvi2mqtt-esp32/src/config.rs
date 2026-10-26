@@ -163,6 +163,15 @@ pub const BLE_SLEEP_DURATION: i32 = match option_env_non_empty!("BLE_SLEEP_DURAT
     None => 60,
 };
 
+/// Whether `sleep()` in main.rs waits awake while a computer is on the USB
+/// port.
+pub const USB_STAY_AWAKE: bool = konst::eq_str(USB_STAY_AWAKE_VALUE, "true");
+
+const USB_STAY_AWAKE_VALUE: &str = match option_env_non_empty!("USB_STAY_AWAKE") {
+    Some(v) => v,
+    None => "true",
+};
+
 /// Ruuvi manufacturer-specific data company identifier (little-endian 0x0499).
 pub const RUUVI_MANUFACTURER_ID: u16 = 0x0499;
 
@@ -273,6 +282,10 @@ const _: () = assert!(
 const _: () = assert!(
     BLE_SLEEP_DURATION > 0,
     "BLE_SLEEP_DURATION must be positive (seconds)"
+);
+const _: () = assert!(
+    USB_STAY_AWAKE || konst::eq_str(USB_STAY_AWAKE_VALUE, "false"),
+    "USB_STAY_AWAKE must be true or false"
 );
 const _: () = assert!(
     match ANTENNA {

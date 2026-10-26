@@ -104,6 +104,7 @@ All settings are baked in at compile-time via environment variables.
 | `BLE_SCAN_DURATION` | — | `5` | BLE scan duration (seconds). Set close to your Wi-Fi + MQTT connect time (see boot log), min 3s |
 | `BLE_SCAN_MODE` | — | `parallel` | `parallel` scans while Wi-Fi connects. `sequential` scans first, then starts Wi-Fi |
 | `BLE_SLEEP_DURATION` | — | `60` | Deep sleep between cycles (seconds) |
+| `USB_STAY_AWAKE` | — | `true` | `false` always deep sleeps. See [Build & flash](#build--flash) |
 | `ANTENNA` | — | *(unset)* | Seeed XIAO ESP32-C6 only: `internal` or `external` antenna. See [Antenna](#antenna) |
 | `LED_MODE` | — | *(unset)* | `on` to light while awake, `off` to turn off at boot, or unset to do nothing |
 | `LED_TYPE` | — | `ws2812` | `ws2812` or `gpio` |
@@ -188,6 +189,14 @@ make flash               # build, flash, and open serial monitor (first build is
 make build               # build only
 make monitor             # open serial monitor (no build/flash)
 ```
+
+Deep sleep turns off the USB port built into the ESP32-C3, -C5, -C6, and -S3.
+While a computer is connected to that port, the board waits awake between
+cycles and restarts instead, so it can be flashed and monitored at any time.
+A charger or power bank doesn't count. A port behind a USB-UART bridge, as on
+ESP32 boards and the DevKitC's UART port, stays up in deep sleep.
+`USB_STAY_AWAKE=false` deep sleeps anyway, for example to measure the sleep
+current.
 
 All available targets:
 

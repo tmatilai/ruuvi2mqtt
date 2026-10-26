@@ -1,4 +1,4 @@
-use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
@@ -33,25 +33,32 @@ fn main() {
         env!("CARGO_PKG_VERSION")
     );
 
-    // RTC memory keeps the count through deep sleep. Only this thread uses
-    // it, so a plain load and store will do.
-    let cycle = CYCLE.load(Ordering::Relaxed).wrapping_add(1);
+    let reset_reason = unsafe { sys::esp_reset_reason() };
+
+    // Deep sleep and sleep()'s restart continue the count, other resets start
+    // it over. Only this thread uses it, so a plain load and store will do.
+    let cycle = match reset_reason {
+        sys::esp_reset_reason_t_ESP_RST_DEEPSLEEP | sys::esp_reset_reason_t_ESP_RST_SW => {
+            CYCLE.load(Ordering::Relaxed).wrapping_add(1)
+        }
+        _ => 1,
+    };
     CYCLE.store(cycle, Ordering::Relaxed);
 
     // A panic or watchdog reset restarts main() immediately. Sleep instead, so
     // that a persistent failure costs one cycle per sleep period rather than a
     // continuous >100mA boot loop that drains the battery.
-    match unsafe { sys::esp_reset_reason() } {
+    match reset_reason {
         sys::esp_reset_reason_t_ESP_RST_PANIC
         | sys::esp_reset_reason_t_ESP_RST_INT_WDT
         | sys::esp_reset_reason_t_ESP_RST_TASK_WDT => {
             warn!("Previous cycle crashed, skipping this one");
-            deep_sleep(SLEEP_SECS);
+            sleep(SLEEP_SECS);
         }
         // A weak battery browns out under Wi-Fi load. Give it time to recover.
         sys::esp_reset_reason_t_ESP_RST_BROWNOUT => {
             warn!("Previous cycle browned out (weak battery?), skipping this one");
-            deep_sleep(BROWNOUT_SLEEP_SECS);
+            sleep(BROWNOUT_SLEEP_SECS);
         }
         _ => {}
     }
@@ -69,12 +76,16 @@ fn main() {
         error!("Cycle failed: {e:#}");
     }
 
-    deep_sleep(SLEEP_SECS);
+    sleep(SLEEP_SECS);
 }
 
-/// Cycles since a cold boot or a crash, which reset RTC memory.
-#[link_section = ".rtc.data.cycle"]
+/// Cycles since a cold boot or a crash. Uninitialized RTC memory, which
+/// `esp_restart()` keeps, unlike `.rtc.data`. `main()` sets it every boot.
+#[link_section = ".rtc_noinit.cycle"]
 static CYCLE: AtomicU32 = AtomicU32::new(0);
+
+/// Set while `sleep()` waits awake, so the cycle timeout doesn't fire.
+static STAYING_AWAKE: AtomicBool = AtomicBool::new(false);
 
 /// Normal deep sleep between cycles.
 const SLEEP_SECS: u64 = config::BLE_SLEEP_DURATION as u64;
@@ -94,10 +105,31 @@ const BROWNOUT_SLEEP_SECS: u64 = 4 * SLEEP_SECS;
 
 /// Enter deep sleep. On wake the chip reboots (`main()` runs fresh).
 /// Deep sleep draws ~5-10µA vs >100mA active.
-fn deep_sleep(secs: u64) -> ! {
+///
+/// Deep sleep turns off the chip's own USB port. While a computer is
+/// connected to it, wait awake instead and restart, so the port stays up
+/// for flashing and monitoring. `esp_restart()` resets the CPU, not the port.
+fn sleep(secs: u64) -> ! {
+    if config::USB_STAY_AWAKE && usb_host_connected() {
+        STAYING_AWAKE.store(true, Ordering::Relaxed);
+        info!("USB host connected, staying awake for {secs}s");
+        thread::sleep(Duration::from_secs(secs));
+        unsafe { sys::esp_restart() }
+    }
     antenna::power_off();
     info!("Entering deep sleep for {secs}s");
     unsafe { sys::esp_deep_sleep(secs * 1_000_000) }
+}
+
+/// A computer sends a USB frame every millisecond, a charger none.
+#[cfg(esp_idf_soc_usb_serial_jtag_supported)]
+fn usb_host_connected() -> bool {
+    unsafe { sys::usb_serial_jtag_is_connected() }
+}
+
+#[cfg(not(esp_idf_soc_usb_serial_jtag_supported))]
+fn usb_host_connected() -> bool {
+    false
 }
 
 /// Milliseconds since `start`, for the diagnostics.
@@ -115,8 +147,10 @@ fn run(start: Instant, cycle: u32) -> anyhow::Result<()> {
         .stack_size(4096)
         .spawn(|| {
             thread::sleep(Duration::from_secs(CYCLE_TIMEOUT_SECS));
-            error!("Cycle timed out after {CYCLE_TIMEOUT_SECS}s");
-            deep_sleep(SLEEP_SECS);
+            if !STAYING_AWAKE.load(Ordering::Relaxed) {
+                error!("Cycle timed out after {CYCLE_TIMEOUT_SECS}s");
+                sleep(SLEEP_SECS);
+            }
         })
         .context("Failed to spawn cycle timeout thread")?;
 
