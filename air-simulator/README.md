@@ -25,9 +25,11 @@ setup`) and a Bluetooth 5 chip: ESP32-C3, C5, C6 or S3.
 make flash log CHIP=esp32c5
 ```
 
-With several boards attached, choose one with `DEVICE=<name>` from the
-firmware's `devices/devices.conf`, or with `ESPFLASH_PORT=<port>`.
-`make boards` lists them. The boot log shows the address, for example
+The board is found as in the firmware: the only attached board is looked up
+in the firmware's `devices/devices.conf`, or `DEVICE=<name>` chooses one,
+and its `devices/<name>.mk` sets `CHIP` and the LED. `DEVICE=` skips the
+registry, and `ESPFLASH_PORT=<port>` chooses the port. `make boards` lists
+the boards. The boot log shows the address, for example
 `Advertising as C0:FF:EE:00:A1:12 (Ruuvi A112)`. Add it to the ruuvi2mqtt
 config with `model: air`.
 
@@ -38,10 +40,10 @@ Compile-time environment variables:
 - `AIR_SETS`: a comma-separated list of the sets to run. Default:
   `legacy,extended,coded`. A chip without the Coded PHY logs a warning and
   runs the others.
-- `LED_GPIO`, `LED_TYPE` and `LED_COLOR`: as in the firmware. With
-  `LED_GPIO`, the LED breathes slowly and dimly every 6 s, to show that the
-  simulator runs. A plain LED (`gpio`) peaks at an eighth of full
-  brightness.
+- `LED_MODE`, `LED_TYPE`, `LED_GPIO`, `LED_ACTIVE_LOW` and `LED_COLOR`: as
+  in the firmware, except that with `LED_MODE=on` the LED breathes slowly
+  and dimly every 6 s, to show that the simulator runs. A plain LED
+  (`gpio`) peaks at an eighth of full brightness.
 
 `make test` runs the encoder's tests on the host. They check it against the
 specs' test vectors and ruuvi-sensor-protocol's decoder.
