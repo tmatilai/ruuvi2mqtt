@@ -154,6 +154,16 @@ struct Tag {
     /// When, and from which publisher
     readings: Vec<(Duration, String)>,
     publishers: BTreeMap<String, usize>,
+    /// An Air's readings with data format E1's values, by publisher
+    e1: BTreeMap<String, usize>,
+}
+
+/// A valid reading
+#[derive(Debug, PartialEq)]
+struct Reading {
+    publisher: String,
+    /// It has PM1, PM4 and PM10, which only data format E1 sends
+    e1: bool,
 }
 
 /// One cycle's diagnostics from an ESP32 board. The times are in ms from the
@@ -288,9 +298,12 @@ impl Watch {
             validate_reading(payload, self.config.model(id))
         };
         match result {
-            Ok(publisher) => {
+            Ok(Reading { publisher, e1 }) => {
                 let tag = self.tags.entry(id.to_string()).or_default();
                 *tag.publishers.entry(publisher.clone()).or_default() += 1;
+                if e1 {
+                    *tag.e1.entry(publisher.clone()).or_default() += 1;
+                }
                 tag.readings.push((at, publisher));
                 None
             }
@@ -504,15 +517,23 @@ impl Watch {
             } else {
                 r.failures.push(format!("{label}: no readings"));
             }
+            let model = c.model(id);
             if let Some(tag) = tag.filter(|t| !t.publishers.is_empty()) {
+                // Only reported: an instance or board without a Bluetooth 5
+                // adapter gets an Air's format 6 only
                 let publishers: Vec<String> = tag
                     .publishers
                     .iter()
-                    .map(|(p, n)| format!("{p} {n}"))
+                    .map(|(p, n)| match model {
+                        Model::Tag => format!("{p} {n}"),
+                        Model::Air => {
+                            format!("{p} {n} ({} E1)", tag.e1.get(p).copied().unwrap_or(0))
+                        }
+                    })
                     .collect();
                 let _ = write!(r.text, ", from {}", publishers.join(", "));
             }
-            let expected = c.model(id).entities();
+            let expected = model.entities();
             let (entities, unexpected): (Vec<&str>, Vec<&str>) = tag
                 .iter()
                 .flat_map(|t| &t.entities)
@@ -960,8 +981,7 @@ fn parse_board_tags(tags: &Value) -> Result<BTreeMap<String, (i64, u64)>, String
         .collect()
 }
 
-/// Returns the reading's publisher.
-fn validate_reading(payload: &[u8], model: Model) -> Result<String, String> {
+fn validate_reading(payload: &[u8], model: Model) -> Result<Reading, String> {
     let reading: Value =
         serde_json::from_slice(payload).map_err(|err| format!("not JSON: {err}"))?;
     for (key, min, max, tag, air) in VALUES {
@@ -989,7 +1009,12 @@ fn validate_reading(payload: &[u8], model: Model) -> Result<String, String> {
         return Err(format!("calibrating: {calibrating}"));
     }
     match &reading["publisher"] {
-        Value::String(publisher) if !publisher.is_empty() => Ok(publisher.clone()),
+        Value::String(publisher) if !publisher.is_empty() => Ok(Reading {
+            publisher: publisher.clone(),
+            e1: ["pm1", "pm4", "pm10"]
+                .iter()
+                .all(|key| reading[key].is_number()),
+        }),
         other => Err(format!("publisher: {other}")),
     }
 }
@@ -1244,7 +1269,10 @@ mod tests {
     fn readings_validate() {
         assert_eq!(
             validate_reading(reading(PANNU).as_bytes(), Model::Tag),
-            Ok(PANNU.to_string())
+            Ok(Reading {
+                publisher: PANNU.into(),
+                e1: false
+            })
         );
         // A tag without the pressure sensor, in an old data format
         let no_pressure = reading(PANNU)
@@ -1277,11 +1305,29 @@ mod tests {
         )
     }
 
+    /// A data format E1 reading
+    fn air_reading_e1(publisher: &str) -> String {
+        air_reading(publisher).replace(
+            r#""pm2_5":11.2,"#,
+            r#""pm1":10.1,"pm2_5":11.2,"pm4":12.3,"pm10":13.4,"#,
+        )
+    }
+
     #[test]
     fn air_readings_validate() {
         assert_eq!(
             validate_reading(air_reading(PANNU).as_bytes(), Model::Air),
-            Ok(PANNU.to_string())
+            Ok(Reading {
+                publisher: PANNU.into(),
+                e1: false
+            })
+        );
+        assert_eq!(
+            validate_reading(air_reading_e1(PANNU).as_bytes(), Model::Air),
+            Ok(Reading {
+                publisher: PANNU.into(),
+                e1: true
+            })
         );
         assert_eq!(
             validate_reading(reading(PANNU).as_bytes(), Model::Air),
@@ -1308,13 +1354,14 @@ mod tests {
         healthy(&mut w, 15);
         discovery(&mut w, AIR, "Living room", &AIR_ENTITIES);
         let topic = format!("ruuvi2mqtt/{AIR}");
+        // E1 from one instance, format 6 only from the other
         for m in 0..15 {
-            w.on_message(
-                secs(40 + m * 60),
-                &topic,
-                air_reading(TALLI).as_bytes(),
-                false,
-            );
+            let reading = if m < 10 {
+                air_reading_e1(TALLI)
+            } else {
+                air_reading(PANNU)
+            };
+            w.on_message(secs(40 + m * 60), &topic, reading.as_bytes(), false);
         }
         let report = w.finish(Duration::from_mins(15));
         assert_eq!(report.failures, Vec::<String>::new(), "{}", report.text);
@@ -1323,7 +1370,14 @@ mod tests {
                 .text
                 .contains("Living room (c4d2a1b3e5f6): 15 readings")
         );
-        assert!(report.text.contains(", discovery 13/13\n"));
+        assert!(report.text.contains(
+            ", from ruuvi2mqtt_pannu 5 (0 E1), ruuvi2mqtt_talli 10 (10 E1), discovery 13/13\n"
+        ));
+        assert!(
+            report
+                .text
+                .contains(", from ruuvi2mqtt_talli 15, discovery 6/6\n")
+        );
     }
 
     #[test]
