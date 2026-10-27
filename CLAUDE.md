@@ -2,7 +2,8 @@
 
 Two independent Rust crates that read Ruuvi BLE sensor broadcasts and publish
 them to MQTT. They share no code, only the `ruuvi-sensor-protocol` dependency.
-A third crate, `checker/`, checks the Linux app on a test bed.
+Two test bed crates: `checker/` checks the Linux app, and `air-simulator/`
+advertises like a Ruuvi Air.
 
 ## Linux daemon (repository root)
 
@@ -64,12 +65,28 @@ discovery configs, and the ESP32 boards' diagnostics. See `checker/README.md`.
 Commands: `cargo test -p ruuvi2mqtt-checker`; `make lint` and `make test`
 cover it.
 
+## Air simulator (`air-simulator/`)
+
+ESP32 firmware, not a workspace member. It shares the firmware's
+`.cargo/config.toml` and `rust-toolchain.toml` through symlinks, pins the
+same crate versions, and finds its board with the firmware's `boards.sh`
+and `devices/devices.conf`.
+`air-simulator/README.md` lists its advertising sets.
+
+- `src/lib.rs`: the format 6 and E1 encoders and the advertising data. Has
+  unit tests against the specs' test vectors and ruuvi-sensor-protocol.
+- `src/main.rs`: the advertising sets, through esp32-nimble and NimBLE.
+- `src/led.rs`: the LED's slow breath. Its curve is in `lib.rs`.
+
+Commands: `make -C air-simulator lint|test|build|flash|log CHIP=<chip>`.
+
 ## What CI covers
 
-fmt and clippy (pedantic) for all three crates, the trycmd CLI tests, ESP32
-host-side unit tests for the pure-Rust modules, the checker's unit tests, the
-Linux binary for six targets, and release firmware builds for ESP32-C5,
-ESP32-C6 and ESP32-S3.
+fmt and clippy (pedantic) for the Linux app, the firmware and the checker,
+the trycmd CLI tests, ESP32 host-side unit tests for the pure-Rust modules,
+the checker's unit tests, the Linux binary for six targets, and release
+firmware builds for ESP32-C5, ESP32-C6 and ESP32-S3. For the Air simulator,
+only fmt, and clippy and the unit tests on the host.
 
 Not covered: no MQTT broker, no Bluetooth hardware, and no ESP32 runtime.
 Runtime behavior in `mqtt.rs`, `ruuvi/listener.rs`, `wifi.rs`, and `ble.rs`,
