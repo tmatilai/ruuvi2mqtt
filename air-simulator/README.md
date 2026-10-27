@@ -14,7 +14,8 @@ The advertising data matches the Air firmware's `src/ble_adv.c` at
 [ruuvi/ruuvi.air.main](https://github.com/ruuvi/ruuvi.air.main) commit
 69a3ffb, except that no set is connectable. The values are the firmware's
 mock build values, with a temperature and sequence number that change in
-each reading. A new reading goes out every second.
+each reading. A new reading goes out every second. It transmits at +20 dBm,
+the chips' maximum, so that scanners hear it through walls.
 
 ## Use
 
