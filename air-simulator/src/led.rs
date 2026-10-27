@@ -1,6 +1,6 @@
 //! A slow breath on the board's LED, to show that the simulator runs
-//! without drawing the eye. `LED_GPIO` turns it on. `LED_TYPE` and
-//! `LED_COLOR` work as in the firmware.
+//! without drawing the eye. The `LED_*` variables work as in the firmware,
+//! except that `LED_MODE=on` breathes.
 
 use std::{
     thread,
@@ -33,32 +33,45 @@ const GPIO_PEAK_DIVISOR: u32 = 8;
 
 enum Kind {
     Ws2812 { color: u32 },
-    Gpio,
+    Gpio { active_low: bool },
 }
 
-/// Starts the breath in a thread of its own, if `LED_GPIO` is set.
+/// Starts the LED in a thread of its own: `LED_MODE=on` breathes, `off`
+/// keeps it dark, and unset leaves the pin alone.
 pub fn start() -> Result<()> {
-    let Some(gpio) = non_empty(option_env!("LED_GPIO")) else {
-        return Ok(());
+    let breath = match non_empty(option_env!("LED_MODE")) {
+        None => return Ok(()),
+        Some("on") => true,
+        Some("off") => false,
+        Some(other) => bail!("bad LED_MODE '{other}'"),
     };
+    let gpio = non_empty(option_env!("LED_GPIO")).context("LED_MODE needs LED_GPIO")?;
     let gpio: u8 = gpio.parse().map_err(|_| anyhow!("bad LED_GPIO '{gpio}'"))?;
+    let active_low = match non_empty(option_env!("LED_ACTIVE_LOW")).unwrap_or("false") {
+        "true" => true,
+        "false" => false,
+        other => bail!("bad LED_ACTIVE_LOW '{other}'"),
+    };
     let kind = match non_empty(option_env!("LED_TYPE")).unwrap_or("ws2812") {
+        "ws2812" if active_low => bail!("LED_ACTIVE_LOW is only for LED_TYPE=gpio"),
         "ws2812" => Kind::Ws2812 {
             color: parse_color(non_empty(option_env!("LED_COLOR")).unwrap_or("000020"))
                 .map_err(anyhow::Error::msg)?,
         },
-        "gpio" => Kind::Gpio,
+        "gpio" => Kind::Gpio { active_low },
         other => bail!("bad LED_TYPE '{other}'"),
     };
     thread::Builder::new()
         .name("led".into())
         .stack_size(4096)
         .spawn(move || {
-            if let Err(e) = breathe(&kind, gpio) {
+            if let Err(e) = run(&kind, gpio, breath) {
                 warn!("LED stopped: {e:#}");
             }
         })?;
-    info!("LED breathing on GPIO {gpio}");
+    if breath {
+        info!("LED breathing on GPIO {gpio}");
+    }
     Ok(())
 }
 
@@ -66,7 +79,7 @@ fn non_empty(value: Option<&'static str>) -> Option<&'static str> {
     value.filter(|v| !v.is_empty())
 }
 
-fn breathe(kind: &Kind, gpio: u8) -> Result<()> {
+fn run(kind: &Kind, gpio: u8, breath: bool) -> Result<()> {
     // SAFETY: nothing else in the simulator uses this pin.
     let pin = unsafe { AnyOutputPin::steal(gpio) };
     let mut set: Box<dyn FnMut(u8) -> Result<()>> = match *kind {
@@ -78,17 +91,29 @@ fn breathe(kind: &Kind, gpio: u8) -> Result<()> {
             let mut tx = TxChannelDriver::new(pin, &config)?;
             Box::new(move |level| ws2812_send(&mut tx, ws2812_grb(color, level)))
         }
-        Kind::Gpio => {
+        Kind::Gpio { active_low } => {
             let peripherals = Peripherals::take().context("taking the LEDC")?;
             let config = TimerConfig::new()
                 .frequency(1.kHz().into())
                 .resolution(Resolution::Bits10);
             let timer = LedcTimerDriver::new(peripherals.ledc.timer0, &config)?;
             let mut channel = LedcDriver::new(peripherals.ledc.channel0, timer, pin)?;
-            let peak = channel.get_max_duty() / GPIO_PEAK_DIVISOR;
-            Box::new(move |level| Ok(channel.set_duty(peak * u32::from(level) / 255)?))
+            let max = channel.get_max_duty();
+            let peak = max / GPIO_PEAK_DIVISOR;
+            Box::new(move |level| {
+                let duty = peak * u32::from(level) / 255;
+                Ok(channel.set_duty(if active_low { max - duty } else { duty })?)
+            })
         }
     };
+
+    if !breath {
+        set(0)?;
+        // The driver keeps the pin at its level while it lives.
+        loop {
+            thread::park();
+        }
+    }
 
     let start = Instant::now();
     loop {

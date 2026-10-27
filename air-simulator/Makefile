@@ -1,3 +1,42 @@
+# The board, as in ../ruuvi2mqtt-esp32: DEVICE from the firmware's
+# devices/devices.conf, or the only attached board if it's registered
+# there. Its devices/<name>.mk sets CHIP and the LED. DEVICE= skips the
+# registry. The firmware's boards.sh finds the port, so no target prompts.
+DEVICES := ../ruuvi2mqtt-esp32/devices
+BOARDS = BOARDS_CONF=$(DEVICES)/devices.conf ESPFLASH_PORT='$(ESPFLASH_PORT)' ../ruuvi2mqtt-esp32/boards.sh
+DEVICE_TARGETS := lint build flash monitor log
+PORT_TARGETS := flash monitor log
+
+ifneq ($(filter $(DEVICE_TARGETS),$(MAKECMDGOALS)),)
+  ifeq ($(origin DEVICE),undefined)
+    ifneq ($(wildcard $(DEVICES)/devices.conf),)
+      DETECTED := $(shell $(BOARDS) detect)
+      ifeq ($(DETECTED),)
+        $(error Auto-detection failed, see above)
+      endif
+      DEVICE := $(word 1,$(DETECTED))
+      ESPFLASH_PORT := $(word 2,$(DETECTED))
+    endif
+  endif
+  ifneq ($(DEVICE),)
+    $(info Using device: $(DEVICE))
+    ifeq ($(wildcard $(DEVICES)/$(DEVICE).mk),)
+      $(error Device config '$(DEVICES)/$(DEVICE).mk' not found)
+    endif
+    include $(DEVICES)/$(DEVICE).mk
+  endif
+endif
+ifneq ($(filter $(PORT_TARGETS),$(MAKECMDGOALS)),)
+  ifeq ($(ESPFLASH_PORT),)
+    ESPFLASH_PORT := $(shell $(BOARDS) $(if $(and $(DEVICE),$(wildcard $(DEVICES)/devices.conf)),port $(DEVICE),only-port))
+    ifeq ($(ESPFLASH_PORT),)
+      $(error No port for the board, see above)
+    endif
+  endif
+  $(info Using port: $(ESPFLASH_PORT))
+  export ESPFLASH_PORT
+endif
+
 # Target chip: esp32c3, esp32c5, esp32c6 or esp32s3. The original ESP32
 # has no Bluetooth 5.
 CHIP ?= esp32c6
@@ -23,21 +62,6 @@ export MCU := $(CHIP)
 export CARGO_TARGET_DIR ?= target/$(CHIP)
 export CARGO_WORKSPACE_DIR ?= $(CURDIR)
 CARGO := cargo $(TOOLCHAIN)
-
-# The board's port: ESPFLASH_PORT, the board registered as DEVICE in the
-# firmware's devices/devices.conf, or the only attached board. The
-# firmware's boards.sh finds it, so no target prompts.
-BOARDS = BOARDS_CONF=../ruuvi2mqtt-esp32/devices/devices.conf ESPFLASH_PORT='$(ESPFLASH_PORT)' ../ruuvi2mqtt-esp32/boards.sh
-ifneq ($(filter flash monitor log,$(MAKECMDGOALS)),)
-  ifeq ($(ESPFLASH_PORT),)
-    ESPFLASH_PORT := $(shell $(BOARDS) $(if $(DEVICE),port $(DEVICE),only-port))
-    ifeq ($(ESPFLASH_PORT),)
-      $(error No port for the board, see above)
-    endif
-  endif
-  $(info Using port: $(ESPFLASH_PORT))
-  export ESPFLASH_PORT
-endif
 
 HOST_CARGO := cargo +stable
 HOST_TARGET := --target host-tuple

@@ -69,8 +69,8 @@ cover it.
 
 ESP32 firmware, not a workspace member. It shares the firmware's
 `.cargo/config.toml` and `rust-toolchain.toml` through symlinks, pins the
-same crate versions, and finds its board with the firmware's `boards.sh`
-and `devices/devices.conf`.
+same crate versions, and finds its board with the firmware's `boards.sh`,
+`devices/devices.conf` and `devices/<name>.mk`.
 `air-simulator/README.md` lists its advertising sets.
 
 - `src/lib.rs`: the format 6 and E1 encoders and the advertising data. Has
