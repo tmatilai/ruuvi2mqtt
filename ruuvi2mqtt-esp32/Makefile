@@ -123,7 +123,7 @@ help: ## Show this help
 # renovate: datasource=crate depName=espflash
 ESPFLASH_VERSION := 4.6.0
 # renovate: datasource=crate depName=espup
-ESPUP_VERSION := 0.18.0
+ESPUP_VERSION := 0.17.1
 # renovate: datasource=crate depName=ldproxy
 LDPROXY_VERSION := 0.3.5
 # The Xtensa Rust toolchain (`+esp`). CI builds ESP32-S3 with it too.
