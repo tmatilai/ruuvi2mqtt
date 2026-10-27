@@ -11,6 +11,9 @@ use log::info;
 
 use crate::config;
 
+/// The GPIO level that lights a `gpio` LED.
+const GPIO_ON: u32 = if config::LED_ACTIVE_LOW { 0 } else { 1 };
+
 /// LED controller — supports WS2812 (addressable RGB), plain GPIO, or no-op.
 pub struct Led {
     inner: Inner,
@@ -33,8 +36,13 @@ impl Led {
         };
 
         info!(
-            "LED: type={}, gpio={}, color={:06x}, mode={}",
+            "LED: type={}{}, gpio={}, color={:06x}, mode={}",
             config::LED_TYPE,
+            if config::LED_ACTIVE_LOW {
+                " (active low)"
+            } else {
+                ""
+            },
             gpio,
             config::LED_COLOR,
             mode,
@@ -80,7 +88,7 @@ impl Led {
         }
     }
 
-    /// Turn the LED on (`LED_COLOR` for WS2812, high for GPIO).
+    /// Turn the LED on (`LED_COLOR` for WS2812, the active level for GPIO).
     pub fn on(&mut self) {
         match &mut self.inner {
             Inner::Noop => {}
@@ -91,7 +99,7 @@ impl Led {
                 }
             }
             Inner::Gpio { pin } => unsafe {
-                esp_idf_svc::sys::gpio_set_level(*pin, 1);
+                esp_idf_svc::sys::gpio_set_level(*pin, GPIO_ON);
             },
         }
     }
@@ -106,7 +114,7 @@ impl Led {
                 }
             }
             Inner::Gpio { pin } => unsafe {
-                esp_idf_svc::sys::gpio_set_level(*pin, 0);
+                esp_idf_svc::sys::gpio_set_level(*pin, 1 - GPIO_ON);
             },
         }
     }

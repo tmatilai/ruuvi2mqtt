@@ -108,6 +108,7 @@ All settings are baked in at compile-time via environment variables.
 | `ANTENNA` | — | *(unset)* | Seeed XIAO ESP32-C6 only: `internal` or `external` antenna. See [Antenna](#antenna) |
 | `LED_MODE` | — | *(unset)* | `on` to light while awake, `off` to turn off at boot, or unset to do nothing |
 | `LED_TYPE` | — | `ws2812` | `ws2812` or `gpio` |
+| `LED_ACTIVE_LOW` | — | `false` | `true` for a `gpio` LED that lights when its pin is low |
 | `LED_GPIO` | — | — | LED pin number. Required with `LED_MODE` |
 | `LED_COLOR` | — | `000020` | WS2812 color as hex `RRGGBB`. Low values keep it dim |
 | `LOG_LEVEL` | — | `info` | Log level for app code (library code stays at info) |
@@ -124,7 +125,7 @@ per-device configuration files (see below).
 | ESP32-C6-DevKitC-1 | `ws2812` | `8` |
 | ESP32-CAM | `ws2812` | `33` |
 | ESP32-S3 AI Camera (DFRobot DFR1154) | `gpio` | `3` |
-| Seeed XIAO-ESP32-C6 | `ws2812` | `15` |
+| Seeed XIAO-ESP32-C6 | `gpio`, `LED_ACTIVE_LOW=true` | `15` |
 
 #### Antenna
 

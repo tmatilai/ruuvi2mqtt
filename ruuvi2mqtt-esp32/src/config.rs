@@ -206,6 +206,14 @@ pub const LED_TYPE: &str = match option_env_non_empty!("LED_TYPE") {
     None => "ws2812",
 };
 
+/// `LED_ACTIVE_LOW=true`: a `gpio` LED that lights when its pin is low.
+pub const LED_ACTIVE_LOW: bool = konst::eq_str(LED_ACTIVE_LOW_VALUE, "true");
+
+const LED_ACTIVE_LOW_VALUE: &str = match option_env_non_empty!("LED_ACTIVE_LOW") {
+    Some(v) => v,
+    None => "false",
+};
+
 /// GPIO pin number for the LED. Required with `LED_MODE`: the pin depends
 /// on the board, and a wrong one may drive something else.
 pub const LED_GPIO: Option<u32> = match option_env_non_empty!("LED_GPIO") {
@@ -308,6 +316,14 @@ const _: () = assert!(
         None => true,
     },
     "LED_GPIO is not a valid GPIO number for this chip"
+);
+const _: () = assert!(
+    LED_ACTIVE_LOW || konst::eq_str(LED_ACTIVE_LOW_VALUE, "false"),
+    "LED_ACTIVE_LOW must be true or false"
+);
+const _: () = assert!(
+    !LED_ACTIVE_LOW || konst::eq_str(LED_TYPE, "gpio"),
+    "LED_ACTIVE_LOW is only for LED_TYPE=gpio"
 );
 const _: () = assert!(
     LED_COLOR_HEX.len() == 6,
