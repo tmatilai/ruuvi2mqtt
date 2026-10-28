@@ -1,121 +1,193 @@
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::thread;
+use std::time::{Duration, Instant};
+
 use esp_idf_svc::hal::{
     gpio::AnyOutputPin,
+    ledc::{
+        config::{Resolution, TimerConfig},
+        LedcDriver, LedcTimerDriver, CHANNEL0, TIMER0,
+    },
     rmt::{
         config::{TransmitConfig, TxChannelConfig},
         encoder::{BytesEncoder, BytesEncoderConfig},
         PinState, Pulse, PulseTicks, Symbol, TxChannelDriver,
     },
+    sys::EspError,
     units::FromValueType,
 };
-use log::info;
+use log::{info, warn};
+use ruuvi2mqtt_esp32::led_pattern::{ws2812_grb, Pattern};
 
 use crate::config;
 
-/// The GPIO level that lights a `gpio` LED.
-const GPIO_ON: u32 = if config::LED_ACTIVE_LOW { 0 } else { 1 };
+/// Set while Wi-Fi is down, for the LED thread of [`start`].
+static WIFI_DOWN: AtomicBool = AtomicBool::new(false);
 
-/// LED controller — supports WS2812 (addressable RGB), plain GPIO, or no-op.
-pub struct Led {
-    inner: Inner,
+/// Set while the last cycle failed, for the LED thread of [`start`].
+static FAILED: AtomicBool = AtomicBool::new(false);
+
+pub fn set_wifi_down(down: bool) {
+    WIFI_DOWN.store(down, Ordering::Relaxed);
 }
 
-enum Inner {
-    Noop,
+pub fn set_failed(failed: bool) {
+    FAILED.store(failed, Ordering::Relaxed);
+}
+
+/// Set by [`off`].
+static OFF: AtomicBool = AtomicBool::new(false);
+
+/// Set by the LED thread once [`off`] has made the LED dark.
+static DARK: AtomicBool = AtomicBool::new(false);
+
+/// Set once the LED thread runs.
+static STARTED: AtomicBool = AtomicBool::new(false);
+
+/// Turn the LED off for good, before deep sleep: a WS2812 keeps its color,
+/// and a plain LED's pin floats.
+pub fn off() {
+    if !STARTED.load(Ordering::Relaxed) {
+        return;
+    }
+    OFF.store(true, Ordering::Relaxed);
+    let start = Instant::now();
+    while !DARK.load(Ordering::Relaxed) && start.elapsed() < 10 * STEP {
+        thread::sleep(STEP);
+    }
+}
+
+/// How often a lit LED changes its brightness.
+const STEP: Duration = Duration::from_millis(20);
+
+/// How often a dark LED checks for a failure.
+const DARK_STEP: Duration = Duration::from_millis(100);
+
+/// A plain LED at full duty is bright. Its breath and steady light peak at an
+/// eighth of it, and its alarm at half.
+const GPIO_DIM_DIVISOR: u32 = 8;
+const GPIO_ALARM_DIVISOR: u32 = 2;
+
+/// The WS2812's alarm, red at half brightness.
+const WS2812_ALARM_COLOR: u32 = 0x80_00_00;
+
+/// Run the LED in a thread of its own, as `LED_MODE` says.
+pub fn start() -> anyhow::Result<()> {
+    // config.rs fails the build when LED_MODE is set without LED_GPIO.
+    let (Some(mode), Some(gpio)) = (config::LED_MODE, config::LED_GPIO) else {
+        return Ok(());
+    };
+    info!(
+        "LED: type={}{}, gpio={}, color={:06x}, mode={}",
+        config::LED_TYPE,
+        if config::LED_ACTIVE_LOW {
+            " (active low)"
+        } else {
+            ""
+        },
+        gpio,
+        config::LED_COLOR,
+        mode,
+    );
+    thread::Builder::new().stack_size(4096).spawn(move || {
+        if let Err(e) = Light::new(gpio).and_then(Light::run) {
+            warn!("LED stopped: {e}");
+        }
+    })?;
+    STARTED.store(true, Ordering::Relaxed);
+    Ok(())
+}
+
+/// The LED of [`start`]. A plain LED dims with PWM.
+enum Light {
     Ws2812(TxChannelDriver<'static>),
-    Gpio { pin: i32 },
+    Gpio(LedcDriver<'static>),
 }
 
-impl Led {
-    /// Initialise the LED driver based on compile-time configuration.
-    ///
-    /// Returns a no-op controller when `LED_MODE` is unset.
-    pub fn new() -> anyhow::Result<Self> {
-        let (Some(mode), Some(gpio)) = (config::LED_MODE, config::LED_GPIO) else {
-            // config.rs fails the build when LED_MODE is set without LED_GPIO.
-            return Ok(Self { inner: Inner::Noop });
-        };
+impl Light {
+    fn new(gpio: u32) -> Result<Self, EspError> {
+        // SAFETY: nothing else uses the pin or the LEDC.
+        #[allow(clippy::cast_possible_truncation)] // GPIO numbers always fit in u8
+        let pin = unsafe { AnyOutputPin::steal(gpio as u8) };
+        if config::LED_TYPE == "ws2812" {
+            let config = TxChannelConfig {
+                resolution: 10.MHz().into(),
+                ..Default::default()
+            };
+            return Ok(Self::Ws2812(TxChannelDriver::new(pin, &config)?));
+        }
+        let config = TimerConfig::new()
+            .frequency(1.kHz().into())
+            .resolution(Resolution::Bits10);
+        let timer = LedcTimerDriver::new(unsafe { TIMER0::steal() }, &config)?;
+        let channel = LedcDriver::new(unsafe { CHANNEL0::steal() }, timer, pin)?;
+        Ok(Self::Gpio(channel))
+    }
 
-        info!(
-            "LED: type={}{}, gpio={}, color={:06x}, mode={}",
-            config::LED_TYPE,
-            if config::LED_ACTIVE_LOW {
-                " (active low)"
+    fn run(mut self) -> Result<(), EspError> {
+        let mut pattern = Pattern::Dark;
+        let mut since = Instant::now();
+        let mut shown = None;
+        loop {
+            let off = OFF.load(Ordering::Relaxed);
+            let failing = WIFI_DOWN.load(Ordering::Relaxed) || FAILED.load(Ordering::Relaxed);
+            let next = if off {
+                Pattern::Dark
             } else {
-                ""
-            },
-            gpio,
-            config::LED_COLOR,
-            mode,
-        );
+                Pattern::for_mode(config::LED_MODE, config::BLE_SCAN_CONTINUOUS, failing)
+            };
+            if next != pattern {
+                pattern = next;
+                since = Instant::now();
+            }
+            #[allow(clippy::cast_possible_truncation)] // below the period
+            let ms = (since.elapsed().as_millis() % u128::from(pattern.period_ms())) as u32;
+            let level = pattern.level(ms);
+            if shown != Some((pattern, level)) {
+                self.show(pattern, level)?;
+                shown = Some((pattern, level));
+            }
+            if off {
+                DARK.store(true, Ordering::Relaxed);
+                // The drivers keep the pin at its level while they live.
+                loop {
+                    thread::park();
+                }
+            }
+            thread::sleep(if pattern == Pattern::Dark {
+                DARK_STEP
+            } else {
+                STEP
+            });
+        }
+    }
 
-        let inner = match config::LED_TYPE {
-            "ws2812" => {
-                #[allow(clippy::cast_possible_truncation)] // GPIO numbers always fit in u8
-                let pin = unsafe { AnyOutputPin::steal(gpio as u8) };
-                let tx_config = TxChannelConfig {
-                    resolution: 10.MHz().into(),
-                    ..Default::default()
+    fn show(&mut self, pattern: Pattern, level: u8) -> Result<(), EspError> {
+        let alarm = pattern == Pattern::Alarm;
+        match self {
+            Self::Ws2812(tx) => {
+                let color = if alarm {
+                    WS2812_ALARM_COLOR
+                } else {
+                    config::LED_COLOR
                 };
-                let tx = TxChannelDriver::new(pin, &tx_config)?;
-                Inner::Ws2812(tx)
+                ws2812_send(tx, ws2812_grb(color, level))
             }
-            "gpio" => {
-                #[allow(clippy::cast_possible_wrap)] // GPIO numbers are always positive
-                let pin = gpio as i32;
-                unsafe {
-                    esp_idf_svc::sys::gpio_set_direction(
-                        pin,
-                        esp_idf_svc::sys::gpio_mode_t_GPIO_MODE_OUTPUT,
-                    );
-                }
-                Inner::Gpio { pin }
+            Self::Gpio(channel) => {
+                let max = channel.get_max_duty();
+                let peak = max
+                    / if alarm {
+                        GPIO_ALARM_DIVISOR
+                    } else {
+                        GPIO_DIM_DIVISOR
+                    };
+                let duty = peak * u32::from(level) / 255;
+                channel.set_duty(if config::LED_ACTIVE_LOW {
+                    max - duty
+                } else {
+                    duty
+                })
             }
-            other => {
-                log::warn!("Unknown LED_TYPE '{other}', disabling LED");
-                Inner::Noop
-            }
-        };
-
-        Ok(Self { inner })
-    }
-
-    /// Apply the configured `LED_MODE`: turn on, explicitly off, or do nothing.
-    pub fn apply_mode(&mut self) {
-        match config::LED_MODE {
-            Some("on") => self.on(),
-            Some(_) => self.off(), // "off" or any unrecognised value
-            None => {}
-        }
-    }
-
-    /// Turn the LED on (`LED_COLOR` for WS2812, the active level for GPIO).
-    pub fn on(&mut self) {
-        match &mut self.inner {
-            Inner::Noop => {}
-            Inner::Ws2812(tx) => {
-                let [_, r, g, b] = config::LED_COLOR.to_be_bytes();
-                if let Err(e) = ws2812_send(tx, [g, r, b]) {
-                    log::warn!("LED on failed: {e}");
-                }
-            }
-            Inner::Gpio { pin } => unsafe {
-                esp_idf_svc::sys::gpio_set_level(*pin, GPIO_ON);
-            },
-        }
-    }
-
-    /// Turn the LED off.
-    pub fn off(&mut self) {
-        match &mut self.inner {
-            Inner::Noop => {}
-            Inner::Ws2812(tx) => {
-                if let Err(e) = ws2812_send(tx, [0, 0, 0]) {
-                    log::warn!("LED off failed: {e}");
-                }
-            }
-            Inner::Gpio { pin } => unsafe {
-                esp_idf_svc::sys::gpio_set_level(*pin, 1 - GPIO_ON);
-            },
         }
     }
 }

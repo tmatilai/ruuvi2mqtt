@@ -109,10 +109,10 @@ All settings are baked in at compile-time via environment variables.
 | `MQTT_BASE_TOPIC` | `mqtt.base_topic` | `ruuvi2mqtt` | Topic prefix |
 | `BLE_SCAN_MODE` | — | `continuous` | `continuous` scans all the time. `parallel` scans while Wi-Fi connects, then deep sleeps. `sequential` scans first, then starts Wi-Fi, and deep sleeps |
 | `BLE_SCAN_DURATION` | — | `60` / `5` | BLE scan duration (seconds). Continuous: the cycle, `60`. Otherwise `5`: set it close to your Wi-Fi + MQTT connect time (see boot log), min 3s |
-| `BLE_SLEEP_DURATION` | — | `60` | Deep sleep between cycles (seconds). Continuous: only after a failure |
+| `BLE_SLEEP_DURATION` | — | `60` | Deep sleep between cycles (seconds). Continuous: the wait awake before a restart after a failure |
 | `USB_STAY_AWAKE` | — | `true` | `false` always deep sleeps. See [Build & flash](#build--flash) |
 | `ANTENNA` | — | *(unset)* | Seeed XIAO ESP32-C6 only: `internal` or `external` antenna. See [Antenna](#antenna) |
-| `LED_MODE` | — | *(unset)* | `on` to light while awake (always, when scanning continuously), `off` to turn off at boot, or unset to do nothing |
+| `LED_MODE` | — | `on` with `LED_GPIO` | `on`, `errors` or `off`. Without `LED_GPIO`, the LED is left alone. See [LED](#led) |
 | `LED_TYPE` | — | `ws2812` | `ws2812` or `gpio` |
 | `LED_ACTIVE_LOW` | — | `false` | `true` for a `gpio` LED that lights when its pin is low |
 | `LED_GPIO` | — | — | LED pin number. Required with `LED_MODE` |
@@ -121,6 +121,19 @@ All settings are baked in at compile-time via environment variables.
 
 These can be set in the environment, in `.envrc` (with direnv), or in
 per-device configuration files (see below).
+
+#### LED
+
+Scanning continuously, `LED_MODE=on` breathes slowly and dimly every 6 s,
+to show that the board runs. In the deep-sleep modes, it lights dimly while
+the board is awake.
+
+On a failure, the LED blinks twice every 3 s instead, at half brightness
+and in red on a WS2812. The blinks go on while Wi-Fi is down, and until a
+cycle has published its readings and scanned without errors. In the
+deep-sleep modes, a failed cycle sleeps right away, so the blinks show in
+the next wake. `errors` keeps the LED dark except for the blinks, for a
+room where a glow would bother.
 
 #### Known board LED configurations
 

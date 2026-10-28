@@ -18,7 +18,7 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
 
-use crate::{ble, config};
+use crate::{ble, config, led};
 
 /// Connect to Wi-Fi and return the `BlockingWifi` guard, and how the NVS
 /// cache was used.
@@ -152,11 +152,13 @@ pub fn keep_connected(
 ) -> anyhow::Result<EspSubscription<'static, System>> {
     *CONNECTED_SINCE.lock().unwrap() = Some(Instant::now());
     ble::set_wifi_connected(true);
+    led::set_wifi_down(false);
     let subscription = sysloop.subscribe::<WifiEvent, _>(|event| match event {
         WifiEvent::StaConnected(_) => {
             info!("Wi-Fi reconnected");
             *CONNECTED_SINCE.lock().unwrap() = Some(Instant::now());
             ble::set_wifi_connected(true);
+            led::set_wifi_down(false);
         }
         WifiEvent::StaDisconnected(d) => {
             // Each failed attempt ends with another disconnect, so log only
@@ -165,6 +167,7 @@ pub fn keep_connected(
                 log::warn!("Wi-Fi disconnected, reason {}", d.reason());
             }
             ble::set_wifi_connected(false);
+            led::set_wifi_down(true);
             if let Err(e) = sys::esp!(unsafe { sys::esp_wifi_connect() }) {
                 log::warn!("Wi-Fi reconnect failed: {e}");
             }

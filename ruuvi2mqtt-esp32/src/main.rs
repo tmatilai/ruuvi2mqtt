@@ -1,5 +1,5 @@
 use std::convert::Infallible;
-use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU8, Ordering};
 use std::sync::mpsc;
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
@@ -36,6 +36,25 @@ fn main() {
     );
 
     let reset_reason = unsafe { sys::esp_reset_reason() };
+
+    // The LED blinks while the previous cycle failed, until this one
+    // succeeds. That way the deep-sleep modes show a failure in the next
+    // wake, as they sleep right after it.
+    let failed_before = match reset_reason {
+        sys::esp_reset_reason_t_ESP_RST_DEEPSLEEP | sys::esp_reset_reason_t_ESP_RST_SW => {
+            LAST_CYCLE_FAILED.load(Ordering::Relaxed) == 1
+        }
+        sys::esp_reset_reason_t_ESP_RST_PANIC
+        | sys::esp_reset_reason_t_ESP_RST_INT_WDT
+        | sys::esp_reset_reason_t_ESP_RST_TASK_WDT
+        | sys::esp_reset_reason_t_ESP_RST_BROWNOUT => true,
+        _ => false,
+    };
+    LAST_CYCLE_FAILED.store(1, Ordering::Relaxed);
+    led::set_failed(failed_before);
+    if let Err(e) = led::start() {
+        warn!("LED failed: {e:#}");
+    }
 
     // Deep sleep and sleep()'s restart continue the count, other resets start
     // it over. Only this thread uses it, so a plain load and store will do.
@@ -76,8 +95,9 @@ fn main() {
             config::BLE_SCAN_MODE,
             config::BLE_SLEEP_DURATION
         );
-        if let Err(e) = run(cycle) {
-            error!("Cycle failed: {e:#}");
+        match run(cycle) {
+            Ok(()) => LAST_CYCLE_FAILED.store(0, Ordering::Relaxed),
+            Err(e) => error!("Cycle failed: {e:#}"),
         }
     }
 
@@ -88,6 +108,12 @@ fn main() {
 /// `esp_restart()` keeps, unlike `.rtc.data`. `main()` sets it every boot.
 #[link_section = ".rtc_noinit.cycle"]
 static CYCLE: AtomicU32 = AtomicU32::new(0);
+
+/// 1 until a cycle succeeds. Uninitialized, as `CYCLE`, so `main()` reads
+/// it only after deep sleep or `sleep()`'s restart. The continuous mode
+/// restarts only after a failure, so it never clears it.
+#[link_section = ".rtc_noinit.last_cycle_failed"]
+static LAST_CYCLE_FAILED: AtomicU8 = AtomicU8::new(0);
 
 /// Set while `sleep()` waits awake, so the cycle timeout doesn't fire.
 static STAYING_AWAKE: AtomicBool = AtomicBool::new(false);
@@ -126,13 +152,23 @@ const BROWNOUT_SLEEP_SECS: u64 = 4 * SLEEP_SECS;
 /// Deep sleep turns off the chip's own USB port. While a computer is
 /// connected to it, wait awake instead and restart, so the port stays up
 /// for flashing and monitoring. `esp_restart()` resets the CPU, not the port.
+///
+/// Scanning continuously, only a failure gets here. The board is on mains
+/// power, so it waits awake, and the LED blinks.
 fn sleep(secs: u64) -> ! {
-    if config::USB_STAY_AWAKE && usb_host_connected() {
+    if config::BLE_SCAN_CONTINUOUS || (config::USB_STAY_AWAKE && usb_host_connected()) {
         STAYING_AWAKE.store(true, Ordering::Relaxed);
-        info!("USB host connected, staying awake for {secs}s");
+        if config::BLE_SCAN_CONTINUOUS {
+            led::set_failed(true);
+            info!("Restarting in {secs}s");
+        } else {
+            led::off();
+            info!("USB host connected, staying awake for {secs}s");
+        }
         thread::sleep(Duration::from_secs(secs));
         unsafe { sys::esp_restart() }
     }
+    led::off();
     antenna::power_off();
     info!("Entering deep sleep for {secs}s");
     unsafe { sys::esp_deep_sleep(secs * 1_000_000) }
@@ -197,10 +233,6 @@ fn run(number: u32) -> anyhow::Result<()> {
     let sysloop = EspSystemEventLoop::take()?;
     let nvs = EspDefaultNvsPartition::take()?;
 
-    // ── LED ──────────────────────────────────────────────────────────────────
-    let mut led = led::Led::new()?;
-    led.apply_mode();
-
     antenna::select();
 
     // ── BLE scan + Wi-Fi connect ─────────────────────────────────────────────
@@ -230,25 +262,18 @@ fn run(number: u32) -> anyhow::Result<()> {
         wifi_ms,
     };
     publish(&mut mqtt, &cycle, scan, error)?;
-
-    led.off();
     Ok(())
 }
 
 /// Scan all the time, and publish each scan's readings and diagnostics while
 /// the next scan runs. Wi-Fi and MQTT stay connected. Returns only on a
 /// failure to start.
-///
-/// The LED stays on, as the board never sleeps.
 fn run_continuous(mut number: u32) -> anyhow::Result<Infallible> {
     start_cycle_timeout()?;
 
     let peripherals = Peripherals::take()?;
     let sysloop = EspSystemEventLoop::take()?;
     let nvs = EspDefaultNvsPartition::take()?;
-
-    let mut led = led::Led::new()?;
-    led.apply_mode();
 
     antenna::select();
 
@@ -272,6 +297,8 @@ fn run_continuous(mut number: u32) -> anyhow::Result<Infallible> {
         })
         .context("Failed to spawn BLE scan thread")?;
 
+    // Show a bad spot from boot, not only after the first restart.
+    led::set_wifi_down(true);
     let (_wifi, wifi_cache) = wifi::connect(peripherals.modem, sysloop.clone(), nvs)?;
     let _reconnect = wifi::keep_connected(&sysloop)?;
     let mut mqtt = mqtt::Mqtt::connect()?;
@@ -294,9 +321,16 @@ fn run_continuous(mut number: u32) -> anyhow::Result<Infallible> {
         // A failed scan is published too, but doesn't count. That way a
         // broken BLE stack restarts the board, as a dead Wi-Fi does.
         match publish(&mut mqtt, &cycle, result, error) {
-            Ok(()) if !scan_failed => extend_deadline(),
-            Ok(()) => {}
-            Err(e) => error!("Cycle {number} failed: {e:#}"),
+            Ok(()) => {
+                if !scan_failed {
+                    extend_deadline();
+                }
+                led::set_failed(scan_failed);
+            }
+            Err(e) => {
+                error!("Cycle {number} failed: {e:#}");
+                led::set_failed(true);
+            }
         }
 
         number = number.wrapping_add(1);

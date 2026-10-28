@@ -11,11 +11,13 @@
 #### Breaking changes
 
 - Scan continuously by default, for a board on mains power: `BLE_SCAN_MODE=continuous` scans all the time, stays connected to Wi-Fi and MQTT, and publishes once per `BLE_SCAN_DURATION`, now 60 s. A battery board needs `BLE_SCAN_MODE=parallel` to keep deep sleeping. The checker's `--board-cycle` defaults to 60 s.
+- `LED_MODE` defaults to `on` when `LED_GPIO` is set, so a board's device file sets up its LED. Set `LED_MODE=off` to keep it dark.
 - `LED_GPIO` is required with `LED_MODE`. It defaulted to 15, the Seeed XIAO ESP32-C6's pin, which may be wired to something else on other boards.
 
 #### Features
 
 - Support the ESP32-C5: `CHIP=esp32c5`.
+- Blink the LED twice every 3 s while Wi-Fi is down or a cycle failed. `LED_MODE=on` breathes slowly and dimly when scanning continuously, and `LED_MODE=errors` shows only the blinks.
 - Add `LED_COLOR` for the WS2812 LED. It defaults to a dim blue instead of a glaring full white.
 - Add `WIFI_BAND` to keep a dual-band chip, such as the ESP32-C5, on 2.4 or 5 GHz.
 - Build each chip in `target/<chip>/`, so one checkout can build several chips. The C6 and C5 share a Rust target, and ESP-IDF's build can't switch between them.
