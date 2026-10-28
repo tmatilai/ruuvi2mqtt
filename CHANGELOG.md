@@ -24,6 +24,7 @@
 
 #### Fixes
 
+- A Seeed XIAO ESP32-C6 needs `ANTENNA`: without it, the RF switch gets no power and the board hears little.
 - Fall back to a full Wi-Fi scan as soon as the cached access point fails, instead of after 15 seconds. The scan could run out of the cycle's time.
 
 ## 1.6.0 / 2026-10-14

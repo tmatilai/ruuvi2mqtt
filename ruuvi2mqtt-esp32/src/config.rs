@@ -189,7 +189,8 @@ pub const RUUVI_MANUFACTURER_ID: u16 = 0x0499;
 // ---------------------------------------------------------------------------
 
 /// The antenna of the Seeed XIAO ESP32-C6: `internal` (ceramic) or
-/// `external` (U.FL). Unset (default), the board uses the internal one.
+/// `external` (U.FL). Unset, its RF switch gets no power, and the board
+/// hears little.
 pub const ANTENNA: Option<&str> = option_env_non_empty!("ANTENNA");
 
 /// `ANTENNA=external`.

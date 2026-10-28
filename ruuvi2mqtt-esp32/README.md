@@ -111,7 +111,7 @@ All settings are baked in at compile-time via environment variables.
 | `BLE_SCAN_DURATION` | — | `60` / `5` | BLE scan duration (seconds). Continuous: the cycle, `60`. Otherwise `5`: set it close to your Wi-Fi + MQTT connect time (see boot log), min 3s |
 | `BLE_SLEEP_DURATION` | — | `60` | Deep sleep between cycles (seconds). Continuous: the wait awake before a restart after a failure |
 | `USB_STAY_AWAKE` | — | `true` | `false` always deep sleeps. See [Build & flash](#build--flash) |
-| `ANTENNA` | — | *(unset)* | Seeed XIAO ESP32-C6 only: `internal` or `external` antenna. See [Antenna](#antenna) |
+| `ANTENNA` | — | *(unset)* | Seeed XIAO ESP32-C6 only, and needed there: `internal` or `external` antenna. See [Antenna](#antenna) |
 | `LED_MODE` | — | `on` with `LED_GPIO` | `on`, `errors` or `off`. Without `LED_GPIO`, the LED is left alone. See [LED](#led) |
 | `LED_TYPE` | — | `ws2812` | `ws2812` or `gpio` |
 | `LED_ACTIVE_LOW` | — | `false` | `true` for a `gpio` LED that lights when its pin is low |
@@ -152,9 +152,10 @@ The Seeed XIAO ESP32-C6 has an RF switch between its ceramic antenna and a
 U.FL connector ([Seeed wiki][xiao-c6]). `ANTENNA` selects one. The switch
 is powered off in deep sleep, since it draws more than the chip does.
 
-Without `ANTENNA`, the firmware doesn't touch the switch, and the XIAO uses
-its internal antenna. Other boards use its pins for other things, so the
-build fails if `ANTENNA` is set for any chip but the ESP32-C6.
+Without `ANTENNA`, the firmware doesn't touch the switch. It then gets no
+power, and the XIAO hears little on Wi-Fi and BLE, so set `ANTENNA` on
+every XIAO. Other boards use its pins for other things, so the build fails
+if `ANTENNA` is set for any chip but the ESP32-C6.
 
 [xiao-c6]: https://wiki.seeedstudio.com/xiao_esp32c6_getting_started/
 
