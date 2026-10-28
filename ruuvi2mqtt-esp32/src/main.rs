@@ -18,6 +18,7 @@ mod config;
 mod led;
 mod mqtt;
 mod system;
+mod web;
 mod wifi;
 
 fn main() {
@@ -301,7 +302,16 @@ fn run_continuous(mut number: u32) -> anyhow::Result<Infallible> {
     led::set_wifi_down(true);
     let (_wifi, wifi_cache) = wifi::connect(peripherals.modem, sysloop.clone(), nvs)?;
     let _reconnect = wifi::keep_connected(&sysloop)?;
+    // The board works without it.
+    let _web = web::start()
+        .inspect_err(|e| warn!("Status page failed: {e:#}"))
+        .ok();
     let mut mqtt = mqtt::Mqtt::connect()?;
+    // Subscribes to the tag names for the page now, not after the first
+    // scan. The cycles wait for the broker anyway.
+    if let Err(e) = mqtt.wait_connected(MQTT_CONNECT_TIMEOUT) {
+        warn!("{e:#}");
+    }
 
     loop {
         CYCLE.store(number, Ordering::Relaxed);
@@ -320,18 +330,18 @@ fn run_continuous(mut number: u32) -> anyhow::Result<Infallible> {
         };
         // A failed scan is published too, but doesn't count. That way a
         // broken BLE stack restarts the board, as a dead Wi-Fi does.
-        match publish(&mut mqtt, &cycle, result, error) {
-            Ok(()) => {
-                if !scan_failed {
-                    extend_deadline();
-                }
-                led::set_failed(scan_failed);
-            }
+        let failed = match publish(&mut mqtt, &cycle, result, error) {
+            Ok(()) => scan_failed,
             Err(e) => {
                 error!("Cycle {number} failed: {e:#}");
-                led::set_failed(true);
+                true
             }
+        };
+        if !failed {
+            extend_deadline();
         }
+        led::set_failed(failed);
+        web::cycle_done(failed);
 
         number = number.wrapping_add(1);
     }

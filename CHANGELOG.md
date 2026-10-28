@@ -16,6 +16,7 @@
 
 #### Features
 
+- Serve a status page on `http://<DEVICE_HOSTNAME>.local/` when scanning continuously, for finding a board's spot. It grades the Wi-Fi, the publishing and the tags tapped as targets, and `/api/status` has the same as JSON.
 - Support the ESP32-C5: `CHIP=esp32c5`.
 - Blink the LED twice every 3 s while Wi-Fi is down or a cycle failed. `LED_MODE=on` breathes slowly and dimly when scanning continuously, and `LED_MODE=errors` shows only the blinks.
 - Add `LED_COLOR` for the WS2812 LED. It defaults to a dim blue instead of a glaring full white.

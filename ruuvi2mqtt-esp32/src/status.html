@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ruuvi2mqtt status</title>
+<style>
+:root {
+  --bg: #f6f6f4; --card: #fff; --text: #1d1d1b; --dim: #6b6b66; --track: #e4e4e0;
+  --good: #1f8a4c; --fair: #c77700; --poor: #c62828; --none: #8a8a85;
+  --good-bg: #e3f4ea; --fair-bg: #fdf0dc; --poor-bg: #fde4e4; --none-bg: #ececea;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #161615; --card: #222220; --text: #ececea; --dim: #9a9a94; --track: #3a3a37;
+    --good: #4cc27c; --fair: #f0a43a; --poor: #f06060; --none: #8a8a85;
+    --good-bg: #17331f; --fair-bg: #3a2a10; --poor-bg: #3d1717; --none-bg: #2c2c2a;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; padding: 12px 16px 32px; background: var(--bg); color: var(--text);
+  font: 16px/1.4 system-ui, -apple-system, sans-serif; max-width: 640px; margin-inline: auto; }
+h1 { font-size: 15px; font-weight: 600; margin: 0; }
+.meta { color: var(--dim); font-size: 13px; margin-bottom: 12px; }
+.verdict { border-radius: 14px; padding: 14px 16px; margin-bottom: 12px; border-left: 8px solid var(--c); background: var(--cbg); }
+.verdict .word { font-size: 28px; font-weight: 700; color: var(--c); }
+.verdict .sub { color: var(--dim); font-size: 14px; }
+.verdict ul { margin: 8px 0 0; padding-left: 20px; }
+.verdict li { margin: 2px 0; }
+.good { --c: var(--good); --cbg: var(--good-bg); }
+.fair { --c: var(--fair); --cbg: var(--fair-bg); }
+.poor { --c: var(--poor); --cbg: var(--poor-bg); }
+.none { --c: var(--none); --cbg: var(--none-bg); }
+.card { background: var(--card); border-radius: 14px; padding: 4px 14px; margin-bottom: 12px; }
+.row { display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; padding: 10px 0; border-bottom: 1px solid var(--track); }
+.row:last-child { border-bottom: 0; }
+.tag { cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.tag.other { opacity: .6; }
+.name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.name .star { color: var(--c); margin-right: 4px; }
+.nums { text-align: right; font-variant-numeric: tabular-nums; color: var(--c); font-weight: 600; }
+.bar { grid-column: 1 / -1; position: relative; height: 8px; border-radius: 4px; background: var(--track); }
+.bar .range { position: absolute; top: 0; bottom: 0; border-radius: 4px; background: var(--c); opacity: .3; }
+.bar .fill { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 4px; background: var(--c); }
+.detail { grid-column: 1 / -1; color: var(--dim); font-size: 13px; }
+.label { color: var(--dim); font-size: 13px; margin: 14px 2px 6px; }
+.empty { color: var(--dim); padding: 10px 0; }
+.stale .card, .stale .label { opacity: .45; }
+</style>
+</head>
+<body>
+<h1 id="host">ruuvi2mqtt</h1>
+<div class="meta" id="meta">Connecting…</div>
+<div id="verdict" class="verdict none"><div class="word">…</div></div>
+<div class="card" id="board"></div>
+<div class="label">Tags</div>
+<div class="card" id="tags"></div>
+<script>
+"use strict";
+const WORDS = { good: "Good spot", fair: "Fair spot", poor: "Poor spot" };
+let targets = [];
+try { targets = JSON.parse(localStorage.getItem("targets") || "[]"); } catch (e) {}
+// A request to a board that's gone hangs instead of failing.
+const TIMEOUT_MS = 4000;
+const STALE_S = 6;
+let lastOk = 0;
+let firmware = "";
+
+function el(tag, cls, text) {
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (text !== undefined) e.textContent = text;
+  return e;
+}
+
+// −100…−40 dBm across the bar
+function pct(rssi) { return Math.max(0, Math.min(100, (rssi + 100) / 60 * 100)); }
+
+function bar(rssi, min, max) {
+  const b = el("div", "bar");
+  if (rssi === null) return b;
+  const range = el("div", "range");
+  range.style.left = pct(min) + "%";
+  range.style.width = Math.max(pct(max) - pct(min), 1) + "%";
+  const fill = el("div", "fill");
+  fill.style.width = pct(rssi) + "%";
+  b.append(range, fill);
+  return b;
+}
+
+function ago(s) { return s < 2 ? "just now" : s + " s ago"; }
+
+function render(r) {
+  document.title = r.hostname;
+  document.getElementById("host").textContent = r.hostname;
+  firmware = r.firmware + (r.antenna ? " · " + r.antenna + " antenna" : "") + " · up " + Math.floor(r.uptime_s / 60) + " min";
+
+  const v = document.getElementById("verdict");
+  v.className = "verdict " + r.verdict;
+  v.replaceChildren(el("div", "word", WORDS[r.verdict]));
+  let sub = r.measuring ? "Measuring, " + r.window_s + " s of 60. " : "";
+  if (!r.tags.some(t => t.target)) sub += "Judged on Wi-Fi and publishing only: tap the tags this spot should cover.";
+  if (sub) v.append(el("div", "sub", sub));
+  if (r.problems.length) {
+    const ul = el("ul");
+    for (const p of r.problems) {
+      const li = el("li", p.grade, p.text);
+      li.style.color = "var(--c)";
+      ul.append(li);
+    }
+    v.append(ul);
+  }
+
+  const w = el("div", "row " + r.wifi.grade);
+  w.append(el("div", "name", "Wi-Fi, channel " + r.wifi.channel), el("div", "nums", r.wifi.rssi + " dBm"),
+    bar(r.wifi.rssi, r.wifi.rssi, r.wifi.rssi));
+  if (r.wifi.drops) w.append(el("div", "detail", "Dropped " + (r.wifi.drops === 1 ? "once" : r.wifi.drops + " times")));
+  const p = el("div", "row " + r.publishing.grade);
+  const cycles = r.publishing.cycles;
+  p.append(el("div", "name", "Publishing"), el("div", "nums", !cycles ? "not yet"
+    : r.publishing.failed ? r.publishing.failed + " of " + cycles + " failed"
+    : cycles + (cycles === 1 ? " cycle" : " cycles")));
+  document.getElementById("board").replaceChildren(w, p);
+
+  const list = document.getElementById("tags");
+  if (!r.tags.length) list.replaceChildren(el("div", "empty", "No Ruuvi tags heard yet"));
+  else list.replaceChildren(...r.tags.map(t => {
+    const row = el("div", "row tag " + (t.rssi === null ? (t.target ? t.grade : "none") : t.grade));
+    if (!t.target) row.classList.add("other");
+    const name = el("div", "name");
+    if (t.target) name.append(el("span", "star", "★"));
+    name.append(t.name || t.mac);
+    const nums = t.rssi === null ? "not heard" : t.rssi + " dBm · " + t.reports_per_min + "/min";
+    row.append(name, el("div", "nums", nums), bar(t.rssi, t.rssi_min, t.rssi_max));
+    if (t.rssi !== null) row.append(el("div", "detail", t.rssi_min + "…" + t.rssi_max + " dBm · " + ago(t.last_heard_s)));
+    row.onclick = () => toggle(t.mac);
+    return row;
+  }));
+}
+
+function toggle(mac) {
+  targets = targets.includes(mac) ? targets.filter(m => m !== mac) : [...targets, mac];
+  try { localStorage.setItem("targets", JSON.stringify(targets)); } catch (e) {}
+  refresh();
+}
+
+let timer = null;
+let generation = 0;
+async function refresh() {
+  clearTimeout(timer);
+  // A tap calls this while a fetch may be in flight. Only the latest call
+  // renders and schedules the next one, or the chains would pile up.
+  const mine = ++generation;
+  const abort = new AbortController();
+  const timeout = setTimeout(() => abort.abort(), TIMEOUT_MS);
+  try {
+    const res = await fetch("/api/status?tags=" + targets.join(","), { cache: "no-store", signal: abort.signal });
+    const r = await res.json();
+    if (mine !== generation) return;
+    lastOk = Date.now();
+    render(r);
+  } catch (e) {
+    // tick() shows it once the data is stale.
+  } finally {
+    clearTimeout(timeout);
+    if (mine === generation) timer = setTimeout(refresh, 2000);
+  }
+}
+
+// Every second, so a board that went quiet shows at once.
+function tick() {
+  const age = Math.floor((Date.now() - lastOk) / 1000);
+  const stale = !lastOk || age >= STALE_S;
+  document.body.classList.toggle("stale", stale && lastOk > 0);
+  document.getElementById("meta").textContent = lastOk
+    ? firmware + " · updated " + (age < 2 ? "just now" : age + " s ago")
+    : "Connecting…";
+  if (stale && lastOk) {
+    const v = document.getElementById("verdict");
+    v.className = "verdict none";
+    v.replaceChildren(el("div", "word", "No answer for " + age + " s"),
+      el("div", "sub", "The board doesn't respond: it may be out of Wi-Fi or restarting. Below is what it last said."));
+  }
+}
+refresh();
+setInterval(tick, 1000);
+</script>
+</body>
+</html>

@@ -4,10 +4,12 @@ use std::time::{Duration, Instant};
 
 use anyhow::{bail, ensure, Context};
 use esp_idf_svc::mqtt::client::{
-    EspMqttClient, EspMqttConnection, EventPayload, MessageId, MqttClientConfiguration, QoS,
+    Details, EspMqttClient, EspMqttConnection, EventPayload, MessageId, MqttClientConfiguration,
+    QoS,
 };
 use esp_idf_svc::tls::X509;
-use log::info;
+use log::{info, warn};
+use ruuvi2mqtt_esp32::status::DISCOVERY_TOPIC;
 
 use crate::config;
 
@@ -136,7 +138,16 @@ impl Mqtt {
 
     fn handle(&mut self, event: Event) {
         match event {
-            Event::Connected(at) => self.connected_at = Some(at),
+            Event::Connected(at) => {
+                self.connected_at = Some(at);
+                // The tag names for the status page. A clean session
+                // forgets the subscription.
+                if config::BLE_SCAN_CONTINUOUS {
+                    if let Err(e) = self.client.subscribe(DISCOVERY_TOPIC, QoS::AtMostOnce) {
+                        warn!("Failed to subscribe to {DISCOVERY_TOPIC}: {e}");
+                    }
+                }
+            }
             Event::Disconnected => self.connected_at = None,
             Event::Published(id) => self.pending.retain(|&p| p != id),
         }
@@ -183,6 +194,15 @@ fn run_event_loop(mut connection: EspMqttConnection, events: &mpsc::Sender<Event
                 Event::Disconnected
             }
             EventPayload::Published(id) => Event::Published(id),
+            EventPayload::Received {
+                topic: Some(topic),
+                data,
+                details: Details::Complete,
+                ..
+            } => {
+                crate::web::discovery(topic, data);
+                continue;
+            }
             other => {
                 log::debug!("MQTT event: {other:?}");
                 continue;

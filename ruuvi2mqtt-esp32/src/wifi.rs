@@ -153,18 +153,21 @@ pub fn keep_connected(
     *CONNECTED_SINCE.lock().unwrap() = Some(Instant::now());
     ble::set_wifi_connected(true);
     led::set_wifi_down(false);
+    enable_ipv6();
     let subscription = sysloop.subscribe::<WifiEvent, _>(|event| match event {
         WifiEvent::StaConnected(_) => {
             info!("Wi-Fi reconnected");
             *CONNECTED_SINCE.lock().unwrap() = Some(Instant::now());
             ble::set_wifi_connected(true);
             led::set_wifi_down(false);
+            enable_ipv6();
         }
         WifiEvent::StaDisconnected(d) => {
             // Each failed attempt ends with another disconnect, so log only
             // the first.
             if CONNECTED_SINCE.lock().unwrap().take().is_some() {
                 log::warn!("Wi-Fi disconnected, reason {}", d.reason());
+                crate::web::wifi_dropped();
             }
             ble::set_wifi_connected(false);
             led::set_wifi_down(true);
@@ -175,6 +178,17 @@ pub fn keep_connected(
         _ => {}
     })?;
     Ok(subscription)
+}
+
+/// Give the station an IPv6 address, so that mDNS answers an AAAA query. A
+/// resolver asks for both addresses, and macOS waits 5 s for the missing
+/// answer before it opens the status page. The link-local address is lost
+/// on a disconnect. A router's advertisements add a global one.
+fn enable_ipv6() {
+    let netif = unsafe { sys::esp_netif_get_handle_from_ifkey(c"WIFI_STA_DEF".as_ptr()) };
+    if let Err(e) = sys::esp!(unsafe { sys::esp_netif_create_ip6_linklocal(netif) }) {
+        log::warn!("Could not enable IPv6: {e}");
+    }
 }
 
 /// Restrict Wi-Fi to `WIFI_BAND`. The default band mode uses both.

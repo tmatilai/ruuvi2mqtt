@@ -15,6 +15,19 @@ impl Mac {
             self.0[0], self.0[1], self.0[2], self.0[3], self.0[4], self.0[5],
         )
     }
+
+    /// Parses the topic format, in either case.
+    #[must_use]
+    pub fn from_topic_str(s: &str) -> Option<Self> {
+        if s.len() != 12 {
+            return None;
+        }
+        let mut bytes = [0; 6];
+        for (i, byte) in bytes.iter_mut().enumerate() {
+            *byte = u8::from_str_radix(s.get(2 * i..2 * i + 2)?, 16).ok()?;
+        }
+        Some(Self(bytes))
+    }
 }
 
 /// Colon-separated lowercase hex (e.g. `"aa:bb:cc:dd:ee:ff"`).
@@ -55,6 +68,16 @@ mod tests {
     #[test]
     fn topic_string_is_bare_lowercase_hex() {
         assert_eq!(EXAMPLE.to_topic_string(), "aabbccddeeff");
+    }
+
+    #[test]
+    fn parses_the_topic_format() {
+        assert_eq!(Mac::from_topic_str("aabbccddeeff"), Some(EXAMPLE));
+        assert_eq!(Mac::from_topic_str("AABBCCDDEEFF"), Some(EXAMPLE));
+        assert_eq!(Mac::from_topic_str("aabbccddee"), None);
+        assert_eq!(Mac::from_topic_str("aabbccddeefg"), None);
+        assert_eq!(Mac::from_topic_str("aa:bb:cc:dd:ee:ff"), None);
+        assert_eq!(Mac::from_topic_str("aabbccddeeé"), None);
     }
 
     #[test]
