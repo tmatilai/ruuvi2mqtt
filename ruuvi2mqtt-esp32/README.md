@@ -4,15 +4,20 @@ ESP32 firmware that scans for Ruuvi BLE advertisements and publishes JSON
 readings over Wi-Fi to an MQTT broker. Topic and payload format matches the
 Linux `ruuvi2mqtt` app.
 
-The firmware operates in a scan-publish-sleep cycle to conserve energy. Each
-cycle scans BLE and connects Wi-Fi in parallel, publishes all unique readings
-over MQTT, then enters deep sleep (CPU, radios, and RAM powered off). On wake
-the chip reboots and reconnects. With the defaults (5s scan, 60s sleep) the
-active time is ~7s per ~67s cycle, reducing average current draw to roughly
-a tenth of always-on operation.
+By default, the firmware scans BLE all the time and stays connected to Wi-Fi
+and MQTT, for a board on mains power. A cycle is one scan of
+`BLE_SCAN_DURATION` (60 s). As the next scan runs, the board publishes each
+tag heard in the cycle once, with its latest reading.
+
+On a battery, the deep-sleep modes save energy with a scan-publish-sleep
+cycle. Each cycle scans BLE and connects Wi-Fi in parallel, publishes all
+unique readings over MQTT, then enters deep sleep (CPU, radios, and RAM
+powered off). On wake the chip reboots and reconnects. With the defaults (5s
+scan, 60s sleep) the active time is ~7s per ~67s cycle, reducing average
+current draw to roughly a tenth of always-on operation.
 
 Wi-Fi and BLE share one 2.4 GHz radio, so the scan gets only part of the
-airtime until Wi-Fi has connected. `BLE_SCAN_MODE=sequential` scans first and
+airtime while Wi-Fi connects. `BLE_SCAN_MODE=sequential` scans first and
 then starts Wi-Fi. That gives the scan the whole radio, but adds the Wi-Fi
 and MQTT connect time to the awake time.
 
@@ -24,8 +29,9 @@ static IP can also be configured to skip DHCP.
 Unlike the Linux app, the ESP32 does **not** subscribe to MQTT for
 cross-gateway throttle coordination — each cycle simply publishes every sensor
 it heard during the scan window. When Linux instances hear the same tags and
-their `throttle` is below the ESP32's full cycle (`BLE_SLEEP_DURATION` plus the
-awake time, ~67s with the defaults), those tags get two messages per cycle.
+their `throttle` is below the ESP32's cycle (`BLE_SCAN_DURATION` when
+scanning continuously, otherwise `BLE_SLEEP_DURATION` plus the awake time),
+those tags get two messages per cycle.
 That is harmless. To avoid it, set the `throttle` above the cycle; the Linux
 instances then fill in only when the ESP32 misses a tag.
 
@@ -101,12 +107,12 @@ All settings are baked in at compile-time via environment variables.
 | `MQTT_USER` | `mqtt.user` | *(anonymous)* | MQTT username |
 | `MQTT_PASSWORD` | `mqtt.password` | *(anonymous)* | MQTT password |
 | `MQTT_BASE_TOPIC` | `mqtt.base_topic` | `ruuvi2mqtt` | Topic prefix |
-| `BLE_SCAN_DURATION` | — | `5` | BLE scan duration (seconds). Set close to your Wi-Fi + MQTT connect time (see boot log), min 3s |
-| `BLE_SCAN_MODE` | — | `parallel` | `parallel` scans while Wi-Fi connects. `sequential` scans first, then starts Wi-Fi |
-| `BLE_SLEEP_DURATION` | — | `60` | Deep sleep between cycles (seconds) |
+| `BLE_SCAN_MODE` | — | `continuous` | `continuous` scans all the time. `parallel` scans while Wi-Fi connects, then deep sleeps. `sequential` scans first, then starts Wi-Fi, and deep sleeps |
+| `BLE_SCAN_DURATION` | — | `60` / `5` | BLE scan duration (seconds). Continuous: the cycle, `60`. Otherwise `5`: set it close to your Wi-Fi + MQTT connect time (see boot log), min 3s |
+| `BLE_SLEEP_DURATION` | — | `60` | Deep sleep between cycles (seconds). Continuous: only after a failure |
 | `USB_STAY_AWAKE` | — | `true` | `false` always deep sleeps. See [Build & flash](#build--flash) |
 | `ANTENNA` | — | *(unset)* | Seeed XIAO ESP32-C6 only: `internal` or `external` antenna. See [Antenna](#antenna) |
-| `LED_MODE` | — | *(unset)* | `on` to light while awake, `off` to turn off at boot, or unset to do nothing |
+| `LED_MODE` | — | *(unset)* | `on` to light while awake (always, when scanning continuously), `off` to turn off at boot, or unset to do nothing |
 | `LED_TYPE` | — | `ws2812` | `ws2812` or `gpio` |
 | `LED_ACTIVE_LOW` | — | `false` | `true` for a `gpio` LED that lights when its pin is low |
 | `LED_GPIO` | — | — | LED pin number. Required with `LED_MODE` |
@@ -216,11 +222,12 @@ make log SECS=70         # print the serial output for 70 s, without prompts
 All but `make monitor` run without prompts, so scripts and agents can use
 them.
 
-Deep sleep turns off the USB port built into the ESP32-C3, -C5, -C6, and -S3.
-While a computer is connected to that port, the board waits awake between
-cycles and restarts instead, so it can be flashed and monitored at any time.
-A charger or power bank doesn't count. A port behind a USB-UART bridge, as on
-ESP32 boards and the DevKitC's UART port, stays up in deep sleep.
+In the deep-sleep modes, deep sleep turns off the USB port built into the
+ESP32-C3, -C5, -C6, and -S3. While a computer is connected to that port,
+the board waits awake between cycles and restarts instead, so it can be
+flashed and monitored at any time. A charger or power bank doesn't count. A
+port behind a USB-UART bridge, as on ESP32 boards and the DevKitC's UART
+port, stays up in deep sleep.
 `USB_STAY_AWAKE=false` deep sleeps anyway, for example to measure the sleep
 current.
 
@@ -270,13 +277,13 @@ heard and when, so a missed tag can be traced to range or to the radio.
 | `cycle` | Cycles since a cold boot or a crash, this one included. A gap means cycles without diagnostics |
 | `settings` | The build-time settings that A/B tests compare: `BLE_SCAN_MODE`, `BLE_SCAN_DURATION` and `ANTENNA` (left out when unset) |
 | `wifi_rssi`, `wifi_channel` | The access point's signal (dBm) and channel |
-| `wifi_cache` | `hit`: connected with the cached channel and BSSID. `miss`: nothing cached. `stale`: the cache failed, so a full scan |
+| `wifi_cache` | `hit`: connected with the cached channel and BSSID. `miss`: nothing cached. `stale`: the cache failed, so a full scan. When scanning continuously, from the first connection after boot |
 | `free_heap` | Free heap in bytes |
 | `scan_start_ms`, `scan_end_ms` | When the BLE scan started and finished |
-| `wifi_ms`, `mqtt_ms` | When Wi-Fi and the broker connection were up |
+| `wifi_ms`, `mqtt_ms` | When Wi-Fi and the broker connection were up. When scanning continuously, `0` if they were up all along |
 | `cycle_ms` | When the message was built |
 | `tags` | Per Ruuvi MAC: the strongest RSSI (dBm), the advertisements received, and when the first one arrived |
-| `adverts_before_wifi`, `adverts_after_wifi` | Ruuvi advertisements before and after Wi-Fi connected |
+| `adverts_before_wifi`, `adverts_after_wifi` | Ruuvi advertisements before and after Wi-Fi connected. When scanning continuously, while Wi-Fi was down and up |
 | `other_adverts_before_wifi`, `other_adverts_after_wifi` | Other BLE advertisements, the same way. They show the scan's airtime |
 | `error` | Only when the BLE scan failed |
 

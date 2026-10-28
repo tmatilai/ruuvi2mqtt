@@ -10,6 +10,7 @@
 
 #### Breaking changes
 
+- Scan continuously by default, for a board on mains power: `BLE_SCAN_MODE=continuous` scans all the time, stays connected to Wi-Fi and MQTT, and publishes once per `BLE_SCAN_DURATION`, now 60 s. A battery board needs `BLE_SCAN_MODE=parallel` to keep deep sleeping. The checker's `--board-cycle` defaults to 60 s.
 - `LED_GPIO` is required with `LED_MODE`. It defaulted to 15, the Seeed XIAO ESP32-C6's pin, which may be wired to something else on other boards.
 
 #### Features

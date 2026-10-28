@@ -1,5 +1,5 @@
 use esp_idf_svc::{
-    eventloop::EspSystemEventLoop,
+    eventloop::{EspSubscription, EspSystemEventLoop, System},
     hal::modem::Modem,
     handle::RawHandle,
     nvs::EspDefaultNvsPartition,
@@ -14,11 +14,11 @@ use ruuvi2mqtt_esp32::diagnostics::CacheUse;
 use ruuvi2mqtt_esp32::mac::Mac;
 use std::ffi::CString;
 use std::sync::atomic::{AtomicU16, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
 
-use crate::config;
+use crate::{ble, config};
 
 /// Connect to Wi-Fi and return the `BlockingWifi` guard, and how the NVS
 /// cache was used.
@@ -131,6 +131,47 @@ pub fn connect(
     update_wifi_cache(cached.as_ref());
 
     Ok((wifi, cache_use))
+}
+
+/// When Wi-Fi connected, while it is connected. Set by [`keep_connected`].
+static CONNECTED_SINCE: Mutex<Option<Instant>> = Mutex::new(None);
+
+/// When Wi-Fi connected, or `None` while it is down.
+pub fn connected_since() -> Option<Instant> {
+    *CONNECTED_SINCE.lock().unwrap()
+}
+
+/// Reconnect whenever Wi-Fi drops, for the continuous mode. Call after
+/// [`connect`], and keep the subscription: dropping it stops the reconnects.
+///
+/// The driver keeps the cached BSSID, so after its access point is gone, the
+/// board keeps trying that one. The cycle timeout restarts the board then,
+/// and the full scan finds another.
+pub fn keep_connected(
+    sysloop: &EspSystemEventLoop,
+) -> anyhow::Result<EspSubscription<'static, System>> {
+    *CONNECTED_SINCE.lock().unwrap() = Some(Instant::now());
+    ble::set_wifi_connected(true);
+    let subscription = sysloop.subscribe::<WifiEvent, _>(|event| match event {
+        WifiEvent::StaConnected(_) => {
+            info!("Wi-Fi reconnected");
+            *CONNECTED_SINCE.lock().unwrap() = Some(Instant::now());
+            ble::set_wifi_connected(true);
+        }
+        WifiEvent::StaDisconnected(d) => {
+            // Each failed attempt ends with another disconnect, so log only
+            // the first.
+            if CONNECTED_SINCE.lock().unwrap().take().is_some() {
+                log::warn!("Wi-Fi disconnected, reason {}", d.reason());
+            }
+            ble::set_wifi_connected(false);
+            if let Err(e) = sys::esp!(unsafe { sys::esp_wifi_connect() }) {
+                log::warn!("Wi-Fi reconnect failed: {e}");
+            }
+        }
+        _ => {}
+    })?;
+    Ok(subscription)
 }
 
 /// Restrict Wi-Fi to `WIFI_BAND`. The default band mode uses both.

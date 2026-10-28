@@ -33,12 +33,11 @@ pub struct Scan {
     pub finished_ms: u32,
 }
 
-/// Set once Wi-Fi has connected, to split the scan statistics.
+/// Set while Wi-Fi is connected, to split the scan statistics.
 static WIFI_CONNECTED: AtomicBool = AtomicBool::new(false);
 
-/// Tells a running scan that Wi-Fi has connected.
-pub fn wifi_connected() {
-    WIFI_CONNECTED.store(true, Ordering::Relaxed);
+pub fn set_wifi_connected(connected: bool) {
+    WIFI_CONNECTED.store(connected, Ordering::Relaxed);
 }
 
 #[derive(Default)]

@@ -12,8 +12,10 @@ use log::info;
 use crate::config;
 
 /// Events forwarded from the event-loop thread to [`Mqtt`].
+#[derive(Clone, Copy)]
 enum Event {
     Connected(Instant),
+    Disconnected,
     Published(MessageId),
 }
 
@@ -21,7 +23,7 @@ enum Event {
 pub struct Mqtt {
     client: EspMqttClient<'static>,
     events: mpsc::Receiver<Event>,
-    /// When the broker first accepted the connection.
+    /// When the broker accepted the connection, while it is up.
     connected_at: Option<Instant>,
     /// Publishes not yet acknowledged by the broker.
     pending: Vec<MessageId>,
@@ -82,7 +84,7 @@ impl Mqtt {
     }
 
     /// Wait until the broker has accepted the connection, and return when
-    /// it did.
+    /// it did. The client reconnects by itself.
     pub fn wait_connected(&mut self, timeout: Duration) -> anyhow::Result<Instant> {
         self.wait(timeout, |mqtt| mqtt.connected_at.is_some())?;
         self.connected_at
@@ -99,33 +101,45 @@ impl Mqtt {
         Ok(())
     }
 
-    /// Wait until the broker has acknowledged all publishes.
+    /// Wait until the broker has acknowledged all publishes. On a timeout,
+    /// it stops waiting for them, so that the next wait doesn't.
     pub fn wait_published(&mut self, timeout: Duration) -> anyhow::Result<()> {
         let published = self.wait(timeout, |mqtt| mqtt.pending.is_empty())?;
+        let unacknowledged = std::mem::take(&mut self.pending).len();
         ensure!(
             published,
-            "{} publishes not acknowledged within {}s",
-            self.pending.len(),
+            "{unacknowledged} publishes not acknowledged within {}s",
             timeout.as_secs()
         );
         Ok(())
     }
 
     /// Process events until `done` holds. Returns `false` on timeout.
+    ///
+    /// It takes the queued events first, so that `done` sees the current
+    /// state.
     fn wait(&mut self, timeout: Duration, done: impl Fn(&Self) -> bool) -> anyhow::Result<bool> {
         let deadline = Instant::now() + timeout;
+        while let Ok(event) = self.events.try_recv() {
+            self.handle(event);
+        }
         while !done(self) {
             let remaining = deadline.saturating_duration_since(Instant::now());
             match self.events.recv_timeout(remaining) {
-                Ok(Event::Connected(at)) => {
-                    self.connected_at.get_or_insert(at);
-                }
-                Ok(Event::Published(id)) => self.pending.retain(|&p| p != id),
+                Ok(event) => self.handle(event),
                 Err(RecvTimeoutError::Timeout) => return Ok(false),
                 Err(RecvTimeoutError::Disconnected) => bail!("MQTT event loop ended"),
             }
         }
         Ok(true)
+    }
+
+    fn handle(&mut self, event: Event) {
+        match event {
+            Event::Connected(at) => self.connected_at = Some(at),
+            Event::Disconnected => self.connected_at = None,
+            Event::Published(id) => self.pending.retain(|&p| p != id),
+        }
     }
 }
 
@@ -163,6 +177,10 @@ fn run_event_loop(mut connection: EspMqttConnection, events: &mpsc::Sender<Event
                 // The main thread may be waiting for the scan, so it
                 // processes the event later.
                 Event::Connected(Instant::now())
+            }
+            EventPayload::Disconnected => {
+                info!("Disconnected from MQTT");
+                Event::Disconnected
             }
             EventPayload::Published(id) => Event::Published(id),
             other => {
