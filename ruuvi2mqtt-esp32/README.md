@@ -26,6 +26,13 @@ in NVS flash after the first connection. On subsequent boots it connects
 directly without scanning all channels, saving several seconds per cycle. A
 static IP can also be configured to skip DHCP.
 
+Scanning continuously, the board roams between the network's access points.
+After a drop, it retries the access point it was on, then reconnects to the
+strongest one. Below −70 dBm, it scans the network and switches to an access
+point at least 8 dB stronger. A scan takes about 5 s, and BLE hears little
+meanwhile. Without a stronger one, it scans again every 10 minutes while the
+link stays weak.
+
 Unlike the Linux app, the ESP32 does **not** subscribe to the readings for
 cross-gateway throttle coordination — each cycle simply publishes every sensor
 it heard during the scan window. When Linux instances hear the same tags and
@@ -320,6 +327,7 @@ heard and when, so a missed tag can be traced to range or to the radio.
   "settings": { "scan_mode": "parallel", "scan_duration": 5, "antenna": "external" },
   "wifi_rssi": -61,
   "wifi_channel": 6,
+  "wifi_bssid": "021122334455",
   "wifi_cache": "hit",
   "free_heap": 151000,
   "scan_start_ms": 180,
@@ -344,7 +352,7 @@ heard and when, so a missed tag can be traced to range or to the radio.
 | `chip` | ESP-IDF target |
 | `cycle` | Cycles since a cold boot or a crash, this one included. A gap means cycles without diagnostics |
 | `settings` | The build-time settings that A/B tests compare: `BLE_SCAN_MODE`, `BLE_SCAN_DURATION` and `ANTENNA` (left out when unset) |
-| `wifi_rssi`, `wifi_channel` | The access point's signal (dBm) and channel |
+| `wifi_rssi`, `wifi_channel`, `wifi_bssid` | The access point's signal (dBm), channel and BSSID, which roaming changes |
 | `wifi_cache` | `hit`: connected with the cached channel and BSSID. `miss`: nothing cached. `stale`: the cache failed, so a full scan. When scanning continuously, from the first connection after boot |
 | `free_heap` | Free heap in bytes |
 | `scan_start_ms`, `scan_end_ms` | When the BLE scan started and finished |

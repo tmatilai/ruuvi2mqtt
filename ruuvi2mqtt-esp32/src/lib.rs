@@ -5,5 +5,6 @@ pub mod diagnostics;
 pub mod led_pattern;
 pub mod mac;
 pub mod payload;
+pub mod roam;
 pub mod scan;
 pub mod status;
