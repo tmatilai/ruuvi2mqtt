@@ -5,6 +5,10 @@ CONFIG_BT_NIMBLE_EXT_ADV=y
 # host and the controller count instances beyond the first.
 CONFIG_BT_NIMBLE_MAX_EXT_ADV_INSTANCES=2
 CONFIG_BT_LE_MAX_EXT_ADV_INSTANCES=2
+# The chips' maximum transmit power, to reach scanners through walls. The
+# C5 and C6 have the first option, the C3 and S3 the second.
+CONFIG_BT_LE_DFT_TX_POWER_LEVEL_P20=y
+CONFIG_BT_CTRL_DFT_TX_POWER_LEVEL_P20=y
 
 CONFIG_ESP_MAIN_TASK_STACK_SIZE=8192
 CONFIG_LOG_DEFAULT_LEVEL_INFO=y
