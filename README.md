@@ -62,7 +62,7 @@ Each reading has a `publisher` field with the MQTT client ID of the instance tha
 Use the same `throttle` on every instance.
 Different values work, but the instance with the shortest one publishes every tag it hears.
 
-An ESP32 doesn't throttle: it publishes every tag it hears once per cycle (`BLE_SLEEP_DURATION` plus the awake time, about 67 s with the defaults).
+An ESP32 doesn't throttle: it publishes every tag it hears once per cycle (60 s with the defaults).
 With a `throttle` below that, the tags it hears get two messages per cycle, one from the ESP32 and one from a Linux instance.
 That is harmless, though Home Assistant records a new state when `publisher` changes, as it is an attribute.
 To avoid it, set `throttle` above the ESP32's cycle.

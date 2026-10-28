@@ -1,4 +1,6 @@
+use std::convert::Infallible;
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
+use std::sync::mpsc;
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
@@ -8,7 +10,7 @@ use esp_idf_svc::{
     nvs::EspDefaultNvsPartition, sys,
 };
 use log::{error, info, warn};
-use ruuvi2mqtt_esp32::diagnostics::{Diagnostics, Settings};
+use ruuvi2mqtt_esp32::diagnostics::{CacheUse, Diagnostics, Settings};
 
 mod antenna;
 mod ble;
@@ -63,17 +65,20 @@ fn main() {
         _ => {}
     }
 
-    info!(
-        "Cycle: {}s {} BLE scan, {}s deep sleep",
-        config::BLE_SCAN_DURATION,
-        config::BLE_SCAN_MODE,
-        config::BLE_SLEEP_DURATION
-    );
-
-    let start = Instant::now();
-
-    if let Err(e) = run(start, cycle) {
-        error!("Cycle failed: {e:#}");
+    if config::BLE_SCAN_CONTINUOUS {
+        info!("Cycle: {}s continuous BLE scan", config::BLE_SCAN_DURATION);
+        let Err(e) = run_continuous(cycle);
+        error!("Continuous scan failed: {e:#}");
+    } else {
+        info!(
+            "Cycle: {}s {} BLE scan, {}s deep sleep",
+            config::BLE_SCAN_DURATION,
+            config::BLE_SCAN_MODE,
+            config::BLE_SLEEP_DURATION
+        );
+        if let Err(e) = run(cycle) {
+            error!("Cycle failed: {e:#}");
+        }
     }
 
     sleep(SLEEP_SECS);
@@ -87,8 +92,14 @@ static CYCLE: AtomicU32 = AtomicU32::new(0);
 /// Set while `sleep()` waits awake, so the cycle timeout doesn't fire.
 static STAYING_AWAKE: AtomicBool = AtomicBool::new(false);
 
+/// When the cycle timeout fires, in seconds since boot.
+static DEADLINE_SECS: AtomicU32 = AtomicU32::new(u32::MAX);
+
 /// Normal deep sleep between cycles.
 const SLEEP_SECS: u64 = config::BLE_SLEEP_DURATION as u64;
+
+/// One BLE scan.
+const SCAN_SECS: u64 = config::BLE_SCAN_DURATION as u64;
 
 /// How long to wait for the broker to accept the connection.
 const MQTT_CONNECT_TIMEOUT: Duration = Duration::from_secs(15);
@@ -97,8 +108,14 @@ const MQTT_CONNECT_TIMEOUT: Duration = Duration::from_secs(15);
 const MQTT_ACK_TIMEOUT: Duration = Duration::from_secs(5);
 
 /// Hard cap on awake time. The Wi-Fi and MQTT steps have their own timeouts,
-/// but a task blocked on an event does not trip the task watchdog.
-const CYCLE_TIMEOUT_SECS: u64 = 40 + config::BLE_SCAN_DURATION as u64;
+/// but a task blocked on an event does not trip the task watchdog. In the
+/// continuous mode, it is the time since the last cycle that scanned and
+/// published, so one cycle may fail, as when Wi-Fi drops for a while.
+const CYCLE_TIMEOUT_SECS: u32 = if config::BLE_SCAN_CONTINUOUS {
+    40 + 2 * config::BLE_SCAN_DURATION.unsigned_abs()
+} else {
+    40 + config::BLE_SCAN_DURATION.unsigned_abs()
+};
 
 /// Deep sleep after a brownout reset.
 const BROWNOUT_SLEEP_SECS: u64 = 4 * SLEEP_SECS;
@@ -141,18 +158,40 @@ fn ms_between(start: Instant, end: Instant) -> u32 {
     u32::try_from(end.saturating_duration_since(start).as_millis()).unwrap_or(u32::MAX)
 }
 
-/// One scan-connect-publish cycle.
-fn run(start: Instant, cycle: u32) -> anyhow::Result<()> {
+fn uptime_secs() -> u32 {
+    u32::try_from(unsafe { sys::esp_timer_get_time() } / 1_000_000).unwrap_or(u32::MAX)
+}
+
+/// Move the cycle timeout to `CYCLE_TIMEOUT_SECS` from now.
+fn extend_deadline() {
+    DEADLINE_SECS.store(
+        uptime_secs().saturating_add(CYCLE_TIMEOUT_SECS),
+        Ordering::Relaxed,
+    );
+}
+
+/// Start the cycle timeout, which deep sleeps once the deadline has passed.
+fn start_cycle_timeout() -> anyhow::Result<()> {
+    extend_deadline();
     thread::Builder::new()
         .stack_size(4096)
-        .spawn(|| {
-            thread::sleep(Duration::from_secs(CYCLE_TIMEOUT_SECS));
-            if !STAYING_AWAKE.load(Ordering::Relaxed) {
+        .spawn(|| loop {
+            thread::sleep(Duration::from_secs(1));
+            if uptime_secs() > DEADLINE_SECS.load(Ordering::Relaxed)
+                && !STAYING_AWAKE.load(Ordering::Relaxed)
+            {
                 error!("Cycle timed out after {CYCLE_TIMEOUT_SECS}s");
                 sleep(SLEEP_SECS);
             }
         })
         .context("Failed to spawn cycle timeout thread")?;
+    Ok(())
+}
+
+/// One scan-connect-publish cycle, before deep sleep.
+fn run(number: u32) -> anyhow::Result<()> {
+    let start = Instant::now();
+    start_cycle_timeout()?;
 
     let peripherals = Peripherals::take()?;
     let sysloop = EspSystemEventLoop::take()?;
@@ -169,10 +208,7 @@ fn run(start: Instant, cycle: u32) -> anyhow::Result<()> {
     // saves a few seconds of active time per cycle, but until Wi-Fi has
     // connected, the scan gets only part of the airtime. The sequential mode
     // finishes the scan before Wi-Fi starts.
-    let ble_handle = thread::Builder::new()
-        .stack_size(4096)
-        .spawn(move || ble::scan(start))
-        .context("Failed to spawn BLE scan thread")?;
+    let ble_handle = spawn_scan(start)?;
     let scan = if config::BLE_SCAN_SEQUENTIAL {
         ScanThread::Finished(finish_scan(ble_handle, start))
     } else {
@@ -181,15 +217,111 @@ fn run(start: Instant, cycle: u32) -> anyhow::Result<()> {
 
     let (_wifi, wifi_cache) = wifi::connect(peripherals.modem, sysloop, nvs)?;
     let wifi_ms = ms_since(start);
-    ble::wifi_connected();
+    ble::set_wifi_connected(true);
 
     // ── MQTT ─────────────────────────────────────────────────────────────────
     let mut mqtt = mqtt::Mqtt::connect()?;
 
-    // ── Publish readings ─────────────────────────────────────────────────────
     let (scan, error) = scan.finish(start);
+    let cycle = Cycle {
+        number,
+        start,
+        wifi_cache,
+        wifi_ms,
+    };
+    publish(&mut mqtt, &cycle, scan, error)?;
 
-    let mqtt_ms = ms_between(start, mqtt.wait_connected(MQTT_CONNECT_TIMEOUT)?);
+    led.off();
+    Ok(())
+}
+
+/// Scan all the time, and publish each scan's readings and diagnostics while
+/// the next scan runs. Wi-Fi and MQTT stay connected. Returns only on a
+/// failure to start.
+///
+/// The LED stays on, as the board never sleeps.
+fn run_continuous(mut number: u32) -> anyhow::Result<Infallible> {
+    start_cycle_timeout()?;
+
+    let peripherals = Peripherals::take()?;
+    let sysloop = EspSystemEventLoop::take()?;
+    let nvs = EspDefaultNvsPartition::take()?;
+
+    let mut led = led::Led::new()?;
+    led.apply_mode();
+
+    antenna::select();
+
+    // One thread scans for good. The channel holds one scan, so that the
+    // next one runs while this thread publishes.
+    let (scan_tx, scans) = mpsc::sync_channel(1);
+    thread::Builder::new()
+        .stack_size(4096)
+        .spawn(move || loop {
+            let start = Instant::now();
+            let result = ble::scan(start);
+            let failed = result.is_err();
+            if scan_tx.send((start, result)).is_err() {
+                return;
+            }
+            // A failed scan returns at once. Wait out the scan, so that the
+            // cycle keeps its length and the diagnostics their rate.
+            if failed {
+                thread::sleep(Duration::from_secs(SCAN_SECS));
+            }
+        })
+        .context("Failed to spawn BLE scan thread")?;
+
+    let (_wifi, wifi_cache) = wifi::connect(peripherals.modem, sysloop.clone(), nvs)?;
+    let _reconnect = wifi::keep_connected(&sysloop)?;
+    let mut mqtt = mqtt::Mqtt::connect()?;
+
+    loop {
+        CYCLE.store(number, Ordering::Relaxed);
+        let (cycle_start, result) = scans.recv().context("BLE scan thread ended")?;
+        let (result, error) = scan_result(result, cycle_start);
+        let scan_failed = error.is_some();
+
+        // Zero when Wi-Fi was up all along, the whole cycle when it was down.
+        let wifi_ms = wifi::connected_since()
+            .map_or_else(|| ms_since(cycle_start), |at| ms_between(cycle_start, at));
+        let cycle = Cycle {
+            number,
+            start: cycle_start,
+            wifi_cache,
+            wifi_ms,
+        };
+        // A failed scan is published too, but doesn't count. That way a
+        // broken BLE stack restarts the board, as a dead Wi-Fi does.
+        match publish(&mut mqtt, &cycle, result, error) {
+            Ok(()) if !scan_failed => extend_deadline(),
+            Ok(()) => {}
+            Err(e) => error!("Cycle {number} failed: {e:#}"),
+        }
+
+        number = number.wrapping_add(1);
+    }
+}
+
+/// A cycle's values for the diagnostics, besides the scan's.
+struct Cycle {
+    number: u32,
+    start: Instant,
+    /// How Wi-Fi used its cache when it first connected.
+    wifi_cache: CacheUse,
+    /// When Wi-Fi was up, in ms from the start.
+    wifi_ms: u32,
+}
+
+/// Publish a cycle's readings and its diagnostics, once the broker has
+/// accepted the connection, and wait for the broker to acknowledge them.
+fn publish(
+    mqtt: &mut mqtt::Mqtt,
+    cycle: &Cycle,
+    scan: ble::Scan,
+    error: Option<String>,
+) -> anyhow::Result<()> {
+    let mqtt_ms = ms_between(cycle.start, mqtt.wait_connected(MQTT_CONNECT_TIMEOUT)?);
 
     for reading in &scan.readings {
         let topic = format!(
@@ -203,13 +335,12 @@ fn run(start: Instant, cycle: u32) -> anyhow::Result<()> {
         }
     }
 
-    // ── Diagnostics ──────────────────────────────────────────────────────────
     let ap_info = system::ap_info();
     let diag = Diagnostics {
         firmware: concat!(env!("CARGO_PKG_NAME"), " ", env!("BUILD_VERSION")),
         client_id: config::MQTT_CLIENT_ID,
         chip: system::chip(),
-        cycle,
+        cycle: cycle.number,
         settings: Settings {
             scan_mode: config::BLE_SCAN_MODE,
             scan_duration: config::BLE_SCAN_DURATION.unsigned_abs(),
@@ -217,13 +348,13 @@ fn run(start: Instant, cycle: u32) -> anyhow::Result<()> {
         },
         wifi_rssi: ap_info.map(|(rssi, _)| rssi),
         wifi_channel: ap_info.map(|(_, channel)| channel),
-        wifi_cache,
+        wifi_cache: cycle.wifi_cache,
         free_heap: system::free_heap(),
         scan_start_ms: scan.started_ms,
         scan_end_ms: scan.finished_ms,
-        wifi_ms,
+        wifi_ms: cycle.wifi_ms,
         mqtt_ms,
-        cycle_ms: ms_since(start),
+        cycle_ms: ms_since(cycle.start),
         scan: scan.stats,
         error,
     };
@@ -238,10 +369,14 @@ fn run(start: Instant, cycle: u32) -> anyhow::Result<()> {
         error!("Failed to publish diagnostics: {e}");
     }
 
-    mqtt.wait_published(MQTT_ACK_TIMEOUT)?;
+    mqtt.wait_published(MQTT_ACK_TIMEOUT)
+}
 
-    led.off();
-    Ok(())
+fn spawn_scan(start: Instant) -> anyhow::Result<JoinHandle<anyhow::Result<ble::Scan>>> {
+    thread::Builder::new()
+        .stack_size(4096)
+        .spawn(move || ble::scan(start))
+        .context("Failed to spawn BLE scan thread")
 }
 
 /// The BLE scan thread, or its result.
@@ -259,17 +394,27 @@ impl ScanThread {
     }
 }
 
-/// Wait for the scan to finish. A failed scan is still reported in the
-/// diagnostics, so it returns the error instead.
+/// Wait for the scan to finish.
 fn finish_scan(
     handle: JoinHandle<anyhow::Result<ble::Scan>>,
     start: Instant,
 ) -> (ble::Scan, Option<String>) {
-    let error = match handle.join() {
-        Ok(Ok(scan)) => return (scan, None),
-        Ok(Err(e)) => format!("BLE scan failed: {e:#}"),
-        Err(_) => "BLE scan thread panicked".to_string(),
-    };
+    match handle.join() {
+        Ok(result) => scan_result(result, start),
+        Err(_) => failed_scan("BLE scan thread panicked".to_string(), start),
+    }
+}
+
+/// A failed scan is still reported in the diagnostics, so it returns the
+/// error instead.
+fn scan_result(result: anyhow::Result<ble::Scan>, start: Instant) -> (ble::Scan, Option<String>) {
+    match result {
+        Ok(scan) => (scan, None),
+        Err(e) => failed_scan(format!("BLE scan failed: {e:#}"), start),
+    }
+}
+
+fn failed_scan(error: String, start: Instant) -> (ble::Scan, Option<String>) {
     error!("{error}");
     let now = ms_since(start);
     let scan = ble::Scan {

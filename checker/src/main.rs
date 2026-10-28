@@ -48,8 +48,9 @@ struct Options {
     /// it
     #[arg(long = "board", value_name = "CLIENT_ID")]
     boards: Vec<String>,
-    /// How often a board publishes: its deep sleep plus its awake time
-    #[arg(long, default_value = "67s", value_parser = time::parse)]
+    /// How often a board publishes: its scan when it scans continuously,
+    /// otherwise its deep sleep plus its awake time
+    #[arg(long, default_value = "60s", value_parser = time::parse)]
     board_cycle: Duration,
     /// The MAC address of a tag that must be published (repeat for each)
     #[arg(
