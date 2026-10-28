@@ -42,8 +42,9 @@ Compile-time environment variables:
   `legacy,extended,coded`. A chip without the Coded PHY logs a warning and
   runs the others.
 - `LED_MODE`, `LED_TYPE`, `LED_GPIO`, `LED_ACTIVE_LOW` and `LED_COLOR`: as
-  in the firmware, except that with `LED_MODE=on` the LED breathes slowly
-  and dimly every 6 s, to show that the simulator runs. A plain LED
+  in the firmware. With `LED_MODE=on`, the default when `LED_GPIO` is set,
+  the LED breathes slowly and dimly every 6 s, to show that the simulator
+  runs. `errors` keeps it dark, as nothing fails. A plain LED
   (`gpio`) peaks at an eighth of full brightness.
 
 `make test` runs the encoder's tests on the host. They check it against the

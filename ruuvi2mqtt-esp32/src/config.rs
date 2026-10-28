@@ -166,7 +166,7 @@ pub const BLE_SCAN_SEQUENTIAL: bool = konst::eq_str(BLE_SCAN_MODE, "sequential")
 
 /// Deep sleep duration (seconds) between scan-publish cycles. The chip fully
 /// powers off (CPU, RAM, radios) and reboots on wake. The continuous mode
-/// sleeps only after a failure.
+/// waits this long awake after a failure, then restarts.
 pub const BLE_SLEEP_DURATION: i32 = match option_env_non_empty!("BLE_SLEEP_DURATION") {
     Some(v) => konst::result::unwrap!(i32::from_str_radix(v, 10)),
     None => 60,
@@ -204,10 +204,18 @@ pub const ANTENNA_EXTERNAL: bool = match ANTENNA {
 
 /// LED operating mode.
 ///
-/// - Unset (default): do nothing — LED GPIO is not touched.
-/// - `on`: turn on while awake, off before deep sleep.
+/// - `on`, the default when `LED_GPIO` is set: scanning continuously,
+///   breathe slowly and dimly. In the deep-sleep modes, light while awake.
+///   Blink while something fails.
+/// - `errors`: blink only while something fails.
 /// - `off`: explicitly turn the LED off at boot.
-pub const LED_MODE: Option<&str> = option_env_non_empty!("LED_MODE");
+///
+/// Without `LED_GPIO` and `LED_MODE`, the LED's pin is not touched.
+pub const LED_MODE: Option<&str> = match option_env_non_empty!("LED_MODE") {
+    Some(v) => Some(v),
+    None if LED_GPIO.is_some() => Some("on"),
+    None => None,
+};
 
 /// LED hardware type: `ws2812` or `gpio`. Default: `ws2812`.
 pub const LED_TYPE: &str = match option_env_non_empty!("LED_TYPE") {
@@ -314,6 +322,17 @@ const _: () = assert!(
 const _: () = assert!(
     ANTENNA.is_none() || konst::slice::eq_bytes(esp_idf_svc::sys::CONFIG_IDF_TARGET, b"esp32c6\0"),
     "ANTENNA is only for the Seeed XIAO ESP32-C6"
+);
+const _: () = assert!(
+    match LED_MODE {
+        Some(v) => konst::eq_str(v, "on") || konst::eq_str(v, "errors") || konst::eq_str(v, "off"),
+        None => true,
+    },
+    "LED_MODE must be on, errors or off"
+);
+const _: () = assert!(
+    konst::eq_str(LED_TYPE, "ws2812") || konst::eq_str(LED_TYPE, "gpio"),
+    "LED_TYPE must be ws2812 or gpio"
 );
 const _: () = assert!(
     LED_MODE.is_none() || LED_GPIO.is_some(),

@@ -37,15 +37,17 @@ enum Kind {
 }
 
 /// Starts the LED in a thread of its own: `LED_MODE=on` breathes, `off`
-/// keeps it dark, and unset leaves the pin alone.
+/// keeps it dark, and so does `errors`, as nothing fails here. Unset, it
+/// breathes when `LED_GPIO` is set, and leaves the pin alone otherwise.
 pub fn start() -> Result<()> {
+    let gpio = non_empty(option_env!("LED_GPIO"));
     let breath = match non_empty(option_env!("LED_MODE")) {
-        None => return Ok(()),
-        Some("on") => true,
-        Some("off") => false,
+        None if gpio.is_none() => return Ok(()),
+        None | Some("on") => true,
+        Some("off" | "errors") => false,
         Some(other) => bail!("bad LED_MODE '{other}'"),
     };
-    let gpio = non_empty(option_env!("LED_GPIO")).context("LED_MODE needs LED_GPIO")?;
+    let gpio = gpio.context("LED_MODE needs LED_GPIO")?;
     let gpio: u8 = gpio.parse().map_err(|_| anyhow!("bad LED_GPIO '{gpio}'"))?;
     let active_low = match non_empty(option_env!("LED_ACTIVE_LOW")).unwrap_or("false") {
         "true" => true,
