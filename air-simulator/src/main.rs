@@ -13,6 +13,7 @@ use esp32_nimble::{
 };
 use log::{info, warn};
 
+mod antenna;
 mod led;
 
 const LEGACY: u8 = 0;
@@ -30,6 +31,7 @@ fn main() -> Result<()> {
     sys::link_patches();
     esp_idf_svc::log::EspLogger::initialize_default();
     led::start()?;
+    antenna::select()?;
 
     let mac = match option_env!("AIR_MAC") {
         Some(text) => parse_mac(text).map_err(anyhow::Error::msg)?,

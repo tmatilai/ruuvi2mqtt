@@ -41,6 +41,7 @@ Compile-time environment variables:
 - `AIR_SETS`: a comma-separated list of the sets to run. Default:
   `legacy,extended,coded`. A chip without the Coded PHY logs a warning and
   runs the others.
+- `ANTENNA`: as in the firmware. A XIAO ESP32-C6 needs it.
 - `LED_MODE`, `LED_TYPE`, `LED_GPIO`, `LED_ACTIVE_LOW` and `LED_COLOR`: as
   in the firmware. With `LED_MODE=on`, the default when `LED_GPIO` is set,
   the LED breathes slowly and dimly every 6 s, to show that the simulator

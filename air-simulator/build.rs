@@ -3,6 +3,7 @@ fn main() {
     embuild::espidf::sysenv::output();
     println!("cargo:rerun-if-env-changed=AIR_MAC");
     println!("cargo:rerun-if-env-changed=AIR_SETS");
+    println!("cargo:rerun-if-env-changed=ANTENNA");
     for name in [
         "LED_MODE",
         "LED_TYPE",
