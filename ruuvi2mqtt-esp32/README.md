@@ -61,7 +61,9 @@ Makefile variable:
 | ESP32-S3 | Xtensa | `esp32s3` |
 
 Each chip builds in its own target directory, `target/<chip>/`, unless
-`CARGO_TARGET_DIR` is set.
+`CARGO_TARGET_DIR` is set. esp-idf-sys doesn't rebuild ESP-IDF when its
+config in `Cargo.toml` changes, so `make build` and `make lint` clean its
+build then.
 
 ---
 
