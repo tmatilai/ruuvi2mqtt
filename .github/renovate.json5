@@ -35,7 +35,7 @@
       // The checker pins the same versions as the app
       matchFileNames: ['Cargo.toml', 'checker/Cargo.toml'],
       matchUpdateTypes: ['minor', 'patch'],
-      groupName: 'Linux crates (minor and patch)',
+      groupName: 'App crates (minor and patch)',
     },
     {
       matchManagers: ['cargo'],

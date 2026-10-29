@@ -30,9 +30,9 @@ The board is found as in the firmware: the only attached board is looked up
 in the firmware's `devices/devices.conf`, or `DEVICE=<name>` chooses one,
 and its `devices/<name>.mk` sets `CHIP` and the LED. `DEVICE=` skips the
 registry, and `ESPFLASH_PORT=<port>` chooses the port. `make boards` lists
-the boards. The boot log shows the address, for example
-`Advertising as C0:FF:EE:00:A1:12 (Ruuvi A112)`. Add it to the ruuvi2mqtt
-config with `model: air`.
+the boards. The boot log shows the address in a line like
+`Advertising as C0:FF:EE:00:A1:12 (Ruuvi A112): ...`. Add it to the
+ruuvi2mqtt config with `model: air`.
 
 Compile-time environment variables:
 

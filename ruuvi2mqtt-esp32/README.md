@@ -2,7 +2,7 @@
 
 ESP32 firmware that scans for Ruuvi BLE advertisements and publishes JSON
 readings over Wi-Fi to an MQTT broker. Topic and payload format matches the
-Linux `ruuvi2mqtt` app.
+`ruuvi2mqtt` app.
 
 By default, the firmware scans BLE all the time and stays connected to Wi-Fi
 and MQTT, for a board on mains power. A cycle is one scan of
@@ -11,7 +11,7 @@ tag heard in the cycle once, with its latest reading.
 
 On a battery, `BLE_SCAN_MODE=deep-sleep` saves energy with a scan-publish-sleep
 cycle. Each cycle scans BLE and connects Wi-Fi in parallel, publishes all
-unique readings over MQTT, then enters deep sleep (CPU, radios, and RAM
+unique readings over MQTT, then enters deep sleep (CPU, radios and main RAM
 powered off). On wake the chip reboots and reconnects. With the defaults (5s
 scan, 60s sleep) the active time is ~7s per ~67s cycle, reducing average
 current draw to roughly a tenth of always-on operation.
@@ -28,23 +28,18 @@ point at least 8 dB stronger. A scan takes about 5 s, and BLE hears little
 meanwhile. Without a stronger one, it scans again every 10 minutes while the
 link stays weak.
 
-Unlike the Linux app, the ESP32 does **not** subscribe to the readings for
-cross-gateway throttle coordination — each cycle simply publishes every sensor
-it heard during the scan window. When Linux instances hear the same tags and
-their `throttle` is below the ESP32's cycle (`BLE_SCAN_DURATION` when
-scanning continuously, otherwise `BLE_SLEEP_DURATION` plus the awake time),
-those tags get two messages per cycle.
-That is harmless. To avoid it, set the `throttle` above the cycle; the Linux
-instances then fill in only when the ESP32 misses a tag.
+Unlike the app, the firmware doesn't throttle: each cycle publishes
+every tag it heard. See [Multiple instances](../README.md#multiple-instances)
+for running it beside app instances.
 
 Each cycle also publishes [diagnostics](#diagnostics). Scanning
 continuously, the board also serves a [status page](#status-page) for
 finding its spot.
 
 This firmware does **not** publish Home Assistant MQTT discovery config.
-At least one instance of the full [`ruuvi2mqtt`](/) Linux app must
+At least one instance of the full [`ruuvi2mqtt`](../README.md) app must
 be running and connected to the same broker for HA to recognise the sensors.
-The ESP32 only publishes sensor readings; the Linux app advertises the device
+The ESP32 only publishes sensor readings; the app advertises the device
 definitions (names, units, entity types) and keeps them retained.
 
 ---
@@ -63,9 +58,7 @@ Makefile variable:
 | ESP32-S3 | Xtensa | `esp32s3` |
 
 Each chip builds in its own target directory, `target/<chip>/`, unless
-`CARGO_TARGET_DIR` is set. esp-idf-sys doesn't rebuild ESP-IDF when its
-config in `Cargo.toml` changes, so `make build` and `make lint` clean its
-build then.
+`CARGO_TARGET_DIR` is set.
 
 ---
 
@@ -89,7 +82,7 @@ All settings are baked in at compile-time via environment variables.
 
 ### Required
 
-| Variable | Linux YAML equivalent | Description |
+| Variable | App YAML equivalent | Description |
 |---|---|---|
 | `WIFI_SSID` | — | Wi-Fi SSID |
 | `WIFI_PASS` | — | Wi-Fi password |
@@ -97,14 +90,14 @@ All settings are baked in at compile-time via environment variables.
 
 ### Optional
 
-| Variable | Linux YAML equivalent | Default | Description |
+| Variable | App YAML equivalent | Default | Description |
 |---|---|---|---|
 | `WIFI_IP` | — | *(DHCP)* | Static IP address (e.g. `192.168.1.50`) |
 | `WIFI_GATEWAY` | — | — | Gateway (required when `WIFI_IP` is set) |
 | `WIFI_NETMASK` | — | `255.255.255.0` | Subnet mask for static IP |
 | `WIFI_DNS` | — | *gateway* | DNS server for static IP |
 | `WIFI_BAND` | — | *(both)* | Dual-band chips only (ESP32-C5): `2.4` or `5` GHz. On the C5, a full scan of 2.4 GHz takes about 2.5 s, of both bands about 13 s |
-| `DEVICE_HOSTNAME` | — | `ruuvi2mqtt-esp32` | Hostname (DHCP + default MQTT client ID) |
+| `DEVICE_HOSTNAME` | — | `ruuvi2mqtt-esp32` | Hostname for DHCP and mDNS, and the default MQTT client ID |
 | `MQTT_PORT` | `mqtt.port` | `1883` / `8883` | MQTT broker port (default depends on TLS) |
 | `MQTT_TLS` | `mqtt.tls` | `false` | Set to `true` to enable TLS (`mqtts://`) |
 | `MQTT_CA_FILE` | `mqtt.ca_file` | — | Path to a PEM CA cert, embedded at compile time |
@@ -114,7 +107,7 @@ All settings are baked in at compile-time via environment variables.
 | `MQTT_PASSWORD` | `mqtt.password` | *(anonymous)* | MQTT password |
 | `MQTT_BASE_TOPIC` | `mqtt.base_topic` | `ruuvi2mqtt` | Topic prefix |
 | `BLE_SCAN_MODE` | — | `continuous` | `continuous` scans all the time. `deep-sleep` scans while Wi-Fi connects, then deep sleeps |
-| `BLE_SCAN_DURATION` | — | `60` / `5` | BLE scan duration (seconds). Continuous: the cycle, `60`. Otherwise `5`: set it close to your Wi-Fi + MQTT connect time (see boot log), min 3s |
+| `BLE_SCAN_DURATION` | — | `60` / `5` | BLE scan duration (seconds). Continuous: the cycle, `60`. Otherwise `5`: set it close to your Wi-Fi + MQTT connect time (see boot log), but at least 3 s |
 | `BLE_SLEEP_DURATION` | — | `60` | Deep sleep between cycles (seconds). Continuous: the wait awake before a restart after a failure. A cycle timeout waits a cycle longer, and a cycle that succeeds meanwhile cancels the restart |
 | `USB_STAY_AWAKE` | — | `true` | `false` always deep sleeps. See [Build & flash](#build--flash) |
 | `ANTENNA` | — | *(unset)* | Seeed XIAO ESP32-C6 only, and needed there: `internal` or `external` antenna. See [Antenna](#antenna) |
@@ -123,7 +116,7 @@ All settings are baked in at compile-time via environment variables.
 | `LED_ACTIVE_LOW` | — | `false` | `true` for a `gpio` LED that lights when its pin is low |
 | `LED_GPIO` | — | — | LED pin number. Required with `LED_MODE` |
 | `LED_COLOR` | — | `000020` | WS2812 color as hex `RRGGBB`. Low values keep it dim |
-| `LOG_LEVEL` | — | `info` | Log level for app code (library code stays at info) |
+| `LOG_LEVEL` | — | `info` | Log level for the firmware's own code. Library code logs at `info` at most |
 
 These can be set in the environment, in `.envrc` (with direnv), or in
 per-device configuration files (see below).
@@ -148,9 +141,9 @@ room where a glow would bother.
 | Beetle ESP32 C6 Mini (DFRobot DFR1117) | `gpio` | `15` |
 | ESP32-C5-DevKitC-1 | `ws2812` | `27` |
 | ESP32-C6-DevKitC-1 | `ws2812` | `8` |
-| ESP32-CAM | `ws2812` | `33` |
+| ESP32-CAM (AI-Thinker) | `gpio`, `LED_ACTIVE_LOW=true` | `33` |
 | ESP32-S3 AI Camera (DFRobot DFR1154) | `gpio` | `3` |
-| Seeed XIAO-ESP32-C6 | `gpio`, `LED_ACTIVE_LOW=true` | `15` |
+| Seeed XIAO ESP32-C6 | `gpio`, `LED_ACTIVE_LOW=true` | `15` |
 
 #### Antenna
 
@@ -169,8 +162,8 @@ if `ANTENNA` is set for any chip but the ESP32-C6.
 
 ## Device configuration
 
-For a single board, set the required variables in the environment (e.g. in
-`.envrc` with direnv) and run `make flash`. No device registration is needed —
+For a single board, set the required variables in the environment and run
+`make flash`. No device registration is needed —
 auto-detection is only active when `devices/devices.conf` exists. To target a
 non-default chip:
 
@@ -207,10 +200,10 @@ its own port reports its MAC as the USB serial number. For a board behind a
 bridge, `make register` records the bridge's serial number. Registered
 boards are found without touching them. An unknown board behind a bridge is
 identified with `espflash board-info`, which resets it. That happens in
-`make boards`, and when looking for a board registered without the serial
-number. Run `make register` again to add it.
+`make boards` and in auto-detection, and when looking for a board registered
+without the serial number. Run `make register` again to add it.
 
-**Auto-detection:** when you run `make flash` (or `build`, `lint`,
+**Auto-detection:** when you run `make flash` (or `all`, `build`, `lint`,
 `monitor`, `log`) without `DEVICE`, the Makefile identifies the attached
 board and loads its `.mk` file. With several boards attached, it lists
 them and asks for `DEVICE`. A target that talks to the board finds its
@@ -275,11 +268,11 @@ The top says *Good*, *Fair* or *Poor spot* and lists what isn't good:
   The phone remembers them. A tag is graded by its mean RSSI over the last
   minute (good from −80 dBm, fair to −90 dBm), and by its reports a minute
   (good from 10, fair from 3). One not heard is poor. For the first 20 s
-  after boot, the rates are left out.
+  after boot, the rates are left out, and a tag not heard yet is fair.
 
 Without targets, only Wi-Fi and publishing count. Each tag shows its mean
 RSSI, the minute's range and its reports a minute. The names come from the
-Home Assistant discovery configs that the Linux app keeps retained on the
+Home Assistant discovery configs that the app keeps retained on the
 broker, so tags it doesn't know show their MAC.
 
 `/api/status` has the same as JSON, for scripts. `?tags=<mac>,<mac>` sets

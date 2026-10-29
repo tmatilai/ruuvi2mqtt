@@ -1,32 +1,32 @@
 # Ruuvi2MQTT
 
-Ruuvi2MQTT listens for [RuuviTag](https://ruuvi.com/ruuvitag/) sensor BLE events and sends MQTT messages, especially for [Home Assistant](https://www.home-assistant.io/) with [MQTT Discovery](https://www.home-assistant.io/docs/mqtt/discovery/).
+Ruuvi2MQTT listens for the BLE broadcasts of [RuuviTag](https://ruuvi.com/ruuvitag/) and [Ruuvi Air](https://ruuvi.com/air/) sensors and publishes their readings over MQTT, especially for [Home Assistant](https://www.home-assistant.io/) with [MQTT Discovery](https://www.home-assistant.io/docs/mqtt/discovery/).
 
-There are also many other projects for integrating RuuviTags to Home Assistant. The main reasons for this project are:
+It has two parts:
 
-- Possibility to run multiple bridges in case one receiver can't hear all the sensors (and/or for HA).
-- I wanted to have a hobby project to learn and use Rust.
+- The app, documented here. It also publishes the Home Assistant discovery configs.
+- The [ESP32 firmware](./ruuvi2mqtt-esp32/), which publishes the readings only.
 
-The second bullet means that the documentation, configuration, and code quality might not be top-notch. Improvements welcome!
+There are many other projects for integrating Ruuvi sensors to Home Assistant.
+This one runs several receivers side by side, for sensors that one receiver can't hear.
 
 ---
 
 ## Requirements
 
-The target platforms are Linux on amd64, arm64, and arm7 (Raspberry Pi). Because of [dbus](https://docs.rs/dbus/latest/dbus/) dependency, (cross) compiling and MUSL can get complicated. MacOS is supposed to work as well.
-
-For local development, `make setup` installs the tools for both the Linux app
-and the [ESP32 firmware](./ruuvi2mqtt-esp32/). Renovate keeps the pinned tool
-versions current, so re-run it after pulling.
+Release builds are for Linux on amd64, arm64 and armv7 (e.g. a Raspberry Pi), with BlueZ.
+It also runs on macOS, e.g. for development.
+macOS hides the sender's MAC address, so there the app only matches readings whose payload carries the full MAC, such as data format 5.
+Other platforms that [btleplug](https://github.com/deviceplug/btleplug) supports are untested.
 
 ---
 
 ## Usage
 
-Pre-build binaries and container images can be found in <https://github.com/tmatilai/ruuvi2mqtt>.
+Prebuilt binaries are on the [releases page](https://github.com/tmatilai/ruuvi2mqtt/releases), and container images at `ghcr.io/tmatilai/ruuvi2mqtt`.
 
 An example configuration file can be seen in [ruuvi2mqtt.yaml.example](./ruuvi2mqtt.yaml.example).
-Configuration file is by default searched from the working directory, but the path can be specified with `--config` CLI option or `CONFIG_FILE` environment variable.
+The app reads `ruuvi2mqtt.yaml` from the working directory, or the file given with `--config` or the `CONFIG_FILE` environment variable.
 `--check-config` validates the configuration file and exits, without connecting to MQTT or Bluetooth.
 
 Example command to run in a Docker container:
@@ -62,8 +62,17 @@ Each reading has a `publisher` field with the MQTT client ID of the instance tha
 Use the same `throttle` on every instance.
 Different values work, but the instance with the shortest one publishes every tag it hears.
 
-An ESP32 doesn't throttle: it publishes every tag it hears once per cycle (60 s with the defaults).
-With a `throttle` below that, the tags it hears get two messages per cycle, one from the ESP32 and one from a Linux instance.
+An ESP32 doesn't throttle, and doesn't subscribe to the readings: it publishes every tag it heard once per cycle.
+The cycle is `BLE_SCAN_DURATION` when scanning continuously (60 s by default), and `BLE_SLEEP_DURATION` plus the awake time in the deep-sleep mode.
+With a `throttle` below that, the tags it hears get two messages per cycle, one from the ESP32 and one from an app instance.
 That is harmless, though Home Assistant records a new state when `publisher` changes, as it is an attribute.
 To avoid it, set `throttle` above the ESP32's cycle.
-The ESP32 then publishes the tags it hears, and the Linux instances fill in when it misses one.
+The ESP32 then publishes the tags it hears, and the app instances fill in when it misses one.
+
+---
+
+## Development
+
+`make setup` installs the tools for the app and the ESP32 firmware.
+Renovate bumps the pinned versions, so re-run it after pulling.
+`make help` lists the other targets.

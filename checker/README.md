@@ -1,8 +1,9 @@
 # ruuvi2mqtt-checker
 
-Checks the Linux app and the ESP32 firmware on a test bed. The test bed
+Checks the ruuvi2mqtt app and the ESP32 firmware on a test bed. The test bed
 deploys a commit to a few instances and boards near real RuuviTags. They
-publish to a broker of their own.
+publish to a broker of their own. The checker lives in this repo because it
+must change when the payloads change.
 
 The checker subscribes to `#` on that broker for a while (`--duration`,
 default 1 hour). Then it checks that:
@@ -44,8 +45,6 @@ the share of cycles in which the board heard each expected tag.
 
 These figures don't fail the check yet, since good values are still
 unknown.
-
-It lives in this repo because it must change when the payloads change.
 
 ## Usage
 
