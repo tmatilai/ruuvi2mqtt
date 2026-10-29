@@ -299,7 +299,7 @@ the targets, with the MACs in the topic format.
   "publishing": { "cycles": 12, "failed": 0, "grade": "good" },
   "tags": [
     {
-      "mac": "f817624e4c0b", "name": "Bedroom", "target": true,
+      "mac": "aabbccddee01", "name": "Bedroom", "target": true,
       "reports_per_min": 38, "rssi": -86, "rssi_min": -93, "rssi_max": -81,
       "last_heard_s": 1, "grade": "fair"
     }
@@ -331,7 +331,7 @@ heard and when, so a missed tag can be traced to range or to the radio.
   "mqtt_ms": 2210,
   "cycle_ms": 5230,
   "tags": {
-    "f817624e4c0b": { "rssi": -74, "adverts": 2, "first_ms": 1210 }
+    "aabbccddee01": { "rssi": -74, "adverts": 2, "first_ms": 1210 }
   },
   "adverts_before_wifi": 1,
   "adverts_after_wifi": 1,

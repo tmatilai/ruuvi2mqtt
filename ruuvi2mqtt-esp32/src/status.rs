@@ -426,9 +426,9 @@ pub fn discovery_name(topic: &str, payload: &[u8]) -> Option<(Mac, Option<String
 mod tests {
     use super::*;
 
-    const BEDROOM: Mac = Mac([0xF8, 0x17, 0x62, 0x4E, 0x4C, 0x0B]);
-    const OFFICE: Mac = Mac([0xCB, 0x20, 0xF2, 0xCC, 0x4F, 0x7E]);
-    const STRANGER: Mac = Mac([0xD8, 0xE6, 0xC5, 0x10, 0x58, 0xD2]);
+    const BEDROOM: Mac = Mac([0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0x01]);
+    const OFFICE: Mac = Mac([0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0x02]);
+    const STRANGER: Mac = Mac([0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0x03]);
 
     fn board(uptime_ms: u64) -> Board<'static> {
         Board {
@@ -607,9 +607,9 @@ mod tests {
                 r#""problems":[{"grade":"poor","text":"Bedroom: 2 reports a minute"}],"#,
                 r#""wifi":{"rssi":-58,"channel":6,"drops":0,"grade":"good"},"#,
                 r#""publishing":{"cycles":12,"failed":0,"grade":"good"},"#,
-                r#""tags":[{"mac":"f817624e4c0b","name":"Bedroom","target":true,"reports_per_min":2,"#,
+                r#""tags":[{"mac":"aabbccddee01","name":"Bedroom","target":true,"reports_per_min":2,"#,
                 r#""rssi":-73,"rssi_min":-75,"rssi_max":-71,"last_heard_s":2,"grade":"poor"},"#,
-                r#"{"mac":"cb20f2cc4f7e","name":"Office","target":false,"reports_per_min":0,"#,
+                r#"{"mac":"aabbccddee02","name":"Office","target":false,"reports_per_min":0,"#,
                 r#""rssi":null,"rssi_min":null,"rssi_max":null,"last_heard_s":null,"grade":"poor"}]}"#
             )
         );
@@ -618,18 +618,18 @@ mod tests {
     #[test]
     fn parses_the_targets() {
         assert_eq!(
-            targets("/api/status?tags=f817624e4c0b,CB20F2CC4F7E,bad"),
+            targets("/api/status?tags=aabbccddee01,AABBCCDDEE02,bad"),
             [BEDROOM, OFFICE]
         );
-        assert_eq!(targets("/api/status?x=1&tags=f817624e4c0b"), [BEDROOM]);
+        assert_eq!(targets("/api/status?x=1&tags=aabbccddee01"), [BEDROOM]);
         assert_eq!(targets("/api/status"), []);
         assert_eq!(targets("/api/status?tags="), []);
     }
 
     #[test]
     fn reads_the_name_from_discovery() {
-        let topic = "homeassistant/sensor/ruuvi_f817624e4c0b/temperature/config";
-        let payload = br#"{"name":"Bedroom Temperature","device":{"name":"Bedroom","identifiers":["F8:17:62:4E:4C:0B"],"manufacturer":"Ruuvi"}}"#;
+        let topic = "homeassistant/sensor/ruuvi_aabbccddee01/temperature/config";
+        let payload = br#"{"name":"Bedroom Temperature","device":{"name":"Bedroom","identifiers":["AA:BB:CC:DD:EE:01"],"manufacturer":"Ruuvi"}}"#;
         assert_eq!(
             discovery_name(topic, payload),
             Some((BEDROOM, Some("Bedroom".into())))
@@ -638,7 +638,7 @@ mod tests {
         assert_eq!(discovery_name(topic, b"{}"), None);
         assert_eq!(
             discovery_name(
-                "homeassistant/sensor/ruuvi_f817624e4c0b/humidity/config",
+                "homeassistant/sensor/ruuvi_aabbccddee01/humidity/config",
                 payload
             ),
             None

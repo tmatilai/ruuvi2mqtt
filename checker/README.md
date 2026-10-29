@@ -56,7 +56,7 @@ printf '%s\n' "$PASSWORD" | target/release/ruuvi2mqtt-checker \
     --commit "$(git rev-parse HEAD)" \
     --instance ruuvi2mqtt_host1 --instance ruuvi2mqtt_host2 \
     --board ruuvi2mqtt-c6 \
-    --tag F8:17:62:4E:4C:0B --tag CB:20:F2:CC:4F:7E --duration 15m
+    --tag AA:BB:CC:DD:EE:01 --tag AA:BB:CC:DD:EE:02 --duration 15m
 ```
 
 The password is the first line of stdin.
