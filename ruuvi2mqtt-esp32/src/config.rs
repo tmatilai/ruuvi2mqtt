@@ -166,7 +166,8 @@ pub const BLE_SCAN_SEQUENTIAL: bool = konst::eq_str(BLE_SCAN_MODE, "sequential")
 
 /// Deep sleep duration (seconds) between scan-publish cycles. The chip fully
 /// powers off (CPU, RAM, radios) and reboots on wake. The continuous mode
-/// waits this long awake after a failure, then restarts.
+/// waits this long awake after a failure, then restarts. A cycle timeout
+/// waits a cycle longer, and a cycle that succeeds cancels the restart.
 pub const BLE_SLEEP_DURATION: i32 = match option_env_non_empty!("BLE_SLEEP_DURATION") {
     Some(v) => konst::result::unwrap!(i32::from_str_radix(v, 10)),
     None => 60,

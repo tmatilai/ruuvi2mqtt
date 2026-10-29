@@ -155,8 +155,9 @@ const BROWNOUT_SLEEP_SECS: u64 = 4 * SLEEP_SECS;
 /// connected to it, wait awake instead and restart, so the port stays up
 /// for flashing and monitoring. `esp_restart()` resets the CPU, not the port.
 ///
-/// Scanning continuously, only a failure gets here. The board is on mains
-/// power, so it waits awake, and the LED blinks.
+/// Scanning continuously, only a crash, a brownout or a failure to start
+/// gets here. The board is on mains power, so it waits awake, and the LED
+/// blinks.
 fn sleep(secs: u64) -> ! {
     if config::BLE_SCAN_CONTINUOUS || (config::USB_STAY_AWAKE && usb_host_connected()) {
         STAYING_AWAKE.store(true, Ordering::Relaxed);
@@ -209,21 +210,56 @@ fn extend_deadline() {
 }
 
 /// Start the cycle timeout, which deep sleeps once the deadline has passed.
+/// Scanning continuously, it restarts instead, unless a cycle succeeds first.
 fn start_cycle_timeout() -> anyhow::Result<()> {
     extend_deadline();
     thread::Builder::new()
         .stack_size(4096)
         .spawn(|| loop {
             thread::sleep(Duration::from_secs(1));
-            if uptime_secs() > DEADLINE_SECS.load(Ordering::Relaxed)
-                && !STAYING_AWAKE.load(Ordering::Relaxed)
-            {
+            if timed_out() && !STAYING_AWAKE.load(Ordering::Relaxed) {
                 error!("Cycle timed out after {CYCLE_TIMEOUT_SECS}s");
-                sleep(SLEEP_SECS);
+                if !config::BLE_SCAN_CONTINUOUS {
+                    sleep(SLEEP_SECS);
+                }
+                if !recovered() {
+                    info!("Restarting");
+                    unsafe { sys::esp_restart() }
+                }
             }
         })
         .context("Failed to spawn cycle timeout thread")?;
     Ok(())
+}
+
+/// A cycle that succeeds moves the deadline.
+fn timed_out() -> bool {
+    uptime_secs() > DEADLINE_SECS.load(Ordering::Relaxed)
+}
+
+/// After a cycle timeout, how long a cycle has to succeed: the sleep for
+/// Wi-Fi and MQTT to reconnect, then the scan and the publish.
+const RECOVERY_SECS: u64 =
+    SLEEP_SECS + SCAN_SECS + MQTT_CONNECT_TIMEOUT.as_secs() + MQTT_ACK_TIMEOUT.as_secs();
+
+/// Scanning continuously, Wi-Fi and MQTT reconnect by themselves, so give a
+/// cycle time to succeed before a restart. Only a cycle that succeeds
+/// cancels it, so that other failures, such as a broken BLE stack, still
+/// restart.
+fn recovered() -> bool {
+    led::set_failed(true);
+    info!("Restarting in {RECOVERY_SECS}s unless a cycle succeeds");
+    let until = Instant::now() + Duration::from_secs(RECOVERY_SECS);
+    while timed_out() {
+        if Instant::now() >= until {
+            return false;
+        }
+        thread::sleep(Duration::from_secs(1));
+    }
+    info!("A cycle succeeded, not restarting");
+    // The scan loop may have cleared it before this set it.
+    led::set_failed(false);
+    true
 }
 
 /// One scan-connect-publish cycle, before deep sleep.
