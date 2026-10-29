@@ -120,7 +120,7 @@ All settings are baked in at compile-time via environment variables.
 | `MQTT_BASE_TOPIC` | `mqtt.base_topic` | `ruuvi2mqtt` | Topic prefix |
 | `BLE_SCAN_MODE` | — | `continuous` | `continuous` scans all the time. `parallel` scans while Wi-Fi connects, then deep sleeps. `sequential` scans first, then starts Wi-Fi, and deep sleeps |
 | `BLE_SCAN_DURATION` | — | `60` / `5` | BLE scan duration (seconds). Continuous: the cycle, `60`. Otherwise `5`: set it close to your Wi-Fi + MQTT connect time (see boot log), min 3s |
-| `BLE_SLEEP_DURATION` | — | `60` | Deep sleep between cycles (seconds). Continuous: the wait awake before a restart after a failure |
+| `BLE_SLEEP_DURATION` | — | `60` | Deep sleep between cycles (seconds). Continuous: the wait awake before a restart after a failure. A cycle timeout waits a cycle longer, and a cycle that succeeds meanwhile cancels the restart |
 | `USB_STAY_AWAKE` | — | `true` | `false` always deep sleeps. See [Build & flash](#build--flash) |
 | `ANTENNA` | — | *(unset)* | Seeed XIAO ESP32-C6 only, and needed there: `internal` or `external` antenna. See [Antenna](#antenna) |
 | `LED_MODE` | — | `on` with `LED_GPIO` | `on`, `errors` or `off`. Without `LED_GPIO`, the LED is left alone. See [LED](#led) |
