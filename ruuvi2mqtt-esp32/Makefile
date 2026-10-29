@@ -138,8 +138,23 @@ setup: ## Install the pinned tools and Xtensa toolchain
 .PHONY: all
 all: lint test build ## Lint, test, and build
 
+# esp-idf-sys doesn't rebuild ESP-IDF when its config in Cargo.toml changes,
+# so a new component would be missing.
+ESP_IDF_SYS_STAMP = $(CARGO_TARGET_DIR)/$(TARGET)/esp-idf-sys.toml
+
+.PHONY: esp-idf-sys-config
+esp-idf-sys-config:
+	@mkdir -p $(dir $(ESP_IDF_SYS_STAMP))
+	@awk '/^\[/ { s = /^\[+package\.metadata\.esp-idf-sys/ } s && !/^[ \t]*(#|$$)/' Cargo.toml >$(ESP_IDF_SYS_STAMP).new
+	@if ! cmp -s $(ESP_IDF_SYS_STAMP).new $(ESP_IDF_SYS_STAMP); then \
+	  echo "New esp-idf-sys config in Cargo.toml: cleaning its build"; \
+	  $(CARGO) clean -p esp-idf-sys --target $(TARGET) && \
+	  $(CARGO) clean -p esp-idf-sys --target $(TARGET) --release; \
+	fi
+	@mv $(ESP_IDF_SYS_STAMP).new $(ESP_IDF_SYS_STAMP)
+
 .PHONY: lint
-lint: ## Format and lint
+lint: esp-idf-sys-config ## Format and lint
 	$(CARGO) fmt
 	$(CARGO) clippy --target $(TARGET) -- -D clippy::all -W clippy::pedantic
 	$(HOST_CARGO) clippy $(HOST_TARGET) --lib --tests -- -D clippy::all -W clippy::pedantic
@@ -149,7 +164,7 @@ test: ## Run host-side unit tests (pure-Rust modules only)
 	$(HOST_CARGO) test $(HOST_TARGET) --lib
 
 .PHONY: build
-build: ## Build the firmware (release)
+build: esp-idf-sys-config ## Build the firmware (release)
 	$(CARGO) build --release --target $(TARGET)
 
 .PHONY: flash
