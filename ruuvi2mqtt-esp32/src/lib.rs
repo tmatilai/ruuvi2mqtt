@@ -6,3 +6,4 @@ pub mod led_pattern;
 pub mod mac;
 pub mod payload;
 pub mod scan;
+pub mod status;

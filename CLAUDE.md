@@ -36,8 +36,8 @@ deep sleep. Configuration is compile-time via environment variables, see
 
 - `src/main.rs`: the wake cycle and logger setup.
 - `src/config.rs`: compile-time config from env vars (konst).
-- `src/wifi.rs`, `src/mqtt.rs`, `src/ble.rs`, `src/led.rs`: one esp-idf-svc subsystem each; `ble.rs` uses esp32-nimble. `src/system.rs` reads values for the diagnostics. `src/antenna.rs` drives the XIAO ESP32-C6's RF switch.
-- `src/lib.rs`: the pure-Rust modules, `mac.rs` (MAC addresses), `payload.rs` (the reading's JSON), `scan.rs` (BLE reception statistics), `diagnostics.rs` (the diagnostics JSON) and `led_pattern.rs` (the LED's breath and blinks). esp-idf-svc and esp32-nimble are espidf-only dependencies, so the lib's unit tests run on the host with stable Rust (`--target host-tuple`). The bin has `test = false`.
+- `src/wifi.rs`, `src/mqtt.rs`, `src/ble.rs`, `src/led.rs`: one esp-idf-svc subsystem each; `ble.rs` uses esp32-nimble. `src/system.rs` reads values for the diagnostics. `src/antenna.rs` drives the XIAO ESP32-C6's RF switch. `src/web.rs` serves the status page (`src/status.html`) and mDNS, scanning continuously.
+- `src/lib.rs`: the pure-Rust modules, `mac.rs` (MAC addresses), `payload.rs` (the reading's JSON), `scan.rs` (BLE reception statistics), `diagnostics.rs` (the diagnostics JSON), `status.rs` (the status page's report and grades) and `led_pattern.rs` (the LED's breath and blinks). esp-idf-svc and esp32-nimble are espidf-only dependencies, so the lib's unit tests run on the host with stable Rust (`--target host-tuple`). The bin has `test = false`.
 - `build.rs`: embuild glue for ESP-IDF.
 - `boards.sh`: finds the attached boards and their serial ports for the Makefile, from macOS `ioreg` or Linux udev.
 

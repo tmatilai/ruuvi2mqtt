@@ -90,6 +90,9 @@ pub fn scan(start: Instant) -> anyhow::Result<Scan> {
                     let addr = device.addr().as_le_bytes();
                     let mac = Mac([addr[5], addr[4], addr[3], addr[2], addr[1], addr[0]]);
                     state.stats.ruuvi(mac, device.rssi(), at_ms, wifi_connected);
+                    if config::BLE_SCAN_CONTINUOUS {
+                        crate::web::record(mac, device.rssi());
+                    }
 
                     // Parse with the ruuvi-sensor-protocol crate.
                     let format = mfr_data.payload.first().copied()?;

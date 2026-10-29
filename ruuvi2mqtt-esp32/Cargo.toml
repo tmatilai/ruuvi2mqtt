@@ -38,3 +38,6 @@ embuild = { version = "=0.33.7", features = ["espidf"] }
 # ESP-IDF 6.0 moved the MQTT client out of the core into a managed component.
 [[package.metadata.esp-idf-sys.extra_components]]
 remote_component = { name = "espressif/mqtt", version = "1.*" }
+# For the status page's <hostname>.local
+[[package.metadata.esp-idf-sys.extra_components]]
+remote_component = { name = "espressif/mdns", version = "1.*" }

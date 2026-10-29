@@ -26,7 +26,7 @@ in NVS flash after the first connection. On subsequent boots it connects
 directly without scanning all channels, saving several seconds per cycle. A
 static IP can also be configured to skip DHCP.
 
-Unlike the Linux app, the ESP32 does **not** subscribe to MQTT for
+Unlike the Linux app, the ESP32 does **not** subscribe to the readings for
 cross-gateway throttle coordination — each cycle simply publishes every sensor
 it heard during the scan window. When Linux instances hear the same tags and
 their `throttle` is below the ESP32's cycle (`BLE_SCAN_DURATION` when
@@ -35,7 +35,9 @@ those tags get two messages per cycle.
 That is harmless. To avoid it, set the `throttle` above the cycle; the Linux
 instances then fill in only when the ESP32 misses a tag.
 
-Each cycle also publishes [diagnostics](#diagnostics).
+Each cycle also publishes [diagnostics](#diagnostics). Scanning
+continuously, the board also serves a [status page](#status-page) for
+finding its spot.
 
 This firmware does **not** publish Home Assistant MQTT discovery config.
 At least one instance of the full [`ruuvi2mqtt`](/) Linux app must
@@ -251,6 +253,56 @@ All available targets:
 make help
 ```
 
+## Status page
+
+Scanning continuously, the board serves a page on
+`http://{DEVICE_HOSTNAME}.local/` (mDNS), or on its IP address. It answers
+one question: is this a good spot for the board? Put the board there, open
+the page on a phone, and it updates every 2 s. When the board stops
+answering, the top says so after 6 s.
+
+The top says *Good*, *Fair* or *Poor spot* and lists what isn't good:
+
+- **Wi-Fi:** the access point's RSSI. Good from −67 dBm, fair to −75 dBm,
+  poor below that. A drop since boot makes it fair at best.
+- **Publishing:** fair until the first cycle, poor while the last cycle
+  failed, and fair while any cycle since boot did.
+- **The target tags:** tap a tag to make it one that the spot should cover.
+  The phone remembers them. A tag is graded by its mean RSSI over the last
+  minute (good from −80 dBm, fair to −90 dBm), and by its reports a minute
+  (good from 10, fair from 3). One not heard is poor. For the first 20 s
+  after boot, the rates are left out.
+
+Without targets, only Wi-Fi and publishing count. Each tag shows its mean
+RSSI, the minute's range and its reports a minute. The names come from the
+Home Assistant discovery configs that the Linux app keeps retained on the
+broker, so tags it doesn't know show their MAC.
+
+`/api/status` has the same as JSON, for scripts. `?tags=<mac>,<mac>` sets
+the targets, with the MACs in the topic format.
+
+```json
+{
+  "hostname": "ruuvi2mqtt-kitchen",
+  "firmware": "ruuvi2mqtt-esp32 1.6.1-dev (4518da5)",
+  "antenna": "internal",
+  "uptime_s": 754,
+  "window_s": 60,
+  "measuring": false,
+  "verdict": "fair",
+  "problems": [{ "grade": "fair", "text": "Bedroom: -86 dBm" }],
+  "wifi": { "rssi": -61, "channel": 6, "drops": 0, "grade": "good" },
+  "publishing": { "cycles": 12, "failed": 0, "grade": "good" },
+  "tags": [
+    {
+      "mac": "f817624e4c0b", "name": "Bedroom", "target": true,
+      "reports_per_min": 38, "rssi": -86, "rssi_min": -93, "rssi_max": -81,
+      "last_heard_s": 1, "grade": "fair"
+    }
+  ]
+}
+```
+
 ## Diagnostics
 
 Each cycle ends with a message on
@@ -315,5 +367,10 @@ ESP-IDF [flash encryption][flash-enc] mitigates this, and can be enabled with
 `CONFIG_SECURE_FLASH_ENC_ENABLED` in `sdkconfig.defaults`. It is off by design:
 the first boot with it enabled burns eFuses irreversibly and changes how the
 board is flashed. Read the Espressif documentation before enabling it.
+
+The status page has no login. It only reads, and shows nothing secret,
+but anyone on the network can open it. The board takes an IPv6 address
+from the router too, so keep the firewall blocking incoming connections,
+as it does by default.
 
 [flash-enc]: https://docs.espressif.com/projects/esp-idf/en/stable/esp32/security/flash-encryption.html
