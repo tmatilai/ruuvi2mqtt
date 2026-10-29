@@ -103,7 +103,9 @@ fn report(targets: &[Mac]) -> anyhow::Result<String> {
         antenna: config::ANTENNA,
         uptime_ms: uptime_ms(),
         // The request came over Wi-Fi.
-        wifi: system::ap_info().context("Wi-Fi is down")?,
+        wifi: system::ap_record()
+            .map(|ap| (ap.rssi, ap.primary))
+            .context("Wi-Fi is down")?,
         wifi_drops: WIFI_DROPS.load(Ordering::Relaxed),
         cycles: CYCLES.load(Ordering::Relaxed),
         cycles_failed: CYCLES_FAILED.load(Ordering::Relaxed),

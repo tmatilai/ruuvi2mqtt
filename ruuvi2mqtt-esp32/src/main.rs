@@ -11,6 +11,7 @@ use esp_idf_svc::{
 };
 use log::{error, info, warn};
 use ruuvi2mqtt_esp32::diagnostics::{CacheUse, Diagnostics, Settings};
+use ruuvi2mqtt_esp32::mac::Mac;
 
 mod antenna;
 mod ble;
@@ -379,7 +380,7 @@ fn publish(
         }
     }
 
-    let ap_info = system::ap_info();
+    let ap = system::ap_record();
     let diag = Diagnostics {
         firmware: concat!(env!("CARGO_PKG_NAME"), " ", env!("BUILD_VERSION")),
         client_id: config::MQTT_CLIENT_ID,
@@ -390,8 +391,9 @@ fn publish(
             scan_duration: config::BLE_SCAN_DURATION.unsigned_abs(),
             antenna: config::ANTENNA,
         },
-        wifi_rssi: ap_info.map(|(rssi, _)| rssi),
-        wifi_channel: ap_info.map(|(_, channel)| channel),
+        wifi_rssi: ap.map(|ap| ap.rssi),
+        wifi_channel: ap.map(|ap| ap.primary),
+        wifi_bssid: ap.map(|ap| Mac::from(ap.bssid)),
         wifi_cache: cycle.wifi_cache,
         free_heap: system::free_heap(),
         scan_start_ms: scan.started_ms,

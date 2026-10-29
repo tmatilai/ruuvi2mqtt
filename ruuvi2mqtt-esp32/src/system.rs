@@ -4,12 +4,12 @@ use std::ffi::CStr;
 
 use esp_idf_svc::sys;
 
-/// The connected access point's RSSI and channel.
-pub fn ap_info() -> Option<(i8, u8)> {
+/// The connected access point.
+pub fn ap_record() -> Option<sys::wifi_ap_record_t> {
     unsafe {
         let mut ap_info: sys::wifi_ap_record_t = std::mem::zeroed();
         if sys::esp_wifi_sta_get_ap_info(&raw mut ap_info) == sys::ESP_OK {
-            Some((ap_info.rssi, ap_info.primary))
+            Some(ap_info)
         } else {
             None
         }

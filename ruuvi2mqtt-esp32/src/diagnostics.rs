@@ -1,5 +1,6 @@
 use serde::Serialize;
 
+use crate::mac::Mac;
 use crate::scan::ScanStats;
 
 /// The message on `<base topic>/diagnostics/<hostname>`, published every
@@ -20,6 +21,8 @@ pub struct Diagnostics<'a> {
     /// The access point's signal, in dBm.
     pub wifi_rssi: Option<i8>,
     pub wifi_channel: Option<u8>,
+    /// Which access point, as roaming may change it.
+    pub wifi_bssid: Option<Mac>,
     pub wifi_cache: CacheUse,
     pub free_heap: u32,
     pub scan_start_ms: u32,
@@ -73,7 +76,6 @@ pub enum CacheUse {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::mac::Mac;
 
     const TAG: Mac = Mac([0xF8, 0x17, 0x62, 0x4E, 0x4C, 0x0B]);
 
@@ -90,6 +92,7 @@ mod tests {
             },
             wifi_rssi: Some(-61),
             wifi_channel: Some(6),
+            wifi_bssid: Some(Mac([0x02, 0x11, 0x22, 0x33, 0x44, 0x55])),
             wifi_cache: CacheUse::Hit,
             free_heap: 151_000,
             scan_start_ms: 180,
@@ -113,7 +116,7 @@ mod tests {
             concat!(
                 r#"{"firmware":"ruuvi2mqtt-esp32 1.5.2-dev (c43f162)","client_id":"esp32-test","#,
                 r#""chip":"esp32c6","cycle":42,"settings":{"scan_mode":"parallel","scan_duration":5},"#,
-                r#""wifi_rssi":-61,"wifi_channel":6,"#,
+                r#""wifi_rssi":-61,"wifi_channel":6,"wifi_bssid":"021122334455","#,
                 r#""wifi_cache":"hit","free_heap":151000,"scan_start_ms":180,"scan_end_ms":5190,"#,
                 r#""wifi_ms":1450,"mqtt_ms":2210,"cycle_ms":5230,"#,
                 r#""tags":{"f817624e4c0b":{"rssi":-74,"adverts":2,"first_ms":1210}},"#,
@@ -133,6 +136,7 @@ mod tests {
             },
             wifi_rssi: None,
             wifi_channel: None,
+            wifi_bssid: None,
             wifi_cache: CacheUse::Stale,
             error: Some("BLE scan thread panicked".into()),
             ..diagnostics(ScanStats::default())
@@ -141,7 +145,9 @@ mod tests {
         assert!(json.contains(
             r#""settings":{"scan_mode":"sequential","scan_duration":8,"antenna":"external"},"#
         ));
-        assert!(json.contains(r#""wifi_rssi":null,"wifi_channel":null,"wifi_cache":"stale","#));
+        assert!(json.contains(
+            r#""wifi_rssi":null,"wifi_channel":null,"wifi_bssid":null,"wifi_cache":"stale","#
+        ));
         assert!(json.contains(r#""tags":{},"#));
         assert!(json.ends_with(r#","error":"BLE scan thread panicked"}"#));
     }

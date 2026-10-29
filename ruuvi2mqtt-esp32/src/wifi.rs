@@ -12,13 +12,14 @@ use esp_idf_svc::{
 use log::info;
 use ruuvi2mqtt_esp32::diagnostics::CacheUse;
 use ruuvi2mqtt_esp32::mac::Mac;
+use ruuvi2mqtt_esp32::roam::{self, Decision};
 use std::ffi::CString;
-use std::sync::atomic::{AtomicU16, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::atomic::{AtomicBool, AtomicU16, Ordering};
+use std::sync::{mpsc, Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
 
-use crate::{ble, config, led};
+use crate::{ble, config, led, system};
 
 /// Connect to Wi-Fi and return the `BlockingWifi` guard, and how the NVS
 /// cache was used.
@@ -141,12 +142,13 @@ pub fn connected_since() -> Option<Instant> {
     *CONNECTED_SINCE.lock().unwrap()
 }
 
-/// Reconnect whenever Wi-Fi drops, for the continuous mode. Call after
-/// [`connect`], and keep the subscription: dropping it stops the reconnects.
+/// Reconnect whenever Wi-Fi drops, and roam, for the continuous mode. Call
+/// after [`connect`], and keep the subscription: dropping it stops both.
 ///
-/// The driver keeps the cached BSSID, so after its access point is gone, the
-/// board keeps trying that one. The cycle timeout restarts the board then,
-/// and the full scan finds another.
+/// After a drop, the first attempt retries the access point the board was
+/// on, which is fast. The next one picks the strongest, as that one may be
+/// gone. A weak signal starts a scan for a stronger one
+/// ([`scan_for_stronger`]).
 pub fn keep_connected(
     sysloop: &EspSystemEventLoop,
 ) -> anyhow::Result<EspSubscription<'static, System>> {
@@ -154,29 +156,96 @@ pub fn keep_connected(
     ble::set_wifi_connected(true);
     led::set_wifi_down(false);
     enable_ipv6();
-    let subscription = sysloop.subscribe::<WifiEvent, _>(|event| match event {
-        WifiEvent::StaConnected(_) => {
-            info!("Wi-Fi reconnected");
-            *CONNECTED_SINCE.lock().unwrap() = Some(Instant::now());
-            ble::set_wifi_connected(true);
-            led::set_wifi_down(false);
-            enable_ipv6();
-        }
-        WifiEvent::StaDisconnected(d) => {
-            // Each failed attempt ends with another disconnect, so log only
-            // the first.
-            if CONNECTED_SINCE.lock().unwrap().take().is_some() {
-                log::warn!("Wi-Fi disconnected, reason {}", d.reason());
-                crate::web::wifi_dropped();
+
+    // The event loop's task has a small stack, and a scan blocks.
+    let (roam_tx, roam_rx) = mpsc::channel();
+    thread::Builder::new().stack_size(4096).spawn(move || {
+        // While the link is weak without a stronger access point.
+        let mut rescan_at: Option<Instant> = None;
+        loop {
+            let event = match rescan_at {
+                Some(at) => {
+                    match roam_rx.recv_timeout(at.saturating_duration_since(Instant::now())) {
+                        Ok(event) => event,
+                        Err(mpsc::RecvTimeoutError::Timeout) => Roam::WeakSignal,
+                        Err(mpsc::RecvTimeoutError::Disconnected) => break,
+                    }
+                }
+                None => match roam_rx.recv() {
+                    Ok(event) => event,
+                    Err(mpsc::RecvError) => break,
+                },
+            };
+            match event {
+                Roam::Connected => {
+                    rescan_at = None;
+                    // The driver falls back to a weak access point when the
+                    // strongest refuses. Don't pin the next attempt, or the
+                    // next boot, to it.
+                    if let Some(ap) = system::ap_record().filter(|ap| ap.rssi >= roam::THRESHOLD) {
+                        if let Err(e) = pin(ap.bssid, ap.primary) {
+                            log::warn!("Could not pin the access point: {e}");
+                        }
+                        update_wifi_cache(load_wifi_cache().as_ref());
+                    }
+                    set_rssi_threshold(roam::THRESHOLD);
+                }
+                Roam::WeakSignal => {
+                    let still_weak = match scan_for_stronger() {
+                        Ok(still_weak) => still_weak,
+                        Err(e) => {
+                            log::warn!("Roaming failed: {e:#}");
+                            true
+                        }
+                    };
+                    rescan_at = still_weak.then(|| Instant::now() + roam::RESCAN);
+                }
             }
-            ble::set_wifi_connected(false);
-            led::set_wifi_down(true);
-            if let Err(e) = sys::esp!(unsafe { sys::esp_wifi_connect() }) {
-                log::warn!("Wi-Fi reconnect failed: {e}");
-            }
         }
-        _ => {}
     })?;
+
+    let subscription = sysloop.subscribe::<WifiEvent, _>({
+        let roam_tx = roam_tx.clone();
+        move |event| match event {
+            WifiEvent::StaConnected(_) => {
+                info!("Wi-Fi reconnected");
+                *CONNECTED_SINCE.lock().unwrap() = Some(Instant::now());
+                ble::set_wifi_connected(true);
+                led::set_wifi_down(false);
+                enable_ipv6();
+                let _ = roam_tx.send(Roam::Connected);
+            }
+            WifiEvent::StaDisconnected(d) => {
+                // Each failed attempt ends with another disconnect. The first
+                // one is a drop, unless the board left on purpose.
+                if CONNECTED_SINCE.lock().unwrap().take().is_some() {
+                    if !ROAMING.swap(false, Ordering::Relaxed) {
+                        // The station leaves itself only when Wi-Fi stops,
+                        // for a restart.
+                        if u32::from(d.reason()) == sys::wifi_err_reason_t_WIFI_REASON_ASSOC_LEAVE {
+                            return;
+                        }
+                        log::warn!("Wi-Fi disconnected, reason {}", d.reason());
+                        crate::web::wifi_dropped();
+                    }
+                } else if let Err(e) = unpin() {
+                    log::warn!("Could not unpin the access point: {e}");
+                }
+                ble::set_wifi_connected(false);
+                led::set_wifi_down(true);
+                if let Err(e) = sys::esp!(unsafe { sys::esp_wifi_connect() }) {
+                    log::warn!("Wi-Fi reconnect failed: {e}");
+                }
+            }
+            WifiEvent::StaBssRssiLow => {
+                let _ = roam_tx.send(Roam::WeakSignal);
+            }
+            _ => {}
+        }
+    })?;
+    // Pin and arm the threshold as after a reconnect. A weak link raises
+    // the event at once, so subscribe first.
+    let _ = roam_tx.send(Roam::Connected);
     Ok(subscription)
 }
 
@@ -188,6 +257,153 @@ fn enable_ipv6() {
     let netif = unsafe { sys::esp_netif_get_handle_from_ifkey(c"WIFI_STA_DEF".as_ptr()) };
     if let Err(e) = sys::esp!(unsafe { sys::esp_netif_create_ip6_linklocal(netif) }) {
         log::warn!("Could not enable IPv6: {e}");
+    }
+}
+
+/// The events for the roaming thread of [`keep_connected`].
+enum Roam {
+    Connected,
+    WeakSignal,
+}
+
+/// Set while the board leaves an access point on purpose, so that the
+/// disconnect doesn't count as a drop.
+static ROAMING: AtomicBool = AtomicBool::new(false);
+
+/// Raise `StaBssRssiLow` once the signal falls below `rssi`.
+fn set_rssi_threshold(rssi: i8) {
+    if let Err(e) = sys::esp!(unsafe { sys::esp_wifi_set_rssi_threshold(rssi.into()) }) {
+        log::warn!("Could not set the RSSI threshold: {e}");
+    }
+}
+
+/// Let the next connect go straight to this access point. The config goes
+/// to NVS flash, so it writes only a change.
+fn pin(bssid: [u8; 6], channel: u8) -> Result<(), sys::EspError> {
+    unsafe {
+        let mut conf: sys::wifi_config_t = std::mem::zeroed();
+        sys::esp!(sys::esp_wifi_get_config(
+            sys::wifi_interface_t_WIFI_IF_STA,
+            &raw mut conf
+        ))?;
+        let sta = &mut conf.sta;
+        if sta.bssid_set
+            && sta.bssid == bssid
+            && sta.channel == channel
+            && sta.scan_method == sys::wifi_scan_method_t_WIFI_FAST_SCAN
+        {
+            return Ok(());
+        }
+        sta.bssid_set = true;
+        sta.bssid = bssid;
+        sta.channel = channel;
+        sta.scan_method = sys::wifi_scan_method_t_WIFI_FAST_SCAN;
+        sys::esp!(sys::esp_wifi_set_config(
+            sys::wifi_interface_t_WIFI_IF_STA,
+            &raw mut conf
+        ))
+    }
+}
+
+/// Let the next connect pick the strongest access point of the network,
+/// instead of the pinned one. See [`pin`].
+fn unpin() -> Result<(), sys::EspError> {
+    unsafe {
+        let mut conf: sys::wifi_config_t = std::mem::zeroed();
+        sys::esp!(sys::esp_wifi_get_config(
+            sys::wifi_interface_t_WIFI_IF_STA,
+            &raw mut conf
+        ))?;
+        let sta = &mut conf.sta;
+        if !sta.bssid_set
+            && sta.channel == 0
+            && sta.scan_method == sys::wifi_scan_method_t_WIFI_ALL_CHANNEL_SCAN
+            && sta.sort_method == sys::wifi_sort_method_t_WIFI_CONNECT_AP_BY_SIGNAL
+        {
+            return Ok(());
+        }
+        sta.bssid_set = false;
+        sta.channel = 0;
+        sta.scan_method = sys::wifi_scan_method_t_WIFI_ALL_CHANNEL_SCAN;
+        sta.sort_method = sys::wifi_sort_method_t_WIFI_CONNECT_AP_BY_SIGNAL;
+        sys::esp!(sys::esp_wifi_set_config(
+            sys::wifi_interface_t_WIFI_IF_STA,
+            &raw mut conf
+        ))
+    }
+}
+
+/// How many access points of the network a scan keeps.
+const MAX_SCANNED: u16 = 16;
+
+/// Scan the network's access points, and leave for a clearly stronger one.
+/// Returns whether the link stays weak without one, so that a later scan
+/// looks again.
+fn scan_for_stronger() -> anyhow::Result<bool> {
+    let Some(ap) = system::ap_record() else {
+        return Ok(false);
+    };
+    let current = Mac::from(ap.bssid);
+
+    let ssid = CString::new(config::WIFI_SSID)?;
+    let scanned = unsafe {
+        let mut scan: sys::wifi_scan_config_t = std::mem::zeroed();
+        scan.ssid = ssid.as_ptr().cast_mut().cast();
+        // Blocks this thread for about 5 s, and BLE hears little meanwhile.
+        sys::esp!(sys::esp_wifi_scan_start(&raw const scan, true))?;
+        let mut count = MAX_SCANNED;
+        let mut records: Vec<sys::wifi_ap_record_t> =
+            vec![std::mem::zeroed(); usize::from(MAX_SCANNED)];
+        let read = sys::esp!(sys::esp_wifi_scan_get_ap_records(
+            &raw mut count,
+            records.as_mut_ptr()
+        ));
+        if read.is_err() {
+            // Reading the records is what frees them.
+            sys::esp_wifi_clear_ap_list();
+        }
+        read?;
+        records.truncate(usize::from(count));
+        records
+            .iter()
+            .map(|r| roam::Ap {
+                bssid: Mac::from(r.bssid),
+                channel: r.primary,
+                rssi: r.rssi,
+            })
+            .collect::<Vec<_>>()
+    };
+
+    match roam::decide(current, ap.rssi, &scanned) {
+        Decision::Switch(to) => {
+            info!(
+                "Roaming from {current} ({} dBm) to {} ({} dBm)",
+                ap.rssi, to.bssid, to.rssi
+            );
+            // The reconnect in `keep_connected` goes straight to it.
+            pin(to.bssid.0, to.channel)?;
+            ROAMING.store(true, Ordering::Relaxed);
+            if let Err(e) = sys::esp!(unsafe { sys::esp_wifi_disconnect() }) {
+                ROAMING.store(false, Ordering::Relaxed);
+                return Err(e.into());
+            }
+            Ok(false)
+        }
+        Decision::Stay { best } => {
+            match best {
+                Some(best) => info!(
+                    "No access point clearly stronger than {current} ({} dBm), the best other at {best} dBm",
+                    ap.rssi
+                ),
+                None => info!("No other access point than {current} ({} dBm)", ap.rssi),
+            }
+            // The signal may have recovered since the event.
+            if ap.rssi >= roam::THRESHOLD {
+                set_rssi_threshold(roam::THRESHOLD);
+                return Ok(false);
+            }
+            Ok(true)
+        }
     }
 }
 
