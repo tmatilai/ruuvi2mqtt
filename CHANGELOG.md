@@ -27,6 +27,7 @@
 
 - A Seeed XIAO ESP32-C6 needs `ANTENNA`: without it, the RF switch gets no power and the board hears little.
 - Fall back to a full Wi-Fi scan as soon as the cached access point fails, instead of after 15 seconds. The scan could run out of the cycle's time.
+- Fix the boot loop of a firmware built with `MQTT_CA_FILE`. esp-idf-svc panicked at the first MQTT connection, because the embedded certificate didn't end with a NUL byte.
 
 ## 1.6.0 / 2026-10-14
 
