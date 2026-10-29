@@ -20,9 +20,14 @@ fn main() {
     if let Ok(ca_path) = std::env::var("MQTT_CA_FILE") {
         let out_dir = PathBuf::from(std::env::var("OUT_DIR").unwrap());
         let dest = out_dir.join("mqtt_ca.pem");
-        std::fs::copy(&ca_path, &dest).unwrap_or_else(|e| {
-            panic!("Failed to copy MQTT_CA_FILE ({ca_path}): {e}");
+        let mut pem = std::fs::read(&ca_path).unwrap_or_else(|e| {
+            panic!("Failed to read MQTT_CA_FILE ({ca_path}): {e}");
         });
+        // esp-idf-svc wants the PEM NUL-terminated.
+        if pem.last() != Some(&0) {
+            pem.push(0);
+        }
+        std::fs::write(&dest, pem).unwrap();
         println!("cargo:rerun-if-changed={ca_path}");
         println!("cargo:rustc-env=MQTT_CA_PEM_PATH={}", dest.display());
         println!("cargo:rustc-cfg=mqtt_ca_file");
