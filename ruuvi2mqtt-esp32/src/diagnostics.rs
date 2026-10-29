@@ -27,7 +27,7 @@ pub struct Diagnostics<'a> {
     pub free_heap: u32,
     pub scan_start_ms: u32,
     pub scan_end_ms: u32,
-    /// When Wi-Fi connected.
+    /// When Wi-Fi was up.
     pub wifi_ms: u32,
     /// When the broker accepted the connection.
     pub mqtt_ms: u32,

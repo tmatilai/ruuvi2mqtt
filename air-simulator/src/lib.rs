@@ -17,7 +17,7 @@ const FLAG_CALIBRATING: u8 = 0x01;
 const FLAG_VOC_BIT8: u8 = 0x40;
 const FLAG_NOX_BIT8: u8 = 0x80;
 
-/// One sample, in the units Home Assistant shows.
+/// One sample.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Reading {
     /// °C

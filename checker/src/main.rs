@@ -1,4 +1,4 @@
-//! Checks the Linux app and the ESP32 boards on a test bed. See README.md.
+//! Checks the ruuvi2mqtt app and the ESP32 boards on a test bed. See README.md.
 
 mod check;
 mod time;
@@ -40,7 +40,7 @@ struct Options {
     /// The commit under test, at least 7 hex digits
     #[arg(long, value_parser = parse_commit)]
     commit: String,
-    /// A Linux instance's MQTT client ID (repeat for each)
+    /// An app instance's MQTT client ID (repeat for each)
     #[arg(long = "instance", value_name = "CLIENT_ID", required = true)]
     instances: Vec<String>,
     /// An ESP32 board's MQTT client ID (repeat for each). Its firmware and

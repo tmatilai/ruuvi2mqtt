@@ -5,9 +5,9 @@ use ruuvi_sensor_protocol::{
 };
 use serde::Serialize;
 
-/// JSON-serialisable sensor reading.
+/// JSON-serializable sensor reading.
 ///
-/// Field names match `homeassistant::SensorData` in the Linux crate.
+/// Field names match `homeassistant::SensorData` in the ruuvi2mqtt app.
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "snake_case")]
 struct SensorPayload<'a> {
@@ -62,7 +62,7 @@ pub fn encode(v: &SensorValues, publisher: &str) -> String {
         .battery_potential_as_millivolts()
         .map(|mv| f32::from(mv) / 1000.0);
 
-    // Temperature-aware battery_low logic, matching the Linux app
+    // Temperature-aware battery_low logic, matching the ruuvi2mqtt app
     // (ported from https://github.com/ruuvi/com.ruuvi.station/).
     let battery_low = match (battery, temperature) {
         (Some(volts), Some(temp)) => Some(

@@ -17,7 +17,8 @@ pub struct TagStats {
 
 /// The advertisements received in a scan.
 ///
-/// The counters are split at the moment Wi-Fi connected.
+/// The counters are split by whether Wi-Fi was up. In the deep-sleep mode,
+/// that is before and after it connected.
 #[derive(Debug, Default, Clone, PartialEq, Eq, Serialize)]
 pub struct ScanStats {
     pub tags: BTreeMap<Mac, TagStats>,

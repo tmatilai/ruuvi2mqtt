@@ -12,7 +12,8 @@ pub const THRESHOLD: i8 = -70;
 const MARGIN: i8 = 8;
 
 /// While the link stays weak and a scan found no stronger access point,
-/// the next scan waits this long. One may come back, after a reboot.
+/// the next scan waits this long. A stronger one may come back, such as
+/// after its own reboot.
 pub const RESCAN: Duration = Duration::from_secs(10 * 60);
 
 /// An access point of the network, as a scan found it.

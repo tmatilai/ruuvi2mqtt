@@ -15,14 +15,14 @@ const RSSI_STRONG: i16 = -40;
 /// Signals at or below this, and readings without RSSI, get the full RSSI
 /// delay. BLE receivers lose packets around this level.
 const RSSI_WEAK: i16 = -100;
-/// 10 ms per dB, so -40..-100 dBm maps to 0..600 ms.
+/// So -40..-100 dBm maps to 0..600 ms.
 const MS_PER_DB: u64 = 10;
 /// Breaks ties between instances with a similar signal. 100 ms equals 10 dB,
 /// about the per-packet fading spread, so instances more than ~10 dB apart
 /// keep a stable order and closer ones alternate.
 const MAX_JITTER: Duration = Duration::from_millis(100);
 
-/// Maps the RSSI to 0..600 ms and adds `jitter`.
+/// Maps the RSSI to a delay and adds `jitter`.
 pub fn publish_delay(rssi: Option<i16>, jitter: Duration) -> Duration {
     let rssi = rssi.unwrap_or(RSSI_WEAK).clamp(RSSI_WEAK, RSSI_STRONG);
     let db_below_strong = u64::from(RSSI_STRONG.abs_diff(rssi));

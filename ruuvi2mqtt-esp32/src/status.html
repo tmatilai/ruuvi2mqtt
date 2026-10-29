@@ -173,7 +173,7 @@ function tick() {
   const stale = !lastOk || age >= STALE_S;
   document.body.classList.toggle("stale", stale && lastOk > 0);
   document.getElementById("meta").textContent = lastOk
-    ? firmware + " · updated " + (age < 2 ? "just now" : age + " s ago")
+    ? firmware + " · updated " + ago(age)
     : "Connecting…";
   if (stale && lastOk) {
     const v = document.getElementById("verdict");

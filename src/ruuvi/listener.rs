@@ -25,7 +25,6 @@ impl RuuviListener {
     pub async fn new(tx: EventSender) -> Result<Self> {
         let manager = Manager::new().await?;
 
-        // get the first bluetooth adapter
         let adapters = manager.adapters().await?;
         let central = adapters
             .into_iter()
@@ -44,7 +43,6 @@ impl RuuviListener {
         );
         self.central.start_scan(ScanFilter::default()).await?;
 
-        // Start BLE event loop
         tokio::spawn(async move {
             while let Some(event) = events.next().await {
                 // BlueZ powers the adapter off before it removes it, e.g. when

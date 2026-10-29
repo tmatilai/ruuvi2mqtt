@@ -36,7 +36,7 @@ cross: $(ARCHS) ## Build all non-local architectures
 CROSS_VERSION := 0.2.5
 
 .PHONY: setup
-setup: ## Install the tools for the Linux app and the ESP32 firmware
+setup: ## Install the tools for the app and the ESP32 firmware
 	cargo install --locked cross@$(CROSS_VERSION)
 	$(MAKE) -C ruuvi2mqtt-esp32 setup
 

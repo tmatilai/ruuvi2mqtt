@@ -32,7 +32,6 @@ ifneq ($(filter $(DEVICE_TARGETS),$(MAKECMDGOALS)),)
     endif
   endif
 
-  # Load device config
   ifneq ($(DEVICE),)
     $(info Using device: $(DEVICE))
     ifeq ($(wildcard devices/$(DEVICE).mk),)
@@ -41,7 +40,6 @@ ifneq ($(filter $(DEVICE_TARGETS),$(MAKECMDGOALS)),)
     include devices/$(DEVICE).mk
   endif
 
-  # Find the board's port
   ifneq ($(filter $(PORT_TARGETS),$(MAKECMDGOALS)),)
     $(ESPFLASH_MISSING)
     ifeq ($(ESPFLASH_PORT),)
@@ -62,9 +60,7 @@ ifneq ($(ESPFLASH_PORT),)
   export ESPFLASH_PORT
 endif
 
-# Target chip (default: esp32c6).
-# Override: make build CHIP=esp32  or set CHIP in a device .mk file.
-# Supported: esp32, esp32c3, esp32c5, esp32c6, esp32s3
+# Target chip. Override with CHIP=esp32 or in a device .mk file.
 CHIP ?= esp32c6
 
 # --- Derive target triple and toolchain from CHIP ---
@@ -194,5 +190,5 @@ endif
 	@$(BOARDS) register $(DEVICE)
 
 .PHONY: clean
-clean: ## Remove build artefacts
+clean: ## Remove build artifacts
 	$(CARGO) clean

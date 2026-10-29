@@ -17,10 +17,10 @@ use crate::config;
 #[derive(Debug, Clone)]
 pub struct RuuviReading {
     pub mac: Mac,
-    /// The data format, the payload's first byte
+    /// The data format, the payload's first byte.
     pub format: u8,
     /// JSON payload matching the `homeassistant::SensorData` field names used
-    /// by the Linux ruuvi2mqtt app.
+    /// by the ruuvi2mqtt app.
     pub payload: String,
 }
 
@@ -54,10 +54,10 @@ pub fn scan(start: Instant) -> anyhow::Result<Scan> {
     let ble_device = BLEDevice::take();
     let mut ble_scan = BLEScan::new();
     // Passive scan with 100% duty cycle — the BLE radio power savings from
-    // duty cycling are negligible compared to WiFi and CPU, so maximize the
-    // chance of catching every tag (~2.5s advertisement interval). Without
-    // the duplicate filter, every advertisement reaches the callback, so the
-    // statistics count them all.
+    // duty cycling are negligible compared to Wi-Fi and CPU, so maximize the
+    // chance of catching every advertisement. Without the duplicate filter,
+    // every advertisement reaches the callback, so the statistics count them
+    // all.
     ble_scan
         .active_scan(false)
         .filter_duplicates(false)
@@ -94,7 +94,6 @@ pub fn scan(start: Instant) -> anyhow::Result<Scan> {
                         crate::web::record(mac, device.rssi());
                     }
 
-                    // Parse with the ruuvi-sensor-protocol crate.
                     let format = mfr_data.payload.first().copied()?;
                     let values = match SensorValues::from_manufacturer_specific_data(
                         mfr_data.company_identifier,

@@ -106,5 +106,5 @@ boards: ## List the attached boards (resets unknown ones behind a USB-UART bridg
 	@$(BOARDS) list
 
 .PHONY: clean
-clean: ## Remove build artefacts
+clean: ## Remove build artifacts
 	$(CARGO) clean

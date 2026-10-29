@@ -90,7 +90,7 @@ pub struct Config {
     pub base_topic: String,
     /// The commit under test, at least 7 hex digits
     pub commit: String,
-    /// The Linux instances' MQTT client IDs
+    /// The app instances' MQTT client IDs
     pub instances: Vec<String>,
     /// The ESP32 boards' MQTT client IDs, to check their firmware and cycle
     pub boards: Vec<String>,
@@ -1019,8 +1019,7 @@ fn validate_reading(payload: &[u8], model: Model) -> Result<Reading, String> {
     }
 }
 
-/// The status must be online, with a version built from `commit` without
-/// local changes.
+/// The status must be online, with a version that passes [`check_version`].
 fn check_status(payload: &str, commit: &str) -> Result<(), String> {
     let status: Value = serde_json::from_str(payload).map_err(|_| "status isn't JSON")?;
     if status["state"] != "online" {

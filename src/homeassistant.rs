@@ -5,7 +5,7 @@ use crate::config;
 use crate::ruuvi::{self, BDAddr};
 
 #[derive(Debug, Serialize)]
-#[allow(clippy::struct_field_names)] // field names intentionally mirror the HA MQTT topic structure
+#[allow(clippy::struct_field_names)] // `device` is a key of the discovery payload
 pub struct Device<'a> {
     name: String,
     unique_id: String,
@@ -58,8 +58,8 @@ pub struct SensorData {
     battery: Option<f32>,
     battery_low: Option<bool>,
     tx_power: Option<i8>,
-    // Ruuvi Air values. Left out when missing, so a tag's reading stays as
-    // it was.
+    // Ruuvi Air values. Left out when missing, so a tag's reading has no
+    // Air keys.
     #[serde(skip_serializing_if = "Option::is_none")]
     co2: Option<u16>,
     #[serde(skip_serializing_if = "Option::is_none")]

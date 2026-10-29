@@ -21,8 +21,8 @@ const MAX_REPORTS: usize = 600;
 /// How often [`Live::record`] drops the old reports.
 const PRUNE_MS: u64 = 10_000;
 
-/// The retained Home Assistant configs that the Linux app publishes, one per
-/// tag. Both models have a temperature.
+/// The retained Home Assistant configs that the ruuvi2mqtt app publishes, one
+/// per tag. Both models have a temperature.
 pub const DISCOVERY_TOPIC: &str = "homeassistant/sensor/+/temperature/config";
 
 /// How good something is, worst last.
