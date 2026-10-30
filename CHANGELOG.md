@@ -10,10 +10,10 @@
 
 #### Breaking changes
 
-- Scan continuously by default, for a board on mains power: `BLE_SCAN_MODE=continuous` scans all the time, stays connected to Wi-Fi and MQTT, and publishes once per `BLE_SCAN_DURATION`, now 60 s. A battery board needs `BLE_SCAN_MODE=parallel` to keep deep sleeping. The checker's `--board-cycle` defaults to 60 s.
+- Scan continuously by default, for a board on mains power: `BLE_SCAN_MODE=continuous` scans all the time, stays connected to Wi-Fi and MQTT, and publishes once per `BLE_SCAN_DURATION`, now 60 s. A battery board needs `BLE_SCAN_MODE=deep-sleep` to keep deep sleeping. The checker's `--board-cycle` defaults to 60 s.
 - `LED_MODE` defaults to `on` when `LED_GPIO` is set, so a board's device file sets up its LED. Set `LED_MODE=off` to keep it dark.
 - `LED_GPIO` is required with `LED_MODE`. It defaulted to 15, the Seeed XIAO ESP32-C6's pin, which may be wired to something else on other boards.
-- Remove `BLE_SCAN_MODE=sequential`. A board on mains power scans continuously, and a battery board wants the shorter awake time of `parallel`.
+- Rename `BLE_SCAN_MODE=parallel` to `deep-sleep`, and remove `sequential`. A board on mains power scans continuously, and a battery board wants the shorter awake time of `deep-sleep`.
 
 #### Features
 

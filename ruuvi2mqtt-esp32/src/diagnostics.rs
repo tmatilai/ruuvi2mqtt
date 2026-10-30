@@ -52,7 +52,7 @@ impl Diagnostics<'_> {
 /// The build-time settings that the test bed compares.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 pub struct Settings<'a> {
-    /// `continuous` or `parallel`.
+    /// `continuous` or `deep-sleep`.
     pub scan_mode: &'a str,
     /// Seconds.
     pub scan_duration: u32,
@@ -86,7 +86,7 @@ mod tests {
             chip: "esp32c6",
             cycle: 42,
             settings: Settings {
-                scan_mode: "parallel",
+                scan_mode: "deep-sleep",
                 scan_duration: 5,
                 antenna: None,
             },
@@ -115,7 +115,7 @@ mod tests {
             diagnostics(scan).to_json(),
             concat!(
                 r#"{"firmware":"ruuvi2mqtt-esp32 1.5.2-dev (c43f162)","client_id":"esp32-test","#,
-                r#""chip":"esp32c6","cycle":42,"settings":{"scan_mode":"parallel","scan_duration":5},"#,
+                r#""chip":"esp32c6","cycle":42,"settings":{"scan_mode":"deep-sleep","scan_duration":5},"#,
                 r#""wifi_rssi":-61,"wifi_channel":6,"wifi_bssid":"021122334455","#,
                 r#""wifi_cache":"hit","free_heap":151000,"scan_start_ms":180,"scan_end_ms":5190,"#,
                 r#""wifi_ms":1450,"mqtt_ms":2210,"cycle_ms":5230,"#,
@@ -130,7 +130,7 @@ mod tests {
     fn json_with_an_error_and_all_settings() {
         let diagnostics = Diagnostics {
             settings: Settings {
-                scan_mode: "parallel",
+                scan_mode: "deep-sleep",
                 scan_duration: 8,
                 antenna: Some("external"),
             },
@@ -143,7 +143,7 @@ mod tests {
         };
         let json = diagnostics.to_json();
         assert!(json.contains(
-            r#""settings":{"scan_mode":"parallel","scan_duration":8,"antenna":"external"},"#
+            r#""settings":{"scan_mode":"deep-sleep","scan_duration":8,"antenna":"external"},"#
         ));
         assert!(json.contains(
             r#""wifi_rssi":null,"wifi_channel":null,"wifi_bssid":null,"wifi_cache":"stale","#

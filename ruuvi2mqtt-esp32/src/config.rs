@@ -135,7 +135,7 @@ pub const MQTT_BASE_TOPIC: &str = match option_env_non_empty!("MQTT_BASE_TOPIC")
 // ---------------------------------------------------------------------------
 
 /// When to scan: `continuous` (default) scans all the time and stays
-/// connected. `parallel` scans while Wi-Fi connects and deep sleeps between
+/// connected. `deep-sleep` scans while Wi-Fi connects and deep sleeps between
 /// cycles.
 pub const BLE_SCAN_MODE: &str = match option_env_non_empty!("BLE_SCAN_MODE") {
     Some(v) => v,
@@ -148,7 +148,7 @@ pub const BLE_SCAN_CONTINUOUS: bool = konst::eq_str(BLE_SCAN_MODE, "continuous")
 /// Duration (seconds) of each BLE scan pass. In the continuous mode, a cycle
 /// is one scan, so this is how often the readings are published.
 ///
-/// In the parallel scan mode, BLE scanning runs during the Wi-Fi connection,
+/// In the deep-sleep mode, BLE scanning runs during the Wi-Fi connection,
 /// so increasing this does not necessarily add to the total active time. For
 /// best results, set this close to your typical Wi-Fi + MQTT connect time
 /// (check the boot log) but at least 3 seconds to have the chance to catch
@@ -299,8 +299,8 @@ const _: () = assert!(
     "BLE_SCAN_DURATION must be positive (seconds)"
 );
 const _: () = assert!(
-    BLE_SCAN_CONTINUOUS || konst::eq_str(BLE_SCAN_MODE, "parallel"),
-    "BLE_SCAN_MODE must be continuous or parallel"
+    BLE_SCAN_CONTINUOUS || konst::eq_str(BLE_SCAN_MODE, "deep-sleep"),
+    "BLE_SCAN_MODE must be continuous or deep-sleep"
 );
 const _: () = assert!(
     BLE_SLEEP_DURATION > 0,

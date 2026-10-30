@@ -955,7 +955,7 @@ fn number(v: &Value, key: &str) -> Result<u64, String> {
     v[key].as_u64().ok_or_else(|| format!("{key}: {}", v[key]))
 }
 
-/// `parallel 5s`, with `, external antenna` if set
+/// `deep-sleep 5s`, with `, external antenna` if set
 fn parse_settings(s: &Value) -> Result<String, String> {
     let mode = s["scan_mode"]
         .as_str()
@@ -1455,7 +1455,7 @@ mod tests {
     /// A board's diagnostics: Wi-Fi connects 1 s into the 5 s scan
     fn diagnostics(firmware: &str, cycle: u64, tags: &str) -> String {
         format!(
-            r#"{{"firmware":"ruuvi2mqtt-esp32 {firmware}","client_id":"{BOARD}","chip":"esp32c6","cycle":{cycle},"settings":{{"scan_mode":"parallel","scan_duration":5}},"wifi_rssi":-61,"wifi_channel":6,"wifi_cache":"hit","free_heap":151000,"scan_start_ms":200,"scan_end_ms":5200,"wifi_ms":1200,"mqtt_ms":2000,"cycle_ms":5300,"tags":{tags},"adverts_before_wifi":1,"adverts_after_wifi":8,"other_adverts_before_wifi":10,"other_adverts_after_wifi":80}}"#
+            r#"{{"firmware":"ruuvi2mqtt-esp32 {firmware}","client_id":"{BOARD}","chip":"esp32c6","cycle":{cycle},"settings":{{"scan_mode":"deep-sleep","scan_duration":5}},"wifi_rssi":-61,"wifi_channel":6,"wifi_cache":"hit","free_heap":151000,"scan_start_ms":200,"scan_end_ms":5200,"wifi_ms":1200,"mqtt_ms":2000,"cycle_ms":5300,"tags":{tags},"adverts_before_wifi":1,"adverts_after_wifi":8,"other_adverts_before_wifi":10,"other_adverts_after_wifi":80}}"#
         )
     }
 
@@ -1493,7 +1493,7 @@ mod tests {
         assert!(report.text.contains(concat!(
             "\nESP32 boards:\n",
             "  ruuvi2mqtt-c6 (ruuvitest-c6, esp32c6): 13 cycles, ruuvi2mqtt-esp32 1.5.2-dev (abcdef0)\n",
-            "    settings: parallel 5s\n",
+            "    settings: deep-sleep 5s\n",
             "    hit rate 100% (13 of 13 tag cycles)\n",
             "    Cellar (f817624e4c0b): 13 of 13 cycles, RSSI -74 (-74..-74), 2.0 adverts per cycle heard\n",
             "    adverts/s before Wi-Fi connected: Ruuvi 1.0, other 10.0; after: Ruuvi 2.0, other 20.0\n",
@@ -1582,12 +1582,12 @@ mod tests {
     fn scan_ending_before_wifi_has_no_time_after_wifi() {
         let payload = diagnostics("1.5.2-dev", 1, "{}")
             .replace(
-                r#""parallel","scan_duration":5"#,
-                r#""parallel","scan_duration":8,"antenna":"external""#,
+                r#""deep-sleep","scan_duration":5"#,
+                r#""deep-sleep","scan_duration":8,"antenna":"external""#,
             )
             .replace(r#""wifi_ms":1200"#, r#""wifi_ms":9500"#);
         let (_, d) = parse_diagnostics(secs(0), "c6", payload.as_bytes()).unwrap();
-        assert_eq!(d.settings, "parallel 8s, external antenna");
+        assert_eq!(d.settings, "deep-sleep 8s, external antenna");
         assert_eq!(d.scan_windows(), [5000, 0]);
         assert_eq!(per_second(0, 0), "-");
     }

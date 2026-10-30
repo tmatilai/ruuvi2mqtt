@@ -9,7 +9,7 @@ and MQTT, for a board on mains power. A cycle is one scan of
 `BLE_SCAN_DURATION` (60 s). As the next scan runs, the board publishes each
 tag heard in the cycle once, with its latest reading.
 
-On a battery, `BLE_SCAN_MODE=parallel` saves energy with a scan-publish-sleep
+On a battery, `BLE_SCAN_MODE=deep-sleep` saves energy with a scan-publish-sleep
 cycle. Each cycle scans BLE and connects Wi-Fi in parallel, publishes all
 unique readings over MQTT, then enters deep sleep (CPU, radios, and RAM
 powered off). On wake the chip reboots and reconnects. With the defaults (5s
@@ -113,7 +113,7 @@ All settings are baked in at compile-time via environment variables.
 | `MQTT_USER` | `mqtt.user` | *(anonymous)* | MQTT username |
 | `MQTT_PASSWORD` | `mqtt.password` | *(anonymous)* | MQTT password |
 | `MQTT_BASE_TOPIC` | `mqtt.base_topic` | `ruuvi2mqtt` | Topic prefix |
-| `BLE_SCAN_MODE` | — | `continuous` | `continuous` scans all the time. `parallel` scans while Wi-Fi connects, then deep sleeps |
+| `BLE_SCAN_MODE` | — | `continuous` | `continuous` scans all the time. `deep-sleep` scans while Wi-Fi connects, then deep sleeps |
 | `BLE_SCAN_DURATION` | — | `60` / `5` | BLE scan duration (seconds). Continuous: the cycle, `60`. Otherwise `5`: set it close to your Wi-Fi + MQTT connect time (see boot log), min 3s |
 | `BLE_SLEEP_DURATION` | — | `60` | Deep sleep between cycles (seconds). Continuous: the wait awake before a restart after a failure. A cycle timeout waits a cycle longer, and a cycle that succeeds meanwhile cancels the restart |
 | `USB_STAY_AWAKE` | — | `true` | `false` always deep sleeps. See [Build & flash](#build--flash) |
@@ -319,7 +319,7 @@ heard and when, so a missed tag can be traced to range or to the radio.
   "client_id": "ruuvi2mqtt-kitchen",
   "chip": "esp32c6",
   "cycle": 42,
-  "settings": { "scan_mode": "parallel", "scan_duration": 5, "antenna": "external" },
+  "settings": { "scan_mode": "deep-sleep", "scan_duration": 5, "antenna": "external" },
   "wifi_rssi": -61,
   "wifi_channel": 6,
   "wifi_bssid": "021122334455",
