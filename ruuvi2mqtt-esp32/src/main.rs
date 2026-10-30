@@ -293,7 +293,11 @@ fn run(number: u32) -> anyhow::Result<()> {
         wifi_cache,
         wifi_ms,
     };
+    // A failed scan is published too, but fails the cycle, so that the LED
+    // blinks in the next wake.
+    let scan_failed = error.is_some();
     publish(&mut mqtt, &cycle, scan, error)?;
+    anyhow::ensure!(!scan_failed, "BLE scan failed");
     Ok(())
 }
 
