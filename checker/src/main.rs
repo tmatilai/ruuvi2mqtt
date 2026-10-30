@@ -33,9 +33,10 @@ const WRITE_INTERVAL: Duration = Duration::from_mins(1);
 struct Cli {
     #[command(subcommand)]
     command: Option<Command>,
-    /// None only with a command
+    /// Empty with a command. Not an optional flatten: clap's derive leaves
+    /// that None even with the options given.
     #[command(flatten)]
-    options: Option<Options>,
+    options: Options,
 }
 
 #[derive(Debug, Subcommand)]
@@ -47,9 +48,10 @@ enum Command {
 
 #[derive(Debug, Args)]
 struct Broker {
-    /// MQTT broker
-    #[arg(long)]
-    server: String,
+    /// MQTT broker. Required, but optional for clap's derive, which would
+    /// otherwise want the check's with a command
+    #[arg(long, required = true)]
+    server: Option<String>,
     /// Default: 8883 with TLS, else 1883
     #[arg(long)]
     port: Option<u16>,
@@ -81,9 +83,9 @@ struct Options {
     broker: Broker,
     #[arg(long, default_value = "ruuvi2mqtt-checker")]
     client_id: String,
-    /// The commit under test, at least 7 hex digits
-    #[arg(long, value_parser = parse_commit)]
-    commit: String,
+    /// The commit under test, at least 7 hex digits. Required, as `server`
+    #[arg(long, required = true, value_parser = parse_commit)]
+    commit: Option<String>,
     /// An app instance's MQTT client ID (repeat for each)
     #[arg(long = "instance", value_name = "CLIENT_ID", required = true)]
     instances: Vec<String>,
@@ -130,11 +132,11 @@ struct Options {
 }
 
 impl Options {
-    fn config(&self) -> Config {
+    fn config(&self) -> Result<Config> {
         let devices = || self.tags.iter().chain(&self.airs);
-        Config {
+        Ok(Config {
             base_topic: self.broker.base_topic(),
-            commit: self.commit.clone(),
+            commit: self.commit.clone().context("No --commit")?,
             instances: self.instances.clone(),
             boards: self.boards.clone(),
             board_cycle: self.board_cycle,
@@ -147,7 +149,7 @@ impl Options {
             max_gap: self.max_gap,
             throttle: self.throttle,
             max_duplicates: self.max_duplicates,
-        }
+        })
     }
 }
 
@@ -156,11 +158,15 @@ impl Broker {
         self.base_topic.trim_end_matches('/').to_string()
     }
 
+    fn server(&self) -> Result<&str> {
+        self.server.as_deref().context("No --server")
+    }
+
     fn mqtt_options(&self, client_id: &str) -> Result<MqttOptions> {
         let port = self
             .port
             .unwrap_or(if self.ca_file.is_some() { 8883 } else { 1883 });
-        let mut options = MqttOptions::new(client_id, &self.server, port);
+        let mut options = MqttOptions::new(client_id, self.server()?, port);
         options.set_keep_alive(Duration::from_secs(15));
         if let Some(user) = &self.user {
             options.set_credentials(user, read_password()?);
@@ -187,10 +193,7 @@ async fn main() -> ExitCode {
         eprintln!("{err:#}");
         return ExitCode::FAILURE;
     }
-    let Some(options) = &cli.options else {
-        unreachable!("clap requires the options without a command");
-    };
-    match run(options).await {
+    match run(&cli.options).await {
         Ok(report) => {
             print!("{}", report.text);
             println!("{}", report.summary);
@@ -210,7 +213,7 @@ async fn main() -> ExitCode {
 async fn run(options: &Options) -> Result<Report> {
     let (client, mut eventloop) =
         AsyncClient::new(options.broker.mqtt_options(&options.client_id)?, 10);
-    let mut watch = Watch::new(options.config());
+    let mut watch = Watch::new(options.config()?);
     let start = Instant::now();
     let deadline = start + options.duration;
     let mut next_progress = start + PROGRESS_INTERVAL;
@@ -240,7 +243,7 @@ async fn run(options: &Options) -> Result<Report> {
             Ok(_) => {}
             // Without a first connection, the instances can't be checked either
             Err(err) if !connected => {
-                bail!("Failed to connect to {}: {err}", options.broker.server);
+                bail!("Failed to connect to {}: {err}", options.broker.server()?);
             }
             Err(err) => {
                 eprintln!("+{} MQTT: {err}", time::format(at));
@@ -288,7 +291,7 @@ async fn record(options: &RecordOptions) -> Result<std::convert::Infallible> {
         };
         match event {
             Ok(Event::Incoming(Incoming::ConnAck(_))) => {
-                eprintln!("connected to {}", options.broker.server);
+                eprintln!("connected to {}", options.broker.server()?);
                 recorder.resume(break_from, unix_now());
                 connected = true;
                 client
@@ -391,6 +394,34 @@ mod tests {
     }
 
     #[test]
+    fn parses_a_check() {
+        let cli = Cli::try_parse_from([
+            "checker",
+            "--server",
+            "broker",
+            "--commit",
+            "6534f11",
+            "--instance",
+            "host1",
+            "--tag",
+            "AA:BB:CC:DD:EE:01/382s",
+            "--air",
+            "AA:BB:CC:DD:EE:02",
+        ])
+        .unwrap();
+        assert!(cli.command.is_none());
+        assert_eq!(cli.options.broker.server().unwrap(), "broker");
+        let config = cli.options.config().unwrap();
+        assert_eq!(config.commit, "6534f11");
+        assert_eq!(config.tags, ["aabbccddee01", "aabbccddee02"]);
+        assert_eq!(config.airs, ["aabbccddee02"]);
+        assert_eq!(
+            config.gaps.into_iter().collect::<Vec<_>>(),
+            [("aabbccddee01".to_string(), Duration::from_secs(382))]
+        );
+    }
+
+    #[test]
     fn record_takes_no_check_options() {
         let cli = Cli::try_parse_from([
             "checker",
@@ -402,6 +433,7 @@ mod tests {
         ])
         .unwrap();
         assert!(matches!(cli.command, Some(Command::Record(_))));
+        assert_eq!(cli.options.commit, None);
         assert!(
             Cli::try_parse_from([
                 "checker", "--commit", "6534f11", "record", "--server", "b", "--state", "s"
