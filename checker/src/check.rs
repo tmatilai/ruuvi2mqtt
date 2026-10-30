@@ -102,6 +102,9 @@ pub struct Config {
     /// Which of the tags are Ruuvi Airs. Any other device is validated as a
     /// tag.
     pub airs: Vec<String>,
+    /// The tags' longest gap before the watch, from the recorder. A tag gets
+    /// twice its gap for its first reading and its gaps, if that is longer.
+    pub gaps: BTreeMap<String, Duration>,
     pub first_reading: Duration,
     pub max_gap: Duration,
     pub throttle: Duration,
@@ -110,6 +113,12 @@ pub struct Config {
 }
 
 impl Config {
+    /// A tag's limits for its first reading and its gaps
+    fn limits(&self, id: &str) -> (Duration, Duration) {
+        let slack = self.gaps.get(id).map_or(Duration::ZERO, |gap| *gap * 2);
+        (self.first_reading.max(slack), self.max_gap.max(slack))
+    }
+
     fn model(&self, id: &str) -> Model {
         if self.airs.iter().any(|a| a == id) {
             Model::Air
@@ -471,52 +480,11 @@ impl Watch {
 
     fn check_tags(&self, r: &mut Report, end: Duration) {
         let c = &self.config;
-        let boards = self.board_ids();
         let _ = writeln!(r.text, "\nTags:");
         for id in &c.tags {
             let tag = self.tags.get(id);
             let label = self.label(id);
-            let readings: Vec<Duration> =
-                tag.map_or_else(Vec::new, |t| t.readings.iter().map(|(at, _)| *at).collect());
-            let _ = write!(r.text, "  {label}: {} readings", readings.len());
-            if let Some(&first) = readings.first() {
-                let max_gap = max_gap(&readings, end);
-                // The boards don't coordinate with the instances or each other
-                let throttled: Vec<Duration> = tag
-                    .iter()
-                    .flat_map(|t| &t.readings)
-                    .filter(|(_, publisher)| !boards.contains(publisher.as_str()))
-                    .map(|(at, _)| *at)
-                    .collect();
-                let duplicates = throttled
-                    .windows(2)
-                    .filter(|w| w[1].saturating_sub(w[0]) < c.throttle * 9 / 10)
-                    .count();
-                let _ = write!(
-                    r.text,
-                    ", first +{}, max gap {}, {duplicates} duplicates",
-                    time::format(first),
-                    time::format(max_gap)
-                );
-                if first > c.first_reading {
-                    r.failures.push(format!(
-                        "{label}: first reading only at +{}",
-                        time::format(first)
-                    ));
-                }
-                if max_gap > c.max_gap {
-                    r.failures
-                        .push(format!("{label}: no reading for {}", time::format(max_gap)));
-                }
-                if duplicates * 100 > usize::from(c.max_duplicates) * throttled.len() {
-                    r.failures.push(format!(
-                        "{label}: {duplicates} of {} readings within the throttle",
-                        throttled.len()
-                    ));
-                }
-            } else {
-                r.failures.push(format!("{label}: no readings"));
-            }
+            self.check_timing(r, id, &label, end);
             let model = c.model(id);
             if let Some(tag) = tag.filter(|t| !t.publishers.is_empty()) {
                 // Only reported: an instance or board without a Bluetooth 5
@@ -570,6 +538,59 @@ impl Watch {
                     tag.readings.len()
                 );
             }
+        }
+    }
+
+    /// A tag's first reading, gaps and duplicates
+    fn check_timing(&self, r: &mut Report, id: &str, label: &str, end: Duration) {
+        let c = &self.config;
+        let tag = self.tags.get(id);
+        let readings: Vec<Duration> =
+            tag.map_or_else(Vec::new, |t| t.readings.iter().map(|(at, _)| *at).collect());
+        let _ = write!(r.text, "  {label}: {} readings", readings.len());
+        let Some(&first) = readings.first() else {
+            r.failures.push(format!("{label}: no readings"));
+            return;
+        };
+        let max_gap = max_gap(&readings, end);
+        // The boards don't coordinate with the instances or each other
+        let boards = self.board_ids();
+        let throttled: Vec<Duration> = tag
+            .iter()
+            .flat_map(|t| &t.readings)
+            .filter(|(_, publisher)| !boards.contains(publisher.as_str()))
+            .map(|(at, _)| *at)
+            .collect();
+        let duplicates = throttled
+            .windows(2)
+            .filter(|w| w[1].saturating_sub(w[0]) < c.throttle * 9 / 10)
+            .count();
+        let _ = write!(
+            r.text,
+            ", first +{}, max gap {}",
+            time::format(first),
+            time::format(max_gap)
+        );
+        if let Some(gap) = c.gaps.get(id) {
+            let _ = write!(r.text, " ({} before)", time::format(*gap));
+        }
+        let _ = write!(r.text, ", {duplicates} duplicates");
+        let (first_limit, gap_limit) = c.limits(id);
+        if first > first_limit {
+            r.failures.push(format!(
+                "{label}: first reading only at +{}",
+                time::format(first)
+            ));
+        }
+        if max_gap > gap_limit {
+            r.failures
+                .push(format!("{label}: no reading for {}", time::format(max_gap)));
+        }
+        if duplicates * 100 > usize::from(c.max_duplicates) * throttled.len() {
+            r.failures.push(format!(
+                "{label}: {duplicates} of {} readings within the throttle",
+                throttled.len()
+            ));
         }
     }
 
@@ -805,7 +826,7 @@ impl Watch {
 
 /// Returns the tag's ID and the entity from
 /// `<component>/ruuvi_<id>/<entity>/config`.
-fn parse_discovery_topic(rest: &str) -> Option<(&str, &'static str)> {
+pub fn parse_discovery_topic(rest: &str) -> Option<(&str, &'static str)> {
     let parts: Vec<&str> = rest.split('/').collect();
     let [component, object, entity, "config"] = parts[..] else {
         return None;
@@ -819,7 +840,7 @@ fn parse_discovery_topic(rest: &str) -> Option<(&str, &'static str)> {
 }
 
 /// A tag's ID in its topics: the MAC as 12 lowercase hex digits
-fn is_tag_id(s: &str) -> bool {
+pub fn is_tag_id(s: &str) -> bool {
     s.len() == 12 && s.bytes().all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f'))
 }
 
@@ -1061,6 +1082,7 @@ mod tests {
             board_cycle: Duration::from_secs(67),
             tags: vec![TAG.into()],
             airs: Vec::new(),
+            gaps: BTreeMap::new(),
             first_reading: Duration::from_mins(5),
             max_gap: Duration::from_mins(10),
             throttle: Duration::from_mins(1),
@@ -1228,6 +1250,46 @@ mod tests {
                 "Cellar (aabbccddee01): first reading only at +6:40",
                 "Cellar (aabbccddee01): no reading for 13:20",
             ]
+        );
+    }
+
+    #[test]
+    fn gap_before_the_watch_extends_the_limits() {
+        // Readings at 11:40 and 25:00: too late and too far apart by default
+        let with_gap = |gap: Option<u64>, end: u64| {
+            let mut w = watch();
+            if let Some(gap) = gap {
+                w.config.gaps.insert(TAG.into(), secs(gap));
+            }
+            healthy(&mut w, 0);
+            let topic = format!("ruuvi2mqtt/{TAG}");
+            for at in [700, 1500] {
+                w.on_message(secs(at), &topic, reading(HOST1).as_bytes(), false);
+            }
+            w.finish(secs(end))
+        };
+        let report = with_gap(None, 1500);
+        assert_eq!(
+            report.failures,
+            [
+                "Cellar (aabbccddee01): first reading only at +11:40",
+                "Cellar (aabbccddee01): no reading for 13:20",
+            ]
+        );
+        // A gap of 6:40 before allows twice that
+        let report = with_gap(Some(400), 1500);
+        assert_eq!(report.failures, Vec::<String>::new(), "{}", report.text);
+        assert!(
+            report
+                .text
+                .contains(", first +11:40, max gap 13:20 (6:40 before), 0 duplicates,"),
+            "{}",
+            report.text
+        );
+        let report = with_gap(Some(400), 2301);
+        assert_eq!(
+            report.summary,
+            "FAIL: Cellar (aabbccddee01): no reading for 13:21"
         );
     }
 
