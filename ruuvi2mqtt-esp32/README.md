@@ -1,52 +1,50 @@
 # ruuvi2mqtt-esp32
 
 ESP32 firmware that scans for Ruuvi BLE advertisements and publishes JSON
-readings over Wi-Fi to an MQTT broker. Topic and payload format matches the
-`ruuvi2mqtt` app.
+readings over Wi-Fi to an MQTT broker. The topics and payloads are the same as
+the `ruuvi2mqtt` app's.
 
 By default, the firmware scans BLE all the time and stays connected to Wi-Fi and
 MQTT, for a board on mains power. A cycle is one scan, which lasts
 `BLE_SCAN_DURATION` (60 s by default). As the next scan runs, the board
 publishes each tag heard in the cycle once, with its latest reading.
 
-On a battery, `BLE_SCAN_MODE=deep-sleep` saves energy with a scan-publish-sleep
-cycle. Each cycle scans BLE and connects Wi-Fi in parallel, publishes all unique
-readings over MQTT, then enters deep sleep (CPU, radios and main RAM powered
-off). On wake the chip reboots and reconnects. With the defaults (5s scan, 60s
-sleep) the active time is ~7s per ~67s cycle, reducing average current draw to
-roughly a tenth of always-on operation.
+For a board on a battery, `BLE_SCAN_MODE=deep-sleep` runs one cycle per wake.
+The board scans BLE while it connects to Wi-Fi, publishes the latest reading of
+each tag it heard, and then deep sleeps with the CPU, the radios and the main
+RAM powered off. On wake, the chip reboots. With the defaults, a 5 s scan and a
+60 s sleep, the board is awake about 7 s of each 67 s cycle. That draws roughly
+a tenth of the current of staying awake.
 
-To further reduce active time, the firmware caches the Wi-Fi channel and BSSID
-in NVS flash after the first connection. On subsequent boots it connects
-directly without scanning all channels, saving several seconds per cycle. A
-static IP can also be configured to skip DHCP.
+After the first connection, the firmware caches the Wi-Fi channel and BSSID in
+NVS flash. Later boots connect without scanning all channels, which saves a few
+seconds per cycle. A static IP also skips DHCP.
 
 Scanning continuously, the board roams between the network's access points.
 After a drop, it retries the access point it was on, then reconnects to the
 strongest one. Below −70 dBm, it scans the network and switches to an access
 point at least 8 dB stronger. A scan takes about 5 s, and BLE hears little
-meanwhile. Without a stronger one, it scans again every 10 minutes while the
-link stays weak.
+meanwhile. If none is stronger, it scans again every 10 minutes while the link
+stays weak.
 
 Unlike the app, the firmware doesn't throttle: each cycle publishes every tag it
 heard. See [Multiple instances](../README.md#multiple-instances) for running it
 beside app instances.
 
 Each cycle also publishes [diagnostics](#diagnostics). Scanning continuously,
-the board also serves a [status page](#status-page) for finding its spot.
+the board serves a [status page](#status-page) for finding a good spot for it.
 
-This firmware does **not** publish Home Assistant MQTT discovery config. At
-least one instance of the full [`ruuvi2mqtt`](../README.md) app must be running
-and connected to the same broker for HA to recognise the sensors. The ESP32 only
-publishes sensor readings; the app advertises the device definitions (names,
-units, entity types) and keeps them retained.
+The firmware does **not** publish the Home Assistant discovery configs. For Home
+Assistant to know the sensors, run at least one instance of the
+[`ruuvi2mqtt`](../README.md) app on the same broker. The app publishes the
+configs, with the names, units and entity types, and keeps them retained.
 
 ---
 
 ## Supported chips
 
-The default target is **ESP32-C6**. Other chips are supported via the `CHIP`
-Makefile variable:
+The default target is **ESP32-C6**. The `CHIP` Makefile variable selects another
+chip:
 
 | Chip     | Architecture | `CHIP` value        |
 | -------- | ------------ | ------------------- |
@@ -63,7 +61,7 @@ Each chip builds in its own target directory, `target/<chip>/`, unless
 
 ## Setup
 
-Install all required toolchains and tools:
+Install the toolchains and tools:
 
 ```sh
 make setup
@@ -77,7 +75,7 @@ after pulling.
 
 ## Configuration
 
-All settings are baked in at compile-time via environment variables.
+Environment variables set the configuration at compile time.
 
 ### Required
 
@@ -89,48 +87,48 @@ All settings are baked in at compile-time via environment variables.
 
 ### Optional
 
-| Variable             | App YAML equivalent | Default              | Description                                                                                                                                                                                     |
-| -------------------- | ------------------- | -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `WIFI_IP`            | —                   | _(DHCP)_             | Static IP address (e.g. `192.168.1.50`)                                                                                                                                                         |
-| `WIFI_GATEWAY`       | —                   | —                    | Gateway (required when `WIFI_IP` is set)                                                                                                                                                        |
-| `WIFI_NETMASK`       | —                   | `255.255.255.0`      | Subnet mask for static IP                                                                                                                                                                       |
-| `WIFI_DNS`           | —                   | _gateway_            | DNS server for static IP                                                                                                                                                                        |
-| `WIFI_BAND`          | —                   | _(both)_             | Dual-band chips only (ESP32-C5): `2.4` or `5` GHz. On the C5, a full scan of 2.4 GHz takes about 2.5 s, of both bands about 13 s                                                                |
-| `DEVICE_HOSTNAME`    | —                   | `ruuvi2mqtt-esp32`   | Hostname for DHCP and mDNS, and the default MQTT client ID                                                                                                                                      |
-| `MQTT_PORT`          | `mqtt.port`         | `1883` / `8883`      | MQTT broker port (default depends on TLS)                                                                                                                                                       |
-| `MQTT_TLS`           | `mqtt.tls`          | `false`              | Set to `true` to enable TLS (`mqtts://`)                                                                                                                                                        |
-| `MQTT_CA_FILE`       | `mqtt.ca_file`      | —                    | Path to a PEM CA cert, embedded at compile time                                                                                                                                                 |
-| `MQTT_TLS_INSECURE`  | `mqtt.tls_insecure` | `false`              | Set to `true` to skip cert hostname check                                                                                                                                                       |
-| `MQTT_CLIENT_ID`     | `mqtt.client_id`    | _hostname_           | MQTT client ID, also sent as `publisher` in each reading                                                                                                                                        |
-| `MQTT_USER`          | `mqtt.user`         | _(anonymous)_        | MQTT username                                                                                                                                                                                   |
-| `MQTT_PASSWORD`      | `mqtt.password`     | _(anonymous)_        | MQTT password                                                                                                                                                                                   |
-| `MQTT_BASE_TOPIC`    | `mqtt.base_topic`   | `ruuvi2mqtt`         | Topic prefix                                                                                                                                                                                    |
-| `BLE_SCAN_MODE`      | —                   | `continuous`         | `continuous` scans all the time. `deep-sleep` scans while Wi-Fi connects, then deep sleeps                                                                                                      |
-| `BLE_SCAN_DURATION`  | —                   | `60` / `5`           | BLE scan duration (seconds). Continuous: the cycle, `60`. Otherwise `5`: set it close to your Wi-Fi + MQTT connect time (see boot log), but at least 3 s                                        |
-| `BLE_SLEEP_DURATION` | —                   | `60`                 | Deep sleep between cycles (seconds). Continuous: the wait awake before a restart after a failure. A cycle timeout waits a cycle longer, and a cycle that succeeds meanwhile cancels the restart |
-| `USB_STAY_AWAKE`     | —                   | `true`               | `false` always deep sleeps. See [Build & flash](#build--flash)                                                                                                                                  |
-| `ANTENNA`            | —                   | _(unset)_            | Seeed XIAO ESP32-C6 only, and needed there: `internal` or `external` antenna. See [Antenna](#antenna)                                                                                           |
-| `LED_MODE`           | —                   | `on` with `LED_GPIO` | `on`, `errors` or `off`. Without `LED_GPIO`, the LED is left alone. See [LED](#led)                                                                                                             |
-| `LED_TYPE`           | —                   | `ws2812`             | `ws2812` or `gpio`                                                                                                                                                                              |
-| `LED_ACTIVE_LOW`     | —                   | `false`              | `true` for a `gpio` LED that lights when its pin is low                                                                                                                                         |
-| `LED_GPIO`           | —                   | —                    | LED pin number. Required with `LED_MODE`                                                                                                                                                        |
-| `LED_COLOR`          | —                   | `000020`             | WS2812 color as hex `RRGGBB`. Low values keep it dim                                                                                                                                            |
-| `LOG_LEVEL`          | —                   | `info`               | Log level for the firmware's own code. Library code logs at `info` at most                                                                                                                      |
+| Variable             | App YAML equivalent | Default              | Description                                                                                                                                                                                                                     |
+| -------------------- | ------------------- | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `WIFI_IP`            | —                   | _(DHCP)_             | Static IP address (e.g. `192.168.1.50`)                                                                                                                                                                                         |
+| `WIFI_GATEWAY`       | —                   | —                    | Gateway (required when `WIFI_IP` is set)                                                                                                                                                                                        |
+| `WIFI_NETMASK`       | —                   | `255.255.255.0`      | Subnet mask for static IP                                                                                                                                                                                                       |
+| `WIFI_DNS`           | —                   | _gateway_            | DNS server for static IP                                                                                                                                                                                                        |
+| `WIFI_BAND`          | —                   | _(both)_             | Dual-band chips only (ESP32-C5): `2.4` or `5` GHz. On the C5, a full scan of 2.4 GHz takes about 2.5 s, of both bands about 13 s                                                                                                |
+| `DEVICE_HOSTNAME`    | —                   | `ruuvi2mqtt-esp32`   | Hostname for DHCP and mDNS, and the default MQTT client ID                                                                                                                                                                      |
+| `MQTT_PORT`          | `mqtt.port`         | `1883` / `8883`      | MQTT broker port (default depends on TLS)                                                                                                                                                                                       |
+| `MQTT_TLS`           | `mqtt.tls`          | `false`              | Set to `true` to enable TLS (`mqtts://`)                                                                                                                                                                                        |
+| `MQTT_CA_FILE`       | `mqtt.ca_file`      | —                    | Path to a PEM CA cert, embedded at compile time                                                                                                                                                                                 |
+| `MQTT_TLS_INSECURE`  | `mqtt.tls_insecure` | `false`              | Set to `true` to skip the certificate's hostname check                                                                                                                                                                          |
+| `MQTT_CLIENT_ID`     | `mqtt.client_id`    | _hostname_           | MQTT client ID, also sent as `publisher` in each reading                                                                                                                                                                        |
+| `MQTT_USER`          | `mqtt.user`         | _(anonymous)_        | MQTT username                                                                                                                                                                                                                   |
+| `MQTT_PASSWORD`      | `mqtt.password`     | _(anonymous)_        | MQTT password                                                                                                                                                                                                                   |
+| `MQTT_BASE_TOPIC`    | `mqtt.base_topic`   | `ruuvi2mqtt`         | Topic prefix                                                                                                                                                                                                                    |
+| `BLE_SCAN_MODE`      | —                   | `continuous`         | `continuous` scans all the time. `deep-sleep` scans while Wi-Fi connects, then deep sleeps                                                                                                                                      |
+| `BLE_SCAN_DURATION`  | —                   | `60` / `5`           | BLE scan length in seconds. Scanning continuously, this is the cycle. In the deep-sleep mode, set it close to the Wi-Fi and MQTT connect time in the boot log, and at least 3                                                   |
+| `BLE_SLEEP_DURATION` | —                   | `60`                 | Deep sleep between cycles in seconds. Scanning continuously, how long the board waits awake after a failure before it restarts. After a cycle timeout, it waits a cycle longer and restarts only if no cycle succeeds meanwhile |
+| `USB_STAY_AWAKE`     | —                   | `true`               | `false` always deep sleeps. See [Build & flash](#build--flash)                                                                                                                                                                  |
+| `ANTENNA`            | —                   | _(unset)_            | Seeed XIAO ESP32-C6 only, and needed there: `internal` or `external` antenna. See [Antenna](#antenna)                                                                                                                           |
+| `LED_MODE`           | —                   | `on` with `LED_GPIO` | `on`, `errors` or `off`. Without `LED_GPIO`, the LED is left alone. See [LED](#led)                                                                                                                                             |
+| `LED_TYPE`           | —                   | `ws2812`             | `ws2812` or `gpio`                                                                                                                                                                                                              |
+| `LED_ACTIVE_LOW`     | —                   | `false`              | `true` for a `gpio` LED that lights when its pin is low                                                                                                                                                                         |
+| `LED_GPIO`           | —                   | —                    | LED pin number. Required with `LED_MODE`                                                                                                                                                                                        |
+| `LED_COLOR`          | —                   | `000020`             | WS2812 color as hex `RRGGBB`. Low values keep it dim                                                                                                                                                                            |
+| `LOG_LEVEL`          | —                   | `info`               | Log level for the firmware's own code. Library code logs at `info` at most                                                                                                                                                      |
 
 These can be set in the environment, in `.envrc` (with direnv), or in per-device
 configuration files (see below).
 
 #### LED
 
-Scanning continuously, `LED_MODE=on` breathes slowly and dimly every 6 s, to
-show that the board runs. In the deep-sleep mode, it lights dimly while the
-board is awake.
+With `LED_MODE=on`, the LED breathes dimly every 6 s while the board scans
+continuously, to show that it runs. In the deep-sleep mode, the LED lights dimly
+while the board is awake.
 
 On a failure, the LED blinks twice every 3 s instead, at half brightness and in
 red on a WS2812. The blinks go on while Wi-Fi is down, and until a cycle has
 published its readings and scanned without errors. In the deep-sleep mode, a
 failed cycle sleeps right away, so the blinks show in the next wake. `errors`
-keeps the LED dark except for the blinks, for a room where a glow would bother.
+keeps the LED dark except for the blinks, for rooms where a glow would disturb.
 
 #### Known board LED configurations
 
@@ -151,7 +149,7 @@ off in deep sleep, since it draws more than the chip does.
 
 Without `ANTENNA`, the firmware doesn't touch the switch. It then gets no power,
 and the XIAO hears little on Wi-Fi and BLE, so set `ANTENNA` on every XIAO.
-Other boards use its pins for other things, so the build fails if `ANTENNA` is
+Other boards use those pins for other things, so the build fails if `ANTENNA` is
 set for any chip but the ESP32-C6.
 
 [xiao-c6]: https://wiki.seeedstudio.com/xiao_esp32c6_getting_started/
@@ -161,8 +159,8 @@ set for any chip but the ESP32-C6.
 ## Device configuration
 
 For a single board, set the required variables in the environment and run
-`make flash`. No device registration is needed — auto-detection is only active
-when `devices/devices.conf` exists. To target a non-default chip:
+`make flash`. No registration is needed, as auto-detection runs only when
+`devices/devices.conf` exists. For a chip other than the default:
 
 ```sh
 make flash CHIP=esp32
@@ -170,8 +168,8 @@ make flash CHIP=esp32
 
 ### Managing multiple devices
 
-When managing multiple boards, each device can have its own configuration file
-and be auto-detected by MAC address.
+With several boards, each one gets its own configuration file, and the Makefile
+finds the attached board by its MAC address.
 
 **Register a device** by attaching it and running:
 
@@ -198,7 +196,7 @@ own port reports its MAC as the USB serial number. For a board behind a bridge,
 without touching them. An unknown board behind a bridge is identified with
 `espflash board-info`, which resets it. That happens in `make boards` and in
 auto-detection, and when looking for a board registered without the serial
-number. Run `make register` again to add it.
+number. Run `make register` again to record the serial number.
 
 **Auto-detection:** when you run `make flash` (or `all`, `build`, `lint`,
 `monitor`, `log`) without `DEVICE`, the Makefile identifies the attached board
@@ -215,14 +213,14 @@ make flash ESPFLASH_PORT=/dev/cu.usbserial-210   # the board on this port
 The Makefile waits up to `WAIT` seconds (default 75) for a sleeping board to
 wake.
 
-> Device config files are git-ignored — only the examples are committed.
+> Device config files are git-ignored. Only the examples are committed.
 
 ---
 
 ## Build & flash
 
 ```sh
-make flash               # build and flash (first build is slow — ESP-IDF is compiled from source)
+make flash               # build and flash (the first build compiles ESP-IDF, so it is slow)
 make flash monitor       # build, flash, and open the serial monitor
 make build               # build only
 make monitor             # open the interactive serial monitor
@@ -245,13 +243,15 @@ All available targets:
 make help
 ```
 
+---
+
 ## Status page
 
 Scanning continuously, the board serves a page on
-`http://{DEVICE_HOSTNAME}.local/` (mDNS), or on its IP address. It answers one
-question: is this a good spot for the board? Put the board there, open the page
-on a phone, and it updates every 2 s. When the board stops answering, the top
-says so after 6 s.
+`http://{DEVICE_HOSTNAME}.local/` (mDNS), or on its IP address. The page shows
+whether the board's spot is good. Put the board there and open the page on a
+phone. It updates every 2 s, and the top says when the board hasn't answered for
+6 s.
 
 The top says _Good_, _Fair_ or _Poor spot_ and lists what isn't good:
 
@@ -259,19 +259,19 @@ The top says _Good_, _Fair_ or _Poor spot_ and lists what isn't good:
   below that. A drop since boot makes it fair at best.
 - **Publishing:** fair until the first cycle, poor while the last cycle failed,
   and fair while any cycle since boot did.
-- **The target tags:** tap a tag to make it one that the spot should cover. The
+- **The target tags:** tap a tag to mark it as one the spot should cover. The
   phone remembers them. A tag is graded by its mean RSSI over the last minute
-  (good from −80 dBm, fair to −90 dBm), and by its reports a minute (good from
+  (good from −80 dBm, fair to −90 dBm), and by its reports per minute (good from
   10, fair from 3). One not heard is poor. For the first 20 s after boot, the
   rates are left out, and a tag not heard yet is fair.
 
 Without targets, only Wi-Fi and publishing count. Each tag shows its mean RSSI,
-the minute's range and its reports a minute. The names come from the Home
-Assistant discovery configs that the app keeps retained on the broker, so tags
-it doesn't know show their MAC.
+the minute's range and its reports per minute. The names come from the Home
+Assistant discovery configs that the app keeps retained on the broker. A tag
+without a config shows its MAC.
 
-`/api/status` has the same as JSON, for scripts. `?tags=<mac>,<mac>` sets the
-targets, with the MACs in the topic format.
+`/api/status` returns the same data as JSON, for scripts. `?tags=<mac>,<mac>`
+sets the targets, with the MACs written as in the topics.
 
 ```json
 {
@@ -300,6 +300,8 @@ targets, with the MACs in the topic format.
   ]
 }
 ```
+
+---
 
 ## Diagnostics
 
@@ -338,26 +340,28 @@ and when, so a missed tag can be traced to range or to the radio.
 }
 ```
 
-| Field                                                   | Description                                                                                                                                                                             |
-| ------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `firmware`                                              | Package version and git commit, with `-dirty` for local changes                                                                                                                         |
-| `client_id`                                             | `MQTT_CLIENT_ID`, the `publisher` in the readings                                                                                                                                       |
-| `chip`                                                  | ESP-IDF target                                                                                                                                                                          |
-| `cycle`                                                 | Cycles since a cold boot or a crash, this one included. A gap means cycles without diagnostics                                                                                          |
-| `settings`                                              | The build-time settings that A/B tests compare: `BLE_SCAN_MODE`, `BLE_SCAN_DURATION` and `ANTENNA` (left out when unset)                                                                |
-| `wifi_rssi`, `wifi_channel`, `wifi_bssid`               | The access point's signal (dBm), channel and BSSID, which roaming changes                                                                                                               |
-| `wifi_cache`                                            | `hit`: connected with the cached channel and BSSID. `miss`: nothing cached. `stale`: the cache failed, so a full scan. When scanning continuously, from the first connection after boot |
-| `free_heap`                                             | Free heap in bytes                                                                                                                                                                      |
-| `scan_start_ms`, `scan_end_ms`                          | When the BLE scan started and finished                                                                                                                                                  |
-| `wifi_ms`, `mqtt_ms`                                    | When Wi-Fi and the broker connection were up. When scanning continuously, `0` if they were up all along                                                                                 |
-| `cycle_ms`                                              | When the message was built                                                                                                                                                              |
-| `tags`                                                  | Per Ruuvi MAC: the strongest RSSI (dBm), the advertisements received, and when the first one arrived                                                                                    |
-| `adverts_before_wifi`, `adverts_after_wifi`             | Ruuvi advertisements before and after Wi-Fi connected. When scanning continuously, while Wi-Fi was down and up                                                                          |
-| `other_adverts_before_wifi`, `other_adverts_after_wifi` | Other BLE advertisements, the same way. They show the scan's airtime                                                                                                                    |
-| `error`                                                 | Only when the BLE scan failed                                                                                                                                                           |
+| Field                                                   | Description                                                                                                                                                                                           |
+| ------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `firmware`                                              | Package version and git commit, with `-dirty` for local changes                                                                                                                                       |
+| `client_id`                                             | `MQTT_CLIENT_ID`, the `publisher` in the readings                                                                                                                                                     |
+| `chip`                                                  | ESP-IDF target                                                                                                                                                                                        |
+| `cycle`                                                 | Cycles since a cold boot or a crash, this one included. A gap means cycles without diagnostics                                                                                                        |
+| `settings`                                              | The build-time settings that A/B tests compare: `BLE_SCAN_MODE`, `BLE_SCAN_DURATION` and `ANTENNA` (left out when unset)                                                                              |
+| `wifi_rssi`, `wifi_channel`, `wifi_bssid`               | The access point's signal (dBm), channel and BSSID, which roaming changes                                                                                                                             |
+| `wifi_cache`                                            | `hit`: connected with the cached channel and BSSID. `miss`: nothing cached. `stale`: the cached values failed, so the board scanned. When scanning continuously, from the first connection after boot |
+| `free_heap`                                             | Free heap in bytes                                                                                                                                                                                    |
+| `scan_start_ms`, `scan_end_ms`                          | When the BLE scan started and finished                                                                                                                                                                |
+| `wifi_ms`, `mqtt_ms`                                    | When Wi-Fi and the broker connection were up. When scanning continuously, `0` if they were up all along                                                                                               |
+| `cycle_ms`                                              | When the message was built                                                                                                                                                                            |
+| `tags`                                                  | Per Ruuvi MAC: the strongest RSSI (dBm), the advertisements received, and when the first one arrived                                                                                                  |
+| `adverts_before_wifi`, `adverts_after_wifi`             | Ruuvi advertisements before and after Wi-Fi connected. When scanning continuously, while Wi-Fi was down and up                                                                                        |
+| `other_adverts_before_wifi`, `other_adverts_after_wifi` | Other BLE advertisements, counted the same way. They show how much the scan heard                                                                                                                     |
+| `error`                                                 | Only when the BLE scan failed                                                                                                                                                                         |
 
 All times are in milliseconds from the start of the cycle. The test bed's
 [checker](../checker/README.md) turns the counts into rates over many cycles.
+
+---
 
 ## Security
 
@@ -365,10 +369,10 @@ The built firmware embeds `WIFI_PASS` and `MQTT_PASSWORD` as plaintext constants
 in flash. Don't share or publish built images, and note that physical access to
 a board is enough to read the credentials back with `espflash`/`esptool`.
 
-ESP-IDF [flash encryption][flash-enc] mitigates this, and can be enabled with
-`CONFIG_SECURE_FLASH_ENC_ENABLED` in `sdkconfig.defaults`. It is off by design:
-the first boot with it enabled burns eFuses irreversibly and changes how the
-board is flashed. Read the Espressif documentation before enabling it.
+ESP-IDF [flash encryption][flash-enc] prevents this. Enable it with
+`CONFIG_SECURE_FLASH_ENC_ENABLED` in `sdkconfig.defaults`. It is off because the
+first boot with it burns eFuses irreversibly and changes how the board is
+flashed. Read the Espressif documentation before enabling it.
 
 The status page has no login. It only reads, and shows nothing secret, but
 anyone on the network can open it. The board takes an IPv6 address from the

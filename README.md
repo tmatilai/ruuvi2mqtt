@@ -12,9 +12,9 @@ It has two parts:
   configs.
 - The [ESP32 firmware](./ruuvi2mqtt-esp32/), which publishes the readings only.
 
-There are many other projects for integrating Ruuvi sensors to Home Assistant.
-This one runs several receivers side by side, for sensors that one receiver
-can't hear.
+Many other projects bring Ruuvi sensors into Home Assistant. This one runs
+several receivers side by side, to cover sensors that a single receiver can't
+hear.
 
 ---
 
@@ -34,11 +34,11 @@ Prebuilt binaries are on the
 [releases page](https://github.com/tmatilai/ruuvi2mqtt/releases), and container
 images at `ghcr.io/tmatilai/ruuvi2mqtt`.
 
-An example configuration file can be seen in
-[ruuvi2mqtt.yaml.example](./ruuvi2mqtt.yaml.example). The app reads
-`ruuvi2mqtt.yaml` from the working directory, or the file given with `--config`
-or the `CONFIG_FILE` environment variable. `--check-config` validates the
-configuration file and exits, without connecting to MQTT or Bluetooth.
+[ruuvi2mqtt.yaml.example](./ruuvi2mqtt.yaml.example) is an example configuration
+file. The app reads `ruuvi2mqtt.yaml` from the working directory, or the file
+given with `--config` or the `CONFIG_FILE` environment variable.
+`--check-config` validates the configuration file and exits, without connecting
+to MQTT or Bluetooth.
 
 Example command to run in a Docker container:
 
@@ -86,8 +86,8 @@ every tag it heard once per cycle. The cycle is `BLE_SCAN_DURATION` when
 scanning continuously (60 s by default), and `BLE_SLEEP_DURATION` plus the awake
 time in the deep-sleep mode. With a `throttle` below that, the tags it hears get
 two messages per cycle, one from the ESP32 and one from an app instance. That is
-harmless, though Home Assistant records a new state when `publisher` changes, as
-it is an attribute. To avoid it, set `throttle` above the ESP32's cycle. The
+harmless, but Home Assistant records a new state each time `publisher` changes,
+as it is an attribute. To avoid it, set `throttle` above the ESP32's cycle. The
 ESP32 then publishes the tags it hears, and the app instances fill in when it
 misses one.
 
