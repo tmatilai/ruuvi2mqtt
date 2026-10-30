@@ -136,8 +136,7 @@ pub const MQTT_BASE_TOPIC: &str = match option_env_non_empty!("MQTT_BASE_TOPIC")
 
 /// When to scan: `continuous` (default) scans all the time and stays
 /// connected. `parallel` scans while Wi-Fi connects and deep sleeps between
-/// cycles. `sequential` runs the full scan first, starts Wi-Fi after it, and
-/// deep sleeps.
+/// cycles.
 pub const BLE_SCAN_MODE: &str = match option_env_non_empty!("BLE_SCAN_MODE") {
     Some(v) => v,
     None => "continuous",
@@ -160,9 +159,6 @@ pub const BLE_SCAN_DURATION: i32 = match option_env_non_empty!("BLE_SCAN_DURATIO
     None if BLE_SCAN_CONTINUOUS => 60,
     None => 5,
 };
-
-/// `BLE_SCAN_MODE=sequential`.
-pub const BLE_SCAN_SEQUENTIAL: bool = konst::eq_str(BLE_SCAN_MODE, "sequential");
 
 /// Deep sleep duration (seconds) between scan-publish cycles. The chip fully
 /// powers off (CPU, RAM, radios) and reboots on wake. The continuous mode
@@ -207,7 +203,7 @@ pub const ANTENNA_EXTERNAL: bool = match ANTENNA {
 /// LED operating mode.
 ///
 /// - `on`, the default when `LED_GPIO` is set: scanning continuously,
-///   breathe slowly and dimly. In the deep-sleep modes, light while awake.
+///   breathe slowly and dimly. In the deep-sleep mode, light while awake.
 ///   Blink while something fails.
 /// - `errors`: blink only while something fails.
 /// - `off`: explicitly turn the LED off at boot.
@@ -303,8 +299,8 @@ const _: () = assert!(
     "BLE_SCAN_DURATION must be positive (seconds)"
 );
 const _: () = assert!(
-    BLE_SCAN_CONTINUOUS || BLE_SCAN_SEQUENTIAL || konst::eq_str(BLE_SCAN_MODE, "parallel"),
-    "BLE_SCAN_MODE must be continuous, parallel or sequential"
+    BLE_SCAN_CONTINUOUS || konst::eq_str(BLE_SCAN_MODE, "parallel"),
+    "BLE_SCAN_MODE must be continuous or parallel"
 );
 const _: () = assert!(
     BLE_SLEEP_DURATION > 0,

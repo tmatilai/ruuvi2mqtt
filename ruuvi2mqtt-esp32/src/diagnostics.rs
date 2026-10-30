@@ -52,7 +52,7 @@ impl Diagnostics<'_> {
 /// The build-time settings that the test bed compares.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 pub struct Settings<'a> {
-    /// `parallel` or `sequential`.
+    /// `continuous` or `parallel`.
     pub scan_mode: &'a str,
     /// Seconds.
     pub scan_duration: u32,
@@ -130,7 +130,7 @@ mod tests {
     fn json_with_an_error_and_all_settings() {
         let diagnostics = Diagnostics {
             settings: Settings {
-                scan_mode: "sequential",
+                scan_mode: "parallel",
                 scan_duration: 8,
                 antenna: Some("external"),
             },
@@ -143,7 +143,7 @@ mod tests {
         };
         let json = diagnostics.to_json();
         assert!(json.contains(
-            r#""settings":{"scan_mode":"sequential","scan_duration":8,"antenna":"external"},"#
+            r#""settings":{"scan_mode":"parallel","scan_duration":8,"antenna":"external"},"#
         ));
         assert!(json.contains(
             r#""wifi_rssi":null,"wifi_channel":null,"wifi_bssid":null,"wifi_cache":"stale","#

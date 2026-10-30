@@ -29,7 +29,7 @@ Commands: `make lint`, `make test`, `make local`. Cross builds use `cross`.
 
 Firmware on esp-idf-svc (ESP-IDF pinned in `.cargo/config.toml`). By
 default it scans continuously, stays connected, and publishes each scan's
-readings over MQTT while the next scan runs. The deep-sleep modes run one
+readings over MQTT while the next scan runs. The deep-sleep mode runs one
 cycle per wake instead: start a BLE scan thread, connect Wi-Fi, publish,
 deep sleep. Configuration is compile-time via environment variables, see
 `ruuvi2mqtt-esp32/README.md`.

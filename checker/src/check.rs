@@ -1579,15 +1579,15 @@ mod tests {
     }
 
     #[test]
-    fn sequential_scan_has_no_time_after_wifi() {
+    fn scan_ending_before_wifi_has_no_time_after_wifi() {
         let payload = diagnostics("1.5.2-dev", 1, "{}")
             .replace(
                 r#""parallel","scan_duration":5"#,
-                r#""sequential","scan_duration":8,"antenna":"external""#,
+                r#""parallel","scan_duration":8,"antenna":"external""#,
             )
             .replace(r#""wifi_ms":1200"#, r#""wifi_ms":9500"#);
         let (_, d) = parse_diagnostics(secs(0), "c6", payload.as_bytes()).unwrap();
-        assert_eq!(d.settings, "sequential 8s, external antenna");
+        assert_eq!(d.settings, "parallel 8s, external antenna");
         assert_eq!(d.scan_windows(), [5000, 0]);
         assert_eq!(per_second(0, 0), "-");
     }

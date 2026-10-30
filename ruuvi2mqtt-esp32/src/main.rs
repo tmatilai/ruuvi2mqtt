@@ -40,8 +40,8 @@ fn main() {
     let reset_reason = unsafe { sys::esp_reset_reason() };
 
     // The LED blinks while the previous cycle failed, until this one
-    // succeeds. That way the deep-sleep modes show a failure in the next
-    // wake, as they sleep right after it.
+    // succeeds. That way the deep-sleep mode shows a failure in the next
+    // wake, as it sleeps right after it.
     let failed_before = match reset_reason {
         sys::esp_reset_reason_t_ESP_RST_DEEPSLEEP | sys::esp_reset_reason_t_ESP_RST_SW => {
             LAST_CYCLE_FAILED.load(Ordering::Relaxed) == 1
@@ -276,14 +276,8 @@ fn run(number: u32) -> anyhow::Result<()> {
     // ── BLE scan + Wi-Fi connect ─────────────────────────────────────────────
     // Wi-Fi and BLE share one 2.4 GHz radio. Scanning while Wi-Fi connects
     // saves a few seconds of active time per cycle, but until Wi-Fi has
-    // connected, the scan gets only part of the airtime. The sequential mode
-    // finishes the scan before Wi-Fi starts.
+    // connected, the scan gets only part of the airtime.
     let ble_handle = spawn_scan(start)?;
-    let scan = if config::BLE_SCAN_SEQUENTIAL {
-        ScanThread::Finished(finish_scan(ble_handle, start))
-    } else {
-        ScanThread::Running(ble_handle)
-    };
 
     let (_wifi, wifi_cache) = wifi::connect(peripherals.modem, sysloop, nvs)?;
     let wifi_ms = ms_since(start);
@@ -292,7 +286,7 @@ fn run(number: u32) -> anyhow::Result<()> {
     // ── MQTT ─────────────────────────────────────────────────────────────────
     let mut mqtt = mqtt::Mqtt::connect()?;
 
-    let (scan, error) = scan.finish(start);
+    let (scan, error) = finish_scan(ble_handle, start);
     let cycle = Cycle {
         number,
         start,
@@ -459,21 +453,6 @@ fn spawn_scan(start: Instant) -> anyhow::Result<JoinHandle<anyhow::Result<ble::S
         .stack_size(4096)
         .spawn(move || ble::scan(start))
         .context("Failed to spawn BLE scan thread")
-}
-
-/// The BLE scan thread, or its result.
-enum ScanThread {
-    Running(JoinHandle<anyhow::Result<ble::Scan>>),
-    Finished((ble::Scan, Option<String>)),
-}
-
-impl ScanThread {
-    fn finish(self, start: Instant) -> (ble::Scan, Option<String>) {
-        match self {
-            Self::Running(handle) => finish_scan(handle, start),
-            Self::Finished(result) => result,
-        }
-    }
 }
 
 /// Wait for the scan to finish.
