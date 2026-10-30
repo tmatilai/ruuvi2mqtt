@@ -14,6 +14,9 @@ The checker subscribes to `#` on that broker for a while (`--duration`, default
 - Each tag (`--tag <MAC>`) and Ruuvi Air (`--air <MAC>`) has its first reading
   within `--first-reading` (5 minutes).
 - No tag goes `--max-gap` (10 minutes) without a reading.
+- A tag given as `<MAC>/<GAP>` gets twice its `GAP` for both, if that is longer.
+  The `GAP` is its longest gap before the watch, from the recorder. A tag that
+  comes rarely then doesn't fail the check.
 - The readings have values in the sensors' ranges. A tag's readings have a
   battery and no air quality values. An Air's have a calibration flag and no
   battery or TX power. Devices not given are checked as tags. The report counts
@@ -64,3 +67,33 @@ The report goes to stdout. Its last line is the summary: `ok: ...` or
 
 The exit status is 0 if all checks pass, 1 if one fails, and 2 on an error, such
 as no connection to the broker.
+
+## Recorder
+
+`ruuvi2mqtt-checker record` subscribes to `#` all the time. It is the test bed's
+record of how often each tag comes, for the runs to know which tags to expect
+and the `GAP` of each.
+
+```sh
+printf '%s\n' "$PASSWORD" | target/release/ruuvi2mqtt-checker record \
+    --server broker.example --ca-file ca.crt --user checker --state state.json
+```
+
+Every minute it writes the state file, through a temporary file. Per device, by
+the topic's ID:
+
+- `name`: from the discovery configs.
+- `last`: the last reading's time.
+- `max_gap`: the longest time in seconds without a reading in the last hour,
+  until now.
+- `publishers`: the readings in the last hour by publisher.
+- `battery` and `battery_low`: from the last reading.
+- `readings`: the last hour's readings, `[<time>, <publisher>]`.
+
+The times are Unix seconds. `written` is when it wrote the file, and `since` is
+when the recording started. The gaps count only from `since`. After a restart,
+it continues from the file. A break longer than 2 minutes, of the recorder or
+its connection, starts the recording over.
+
+Its client ID is `ruuvi2mqtt-recorder`, so that a checker on the same broker
+doesn't disconnect it. It returns only on an error.
