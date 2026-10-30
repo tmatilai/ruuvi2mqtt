@@ -9,17 +9,12 @@ and MQTT, for a board on mains power. A cycle is one scan of
 `BLE_SCAN_DURATION` (60 s). As the next scan runs, the board publishes each
 tag heard in the cycle once, with its latest reading.
 
-On a battery, the deep-sleep modes save energy with a scan-publish-sleep
+On a battery, `BLE_SCAN_MODE=parallel` saves energy with a scan-publish-sleep
 cycle. Each cycle scans BLE and connects Wi-Fi in parallel, publishes all
 unique readings over MQTT, then enters deep sleep (CPU, radios, and RAM
 powered off). On wake the chip reboots and reconnects. With the defaults (5s
 scan, 60s sleep) the active time is ~7s per ~67s cycle, reducing average
 current draw to roughly a tenth of always-on operation.
-
-Wi-Fi and BLE share one 2.4 GHz radio, so the scan gets only part of the
-airtime while Wi-Fi connects. `BLE_SCAN_MODE=sequential` scans first and
-then starts Wi-Fi. That gives the scan the whole radio, but adds the Wi-Fi
-and MQTT connect time to the awake time.
 
 To further reduce active time, the firmware caches the Wi-Fi channel and BSSID
 in NVS flash after the first connection. On subsequent boots it connects
@@ -118,7 +113,7 @@ All settings are baked in at compile-time via environment variables.
 | `MQTT_USER` | `mqtt.user` | *(anonymous)* | MQTT username |
 | `MQTT_PASSWORD` | `mqtt.password` | *(anonymous)* | MQTT password |
 | `MQTT_BASE_TOPIC` | `mqtt.base_topic` | `ruuvi2mqtt` | Topic prefix |
-| `BLE_SCAN_MODE` | — | `continuous` | `continuous` scans all the time. `parallel` scans while Wi-Fi connects, then deep sleeps. `sequential` scans first, then starts Wi-Fi, and deep sleeps |
+| `BLE_SCAN_MODE` | — | `continuous` | `continuous` scans all the time. `parallel` scans while Wi-Fi connects, then deep sleeps |
 | `BLE_SCAN_DURATION` | — | `60` / `5` | BLE scan duration (seconds). Continuous: the cycle, `60`. Otherwise `5`: set it close to your Wi-Fi + MQTT connect time (see boot log), min 3s |
 | `BLE_SLEEP_DURATION` | — | `60` | Deep sleep between cycles (seconds). Continuous: the wait awake before a restart after a failure. A cycle timeout waits a cycle longer, and a cycle that succeeds meanwhile cancels the restart |
 | `USB_STAY_AWAKE` | — | `true` | `false` always deep sleeps. See [Build & flash](#build--flash) |
@@ -136,13 +131,13 @@ per-device configuration files (see below).
 #### LED
 
 Scanning continuously, `LED_MODE=on` breathes slowly and dimly every 6 s,
-to show that the board runs. In the deep-sleep modes, it lights dimly while
+to show that the board runs. In the deep-sleep mode, it lights dimly while
 the board is awake.
 
 On a failure, the LED blinks twice every 3 s instead, at half brightness
 and in red on a WS2812. The blinks go on while Wi-Fi is down, and until a
 cycle has published its readings and scanned without errors. In the
-deep-sleep modes, a failed cycle sleeps right away, so the blinks show in
+deep-sleep mode, a failed cycle sleeps right away, so the blinks show in
 the next wake. `errors` keeps the LED dark except for the blinks, for a
 room where a glow would bother.
 
@@ -247,7 +242,7 @@ make log SECS=70         # print the serial output for 70 s, without prompts
 All but `make monitor` run without prompts, so scripts and agents can use
 them.
 
-In the deep-sleep modes, deep sleep turns off the USB port built into the
+In the deep-sleep mode, deep sleep turns off the USB port built into the
 ESP32-C3, -C5, -C6, and -S3. While a computer is connected to that port,
 the board waits awake between cycles and restarts instead, so it can be
 flashed and monitored at any time. A charger or power bank doesn't count. A
