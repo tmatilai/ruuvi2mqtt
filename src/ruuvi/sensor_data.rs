@@ -240,8 +240,6 @@ mod tests {
         assert_eq!(s.battery_low(), None);
     }
 
-    // --- Zone 1: temp <= -20 °C — threshold is 2.0 V ---
-
     #[test]
     fn very_cold_battery_below_2v_is_low() {
         let s = make_sensor(Some(-25_000), Some(1999));
@@ -250,20 +248,15 @@ mod tests {
 
     #[test]
     fn very_cold_battery_at_2v_is_not_low() {
-        // boundary: < 2.0 V is low, so 2.0 V exactly is fine
         let s = make_sensor(Some(-25_000), Some(2000));
         assert_eq!(s.battery_low(), Some(false));
     }
 
     #[test]
     fn minus20_uses_2v_threshold_not_2_3v() {
-        // At exactly -20 °C the condition `temperature <= -20.0` applies (2.0 V threshold).
-        // 2.2 V is above 2.0 V, so it should NOT be flagged low.
         let s = make_sensor(Some(-20_000), Some(2200));
         assert_eq!(s.battery_low(), Some(false));
     }
-
-    // --- Zone 2: -20 °C < temp < 0 °C — threshold is 2.3 V ---
 
     #[test]
     fn mid_cold_battery_below_2_3v_is_low() {
@@ -279,12 +272,9 @@ mod tests {
 
     #[test]
     fn just_above_minus20_uses_stricter_2_3v_threshold() {
-        // One step above -20 °C: same 2.2 V that is safe at -20 °C is now low.
         let s = make_sensor(Some(-19_000), Some(2200));
         assert_eq!(s.battery_low(), Some(true));
     }
-
-    // --- Zone 3: temp >= 0 °C — threshold is 2.5 V ---
 
     #[test]
     fn warm_battery_below_2_5v_is_low() {
@@ -300,7 +290,6 @@ mod tests {
 
     #[test]
     fn zero_celsius_uses_2_5v_threshold() {
-        // 0 °C hits `temperature >= 0.0`, so the 2.5 V threshold applies.
         let s = make_sensor(Some(0), Some(2499));
         assert_eq!(s.battery_low(), Some(true));
     }

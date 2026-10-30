@@ -26,8 +26,6 @@ fn main() {
     // Required by esp-idf-svc: links esp-idf glue patches.
     sys::link_patches();
 
-    // Initialise logging. LOG_LEVEL only applies to our own crate; library
-    // code stays at info to avoid noise when debugging.
     log::set_max_level(APP_LEVEL);
     log::set_logger(&AppLogger).unwrap();
 
@@ -273,7 +271,6 @@ fn run(number: u32) -> anyhow::Result<()> {
 
     antenna::select();
 
-    // ── BLE scan + Wi-Fi connect ─────────────────────────────────────────────
     // Wi-Fi and BLE share one 2.4 GHz radio. Scanning while Wi-Fi connects
     // saves a few seconds of active time per cycle, but until Wi-Fi has
     // connected, the scan gets only part of the airtime.
@@ -283,7 +280,6 @@ fn run(number: u32) -> anyhow::Result<()> {
     let wifi_ms = ms_since(start);
     ble::set_wifi_connected(true);
 
-    // ── MQTT ─────────────────────────────────────────────────────────────────
     let mut mqtt = mqtt::Mqtt::connect()?;
 
     let (scan, error) = finish_scan(ble_handle, start);
@@ -490,8 +486,8 @@ fn failed_scan(error: String, start: Instant) -> (ble::Scan, Option<String>) {
     (scan, Some(error))
 }
 
-/// Thin logger wrapper that applies `LOG_LEVEL` only to this crate's modules
-/// and keeps library code at `Info`.
+/// Applies `LOG_LEVEL` to this crate's modules. Library code logs at `Info`
+/// at most, so that debug logs show only the app's.
 struct AppLogger;
 
 /// Compile-time log level parsed from `LOG_LEVEL`.

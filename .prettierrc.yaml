@@ -1,0 +1,7 @@
+proseWrap: always
+overrides:
+  # The release notes are copied from it, and GitHub shows their line
+  # breaks as is.
+  - files: CHANGELOG.md
+    options:
+      proseWrap: never

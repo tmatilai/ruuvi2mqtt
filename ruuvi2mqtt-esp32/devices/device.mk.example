@@ -12,13 +12,13 @@
 # export WIFI_IP = 192.168.1.50
 # export WIFI_GATEWAY = 192.168.1.1
 
-# Device hostname (used as MQTT client ID and DHCP hostname)
+# Device hostname (DHCP and mDNS name, default MQTT client ID)
 # export DEVICE_HOSTNAME = ruuvi2mqtt-kitchen
 
 # Antenna, Seeed XIAO ESP32-C6 only: "internal" or "external". A XIAO needs it.
 # export ANTENNA = internal
 
-# LED mode: unset = do nothing, "off" = turn off, "on" = light while awake
+# LED mode: "on" (the default with LED_GPIO), "errors" or "off".
 # See README for known board LED configurations.
 # export LED_MODE = off
 # export LED_TYPE = gpio

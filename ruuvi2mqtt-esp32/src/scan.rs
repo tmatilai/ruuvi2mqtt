@@ -17,7 +17,8 @@ pub struct TagStats {
 
 /// The advertisements received in a scan.
 ///
-/// The counters are split at the moment Wi-Fi connected.
+/// The counters are split by whether Wi-Fi was up. In the deep-sleep mode,
+/// that is before and after it connected.
 #[derive(Debug, Default, Clone, PartialEq, Eq, Serialize)]
 pub struct ScanStats {
     pub tags: BTreeMap<Mac, TagStats>,
@@ -66,8 +67,8 @@ impl ScanStats {
 mod tests {
     use super::*;
 
-    const TAG: Mac = Mac([0xF8, 0x17, 0x62, 0x4E, 0x4C, 0x0B]);
-    const OTHER_TAG: Mac = Mac([0xCB, 0x20, 0xF2, 0xCC, 0x4F, 0x7E]);
+    const TAG: Mac = Mac([0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0x01]);
+    const OTHER_TAG: Mac = Mac([0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0x02]);
 
     #[test]
     fn keeps_the_strongest_rssi_and_the_first_arrival() {

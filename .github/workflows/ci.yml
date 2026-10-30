@@ -40,6 +40,9 @@ jobs:
       - name: Check the version
         run: script/check-version
 
+      - name: Check the Markdown format
+        run: make fmt-docs PRETTIER_MODE=--check
+
   clippy:
     name: Clippy
     runs-on: ubuntu-latest

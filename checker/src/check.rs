@@ -90,7 +90,7 @@ pub struct Config {
     pub base_topic: String,
     /// The commit under test, at least 7 hex digits
     pub commit: String,
-    /// The Linux instances' MQTT client IDs
+    /// The app instances' MQTT client IDs
     pub instances: Vec<String>,
     /// The ESP32 boards' MQTT client IDs, to check their firmware and cycle
     pub boards: Vec<String>,
@@ -1019,8 +1019,7 @@ fn validate_reading(payload: &[u8], model: Model) -> Result<Reading, String> {
     }
 }
 
-/// The status must be online, with a version built from `commit` without
-/// local changes.
+/// The status must be online, with a version that passes [`check_version`].
 fn check_status(payload: &str, commit: &str) -> Result<(), String> {
     let status: Value = serde_json::from_str(payload).map_err(|_| "status isn't JSON")?;
     if status["state"] != "online" {
@@ -1049,15 +1048,15 @@ mod tests {
     use super::*;
 
     const COMMIT: &str = "6534f11d0c2e5a7b9f8e1d2c3b4a5968778695a4";
-    const PANNU: &str = "ruuvi2mqtt_pannu";
-    const TALLI: &str = "ruuvi2mqtt_talli";
-    const TAG: &str = "f817624e4c0b";
+    const HOST1: &str = "ruuvi2mqtt_host1";
+    const HOST2: &str = "ruuvi2mqtt_host2";
+    const TAG: &str = "aabbccddee01";
 
     fn watch() -> Watch {
         Watch::new(Config {
             base_topic: "ruuvi2mqtt".into(),
             commit: COMMIT.into(),
-            instances: vec![PANNU.into(), TALLI.into()],
+            instances: vec![HOST1.into(), HOST2.into()],
             boards: Vec::new(),
             board_cycle: Duration::from_secs(67),
             tags: vec![TAG.into()],
@@ -1086,7 +1085,7 @@ mod tests {
     /// Statuses for both instances, discovery for TAG, and a reading every
     /// minute for `minutes`, the first `duplicates` of them twice
     fn healthy_with(watch: &mut Watch, minutes: u64, duplicates: u64) {
-        for instance in [PANNU, TALLI] {
+        for instance in [HOST1, HOST2] {
             let topic = format!("ruuvi2mqtt/status/{instance}");
             watch.on_message(
                 secs(0),
@@ -1098,9 +1097,9 @@ mod tests {
         discovery(watch, TAG, "Cellar", &TAG_ENTITIES);
         let topic = format!("ruuvi2mqtt/{TAG}");
         for m in 0..minutes {
-            watch.on_message(secs(30 + m * 60), &topic, reading(TALLI).as_bytes(), false);
+            watch.on_message(secs(30 + m * 60), &topic, reading(HOST2).as_bytes(), false);
             if m < duplicates {
-                watch.on_message(secs(31 + m * 60), &topic, reading(PANNU).as_bytes(), false);
+                watch.on_message(secs(31 + m * 60), &topic, reading(HOST1).as_bytes(), false);
             }
         }
     }
@@ -1129,7 +1128,7 @@ mod tests {
             report.summary,
             "ok: 1 tags from 2 instances on 6534f11, 15:00"
         );
-        assert!(report.text.contains("Cellar (f817624e4c0b): 15 readings"));
+        assert!(report.text.contains("Cellar (aabbccddee01): 15 readings"));
     }
 
     #[test]
@@ -1139,13 +1138,13 @@ mod tests {
             healthy(&mut w, 15);
             w.on_message(
                 secs(0),
-                "ruuvi2mqtt/status/ruuvi2mqtt_pannu",
+                "ruuvi2mqtt/status/ruuvi2mqtt_host1",
                 online(version).as_bytes(),
                 true,
             );
             let report = w.finish(Duration::from_mins(15));
             assert_eq!(report.failures.len(), 1, "{version}: {}", report.text);
-            assert!(report.summary.starts_with("FAIL: ruuvi2mqtt_pannu: "));
+            assert!(report.summary.starts_with("FAIL: ruuvi2mqtt_host1: "));
         }
     }
 
@@ -1161,16 +1160,16 @@ mod tests {
     fn status_change_fails() {
         let mut w = watch();
         healthy(&mut w, 15);
-        let topic = "ruuvi2mqtt/status/ruuvi2mqtt_talli";
+        let topic = "ruuvi2mqtt/status/ruuvi2mqtt_host2";
         let note = w.on_message(secs(300), topic, br#"{"state":"offline"}"#, false);
         assert_eq!(
             note.as_deref(),
-            Some(r#"+5:00 ruuvi2mqtt_talli: {"state":"offline"}"#)
+            Some(r#"+5:00 ruuvi2mqtt_host2: {"state":"offline"}"#)
         );
         let report = w.finish(Duration::from_mins(15));
         assert_eq!(
             report.summary,
-            "FAIL: ruuvi2mqtt_talli: the status changed 1 times"
+            "FAIL: ruuvi2mqtt_host2: the status changed 1 times"
         );
     }
 
@@ -1179,7 +1178,7 @@ mod tests {
         let mut w = watch();
         healthy(&mut w, 15);
         // After the checker's own reconnect
-        let topic = "ruuvi2mqtt/status/ruuvi2mqtt_talli";
+        let topic = "ruuvi2mqtt/status/ruuvi2mqtt_host2";
         assert_eq!(
             w.on_message(
                 secs(300),
@@ -1199,9 +1198,9 @@ mod tests {
     fn missing_status_fails() {
         let mut w = watch();
         healthy(&mut w, 15);
-        w.statuses.remove(PANNU);
+        w.statuses.remove(HOST1);
         let report = w.finish(Duration::from_mins(15));
-        assert_eq!(report.summary, "FAIL: ruuvi2mqtt_pannu: no status");
+        assert_eq!(report.summary, "FAIL: ruuvi2mqtt_host1: no status");
     }
 
     #[test]
@@ -1209,7 +1208,7 @@ mod tests {
         let mut w = watch();
         healthy(&mut w, 0);
         let report = w.finish(Duration::from_mins(15));
-        assert_eq!(report.summary, "FAIL: Cellar (f817624e4c0b): no readings");
+        assert_eq!(report.summary, "FAIL: Cellar (aabbccddee01): no readings");
     }
 
     #[test]
@@ -1219,15 +1218,15 @@ mod tests {
         w.on_message(
             secs(400),
             &format!("ruuvi2mqtt/{TAG}"),
-            reading(PANNU).as_bytes(),
+            reading(HOST1).as_bytes(),
             false,
         );
         let report = w.finish(Duration::from_mins(20));
         assert_eq!(
             report.failures,
             [
-                "Cellar (f817624e4c0b): first reading only at +6:40",
-                "Cellar (f817624e4c0b): no reading for 13:20",
+                "Cellar (aabbccddee01): first reading only at +6:40",
+                "Cellar (aabbccddee01): no reading for 13:20",
             ]
         );
     }
@@ -1246,7 +1245,7 @@ mod tests {
         let report = w.finish(Duration::from_mins(15));
         assert_eq!(
             report.summary,
-            "FAIL: Cellar (f817624e4c0b): 2 of 17 readings within the throttle"
+            "FAIL: Cellar (aabbccddee01): 2 of 17 readings within the throttle"
         );
     }
 
@@ -1255,11 +1254,11 @@ mod tests {
         let mut w = watch();
         healthy(&mut w, 15);
         let topic = format!("ruuvi2mqtt/{TAG}");
-        let bad = reading(TALLI).replace("45.5", "145.5");
+        let bad = reading(HOST2).replace("45.5", "145.5");
         let note = w.on_message(secs(100), &topic, bad.as_bytes(), false);
         assert_eq!(
             note.as_deref(),
-            Some("+1:40 f817624e4c0b: humidity 145.5 out of range")
+            Some("+1:40 aabbccddee01: humidity 145.5 out of range")
         );
         let report = w.finish(Duration::from_mins(15));
         assert_eq!(report.summary, "FAIL: 1 invalid readings");
@@ -1268,30 +1267,30 @@ mod tests {
     #[test]
     fn readings_validate() {
         assert_eq!(
-            validate_reading(reading(PANNU).as_bytes(), Model::Tag),
+            validate_reading(reading(HOST1).as_bytes(), Model::Tag),
             Ok(Reading {
-                publisher: PANNU.into(),
+                publisher: HOST1.into(),
                 e1: false
             })
         );
         // A tag without the pressure sensor, in an old data format
-        let no_pressure = reading(PANNU)
+        let no_pressure = reading(HOST1)
             .replace("1003.2", "null")
             .replace(r#""tx_power":4"#, r#""tx_power":null"#);
         assert!(validate_reading(no_pressure.as_bytes(), Model::Tag).is_ok());
-        let no_temperature = reading(PANNU).replace("21.3", "null");
+        let no_temperature = reading(HOST1).replace("21.3", "null");
         assert_eq!(
             validate_reading(no_temperature.as_bytes(), Model::Tag),
             Err("temperature: null".into())
         );
-        let no_publisher = reading(PANNU).replace(r#","publisher":"ruuvi2mqtt_pannu""#, "");
+        let no_publisher = reading(HOST1).replace(r#","publisher":"ruuvi2mqtt_host1""#, "");
         assert_eq!(
             validate_reading(no_publisher.as_bytes(), Model::Tag),
             Err("publisher: null".into())
         );
         assert!(validate_reading(b"21.3", Model::Tag).is_err());
         assert_eq!(
-            validate_reading(air_reading(PANNU).as_bytes(), Model::Tag),
+            validate_reading(air_reading(HOST1).as_bytes(), Model::Tag),
             Err("battery: null".into())
         );
     }
@@ -1316,30 +1315,30 @@ mod tests {
     #[test]
     fn air_readings_validate() {
         assert_eq!(
-            validate_reading(air_reading(PANNU).as_bytes(), Model::Air),
+            validate_reading(air_reading(HOST1).as_bytes(), Model::Air),
             Ok(Reading {
-                publisher: PANNU.into(),
+                publisher: HOST1.into(),
                 e1: false
             })
         );
         assert_eq!(
-            validate_reading(air_reading_e1(PANNU).as_bytes(), Model::Air),
+            validate_reading(air_reading_e1(HOST1).as_bytes(), Model::Air),
             Ok(Reading {
-                publisher: PANNU.into(),
+                publisher: HOST1.into(),
                 e1: true
             })
         );
         assert_eq!(
-            validate_reading(reading(PANNU).as_bytes(), Model::Air),
+            validate_reading(reading(HOST1).as_bytes(), Model::Air),
             Err("battery: 2.9".into())
         );
         let battery_low =
-            air_reading(PANNU).replace(r#""battery_low":null"#, r#""battery_low":false"#);
+            air_reading(HOST1).replace(r#""battery_low":null"#, r#""battery_low":false"#);
         assert_eq!(
             validate_reading(battery_low.as_bytes(), Model::Air),
             Err("battery_low: false".into())
         );
-        let calibrating = air_reading(PANNU).replace(r#""calibrating":false,"#, "");
+        let calibrating = air_reading(HOST1).replace(r#""calibrating":false,"#, "");
         assert_eq!(
             validate_reading(calibrating.as_bytes(), Model::Air),
             Err("calibrating: null".into())
@@ -1357,9 +1356,9 @@ mod tests {
         // E1 from one instance, format 6 only from the other
         for m in 0..15 {
             let reading = if m < 10 {
-                air_reading_e1(TALLI)
+                air_reading_e1(HOST2)
             } else {
-                air_reading(PANNU)
+                air_reading(HOST1)
             };
             w.on_message(secs(40 + m * 60), &topic, reading.as_bytes(), false);
         }
@@ -1371,12 +1370,12 @@ mod tests {
                 .contains("Living room (c4d2a1b3e5f6): 15 readings")
         );
         assert!(report.text.contains(
-            ", from ruuvi2mqtt_pannu 5 (0 E1), ruuvi2mqtt_talli 10 (10 E1), discovery 13/13\n"
+            ", from ruuvi2mqtt_host1 5 (0 E1), ruuvi2mqtt_host2 10 (10 E1), discovery 13/13\n"
         ));
         assert!(
             report
                 .text
-                .contains(", from ruuvi2mqtt_talli 15, discovery 6/6\n")
+                .contains(", from ruuvi2mqtt_host2 15, discovery 6/6\n")
         );
     }
 
@@ -1406,7 +1405,7 @@ mod tests {
         let report = w.finish(Duration::from_mins(15));
         assert_eq!(
             report.summary,
-            "FAIL: Cellar (f817624e4c0b): 5 of 6 discovery configs"
+            "FAIL: Cellar (aabbccddee01): 5 of 6 discovery configs"
         );
     }
 
@@ -1418,7 +1417,7 @@ mod tests {
         let report = w.finish(Duration::from_mins(15));
         assert_eq!(
             report.summary,
-            "FAIL: Cellar (f817624e4c0b): unexpected discovery configs: co2"
+            "FAIL: Cellar (aabbccddee01): unexpected discovery configs: co2"
         );
     }
 
@@ -1428,8 +1427,8 @@ mod tests {
         healthy(&mut w, 15);
         w.on_message(
             secs(100),
-            "ruuvi2mqtt/fc2966f1fd67",
-            reading(PANNU).as_bytes(),
+            "ruuvi2mqtt/aabbccddee02",
+            reading(HOST1).as_bytes(),
             false,
         );
         w.on_message(secs(100), "zigbee2mqtt/bridge/state", b"online", false);
@@ -1444,7 +1443,7 @@ mod tests {
         assert!(
             report
                 .text
-                .contains("\nOther tags:\n  fc2966f1fd67: 1 readings\n")
+                .contains("\nOther tags:\n  aabbccddee02: 1 readings\n")
         );
         assert!(report.text.contains("\nOther statuses:\n  conn-plain: "));
         assert!(report.text.contains("\n1 messages on other topics\n"));
@@ -1460,7 +1459,7 @@ mod tests {
     }
 
     /// `minutes` of healthy instances, and a board cycle every 67 s, each
-    /// with a reading of TAG right after TALLI's
+    /// with a reading of TAG
     fn with_board(watch: &mut Watch, minutes: u64, firmware: &str) {
         healthy(watch, minutes);
         let topic = format!("ruuvi2mqtt/{TAG}");
@@ -1471,7 +1470,7 @@ mod tests {
             let payload = diagnostics(firmware, 10 + n, &tags);
             watch.on_message(
                 secs(at),
-                "ruuvi2mqtt/diagnostics/ruuvitest-c6",
+                "ruuvi2mqtt/diagnostics/c6-board",
                 payload.as_bytes(),
                 false,
             );
@@ -1492,10 +1491,10 @@ mod tests {
         assert_eq!(report.failures, Vec::<String>::new(), "{}", report.text);
         assert!(report.text.contains(concat!(
             "\nESP32 boards:\n",
-            "  ruuvi2mqtt-c6 (ruuvitest-c6, esp32c6): 13 cycles, ruuvi2mqtt-esp32 1.5.2-dev (abcdef0)\n",
+            "  ruuvi2mqtt-c6 (c6-board, esp32c6): 13 cycles, ruuvi2mqtt-esp32 1.5.2-dev (abcdef0)\n",
             "    settings: deep-sleep 5s\n",
             "    hit rate 100% (13 of 13 tag cycles)\n",
-            "    Cellar (f817624e4c0b): 13 of 13 cycles, RSSI -74 (-74..-74), 2.0 adverts per cycle heard\n",
+            "    Cellar (aabbccddee01): 13 of 13 cycles, RSSI -74 (-74..-74), 2.0 adverts per cycle heard\n",
             "    adverts/s before Wi-Fi connected: Ruuvi 1.0, other 10.0; after: Ruuvi 2.0, other 20.0\n",
             "    mean ms: Wi-Fi 1200, MQTT 2000, scan 200..5200, cycle 5300 (max 5300)\n",
             "    Wi-Fi cache 13 hit; cycle counter: 0 missed, 0 restarts\n",
@@ -1503,7 +1502,7 @@ mod tests {
         assert!(
             report
                 .text
-                .contains("from ruuvi2mqtt-c6 13, ruuvi2mqtt_talli 15,")
+                .contains("from ruuvi2mqtt-c6 13, ruuvi2mqtt_host2 15,")
         );
     }
 
@@ -1558,7 +1557,7 @@ mod tests {
     fn missed_cycles_and_restarts_are_counted() {
         let mut w = watch();
         healthy(&mut w, 5);
-        let topic = "ruuvi2mqtt/diagnostics/ruuvitest-c6";
+        let topic = "ruuvi2mqtt/diagnostics/c6-board";
         for (at, cycle) in [(0, 7), (67, 8), (201, 10), (268, 2)] {
             let payload = diagnostics("1.5.2-dev (6534f11)", cycle, "{}");
             w.on_message(secs(at), topic, payload.as_bytes(), false);
@@ -1599,11 +1598,11 @@ mod tests {
         let topic = "ruuvi2mqtt/diagnostics/esp32";
         let note = w.on_message(secs(100), topic, br#"{"firmware":"x"}"#, false);
         assert_eq!(note.as_deref(), Some("+1:40 esp32: client_id: null"));
-        let bad_tag = diagnostics("1.5.2-dev", 1, r#"{"f817624e4c0b":{"rssi":"weak"}}"#);
+        let bad_tag = diagnostics("1.5.2-dev", 1, r#"{"aabbccddee01":{"rssi":"weak"}}"#);
         let note = w.on_message(secs(160), topic, bad_tag.as_bytes(), false);
         assert_eq!(
             note.as_deref(),
-            Some(r#"+2:40 esp32: tag f817624e4c0b: {"rssi":"weak"}"#)
+            Some(r#"+2:40 esp32: tag aabbccddee01: {"rssi":"weak"}"#)
         );
         let report = w.finish(Duration::from_mins(15));
         assert_eq!(report.summary, "FAIL: 2 invalid diagnostics");

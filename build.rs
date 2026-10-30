@@ -6,7 +6,7 @@ fn main() {
     let version = env!("CARGO_PKG_VERSION");
     let build_version = match git_revision() {
         Some(revision) => format!("{version} ({revision})"),
-        // E.g. in a cross container without git, or a source tarball.
+        // E.g. when built from a source tarball.
         None => version.to_string(),
     };
     println!("cargo:rustc-env=BUILD_VERSION={build_version}");

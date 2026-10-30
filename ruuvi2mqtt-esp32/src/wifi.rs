@@ -24,11 +24,7 @@ use crate::{ble, config, led, system};
 /// Connect to Wi-Fi and return the `BlockingWifi` guard, and how the NVS
 /// cache was used.
 ///
-/// Uses NVS-cached channel/BSSID for fast reconnect when available, falling
-/// back to a full scan on first boot or when the cache is stale. Optionally
-/// configures a static IP to skip DHCP.
-///
-/// The guard keeps the Wi-Fi driver alive.  Dropping it disconnects.
+/// The guard keeps the Wi-Fi driver alive. Dropping it disconnects.
 pub fn connect(
     modem: Modem<'static>,
     sysloop: EspSystemEventLoop,
@@ -36,8 +32,8 @@ pub fn connect(
 ) -> anyhow::Result<(BlockingWifi<EspWifi<'static>>, CacheUse)> {
     let esp_wifi = EspWifi::new(modem, sysloop.clone(), Some(nvs))?;
 
-    let hostname = CString::new(config::DEVICE_HOSTNAME)
-        .expect("ESP32_DEVICE_HOSTNAME contains an unexpected null byte");
+    let hostname =
+        CString::new(config::DEVICE_HOSTNAME).expect("DEVICE_HOSTNAME contains a null byte");
     if let Err(e) = unsafe {
         sys::esp!(sys::esp_netif_set_hostname(
             esp_wifi.sta_netif().handle(),
@@ -47,7 +43,6 @@ pub fn connect(
         log::warn!("Could not set hostname: {e}");
     }
 
-    // ── Static IP ────────────────────────────────────────────────────────────
     if let Some(ip) = config::WIFI_IP {
         configure_static_ip(esp_wifi.sta_netif().handle(), ip)?;
     }
@@ -62,7 +57,6 @@ pub fn connect(
         AuthMethod::WPA2Personal
     };
 
-    // ── Fast reconnect from NVS cache ────────────────────────────────────────
     let cached = load_wifi_cache();
     let (channel, bssid, scan_method) = if let Some(cache) = &cached {
         info!(
@@ -105,7 +99,6 @@ pub fn connect(
         Ok(()) if cached.is_some() => CacheUse::Hit,
         Ok(()) => CacheUse::Miss,
         Err(e) if cached.is_some() => {
-            // Cached channel/BSSID may be stale — retry with full scan.
             log::warn!("Fast reconnect failed ({e}), retrying with full scan");
             wifi.set_configuration(&Configuration::Client(ClientConfiguration {
                 ssid: config::WIFI_SSID
@@ -128,7 +121,6 @@ pub fn connect(
     }
     info!("Connected to Wi-Fi as '{}'", config::DEVICE_HOSTNAME);
 
-    // ── Update NVS cache ─────────────────────────────────────────────────────
     update_wifi_cache(cached.as_ref());
 
     Ok((wifi, cache_use))

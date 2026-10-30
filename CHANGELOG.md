@@ -140,16 +140,15 @@
 ## 1.3.0 / 2023-02-05
 
 - Support vendoring libdbus and building statically linked binaries ([#172](https://github.com/tmatilai/ruuvi2mqtt/pull/172)).
-- Build the container images from `scratch`, and only include a statically linked (MUSL) binary.
-  The default path of the config file is changed to `/ruuvi2mqtt.yaml`.
+- Build the container images from `scratch`, and only include a statically linked (MUSL) binary. The default path of the config file is changed to `/ruuvi2mqtt.yaml`.
 
 ## 1.2.0 / 2022-12-22
 
 - Expose diagnostic information ([#124](https://github.com/tmatilai/ruuvi2mqtt/pull/124)):
-    * Battery voltage
-    * Low batter indicator
-    * Transmitter power
-    * All data in attributes for all sensors
+  - Battery voltage
+  - Low batter indicator
+  - Transmitter power
+  - All data in attributes for all sensors
 - Support more detailed log level configuration with the `RUST_LOG` env var ([#145](https://github.com/tmatilai/ruuvi2mqtt/pull/145)):
 
 ## 1.1.1 / 2022-10-30

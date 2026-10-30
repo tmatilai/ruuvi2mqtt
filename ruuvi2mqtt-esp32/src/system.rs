@@ -1,4 +1,4 @@
-//! Values for the diagnostics that need ESP-IDF.
+//! Board values that need ESP-IDF.
 
 use std::ffi::CStr;
 

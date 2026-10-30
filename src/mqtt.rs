@@ -283,7 +283,7 @@ impl EventLoop {
     }
 
     pub async fn run(self, mut eventloop: MqttEventLoop) {
-        log::info!("Starting MQTT evenloop");
+        log::info!("Starting MQTT event loop");
         loop {
             match eventloop.poll().await {
                 Ok(event) => {

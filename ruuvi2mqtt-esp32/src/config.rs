@@ -1,6 +1,4 @@
-// Compile-time configuration for ruuvi2mqtt-esp32.
-//
-// Most settings are read from environment variables at compile time.
+// Compile-time configuration from environment variables.
 
 /// Like `option_env!` but treats empty strings as `None`, so that setting a
 /// variable to empty on the command line (e.g. `make flash WIFI_IP=`) is
@@ -42,8 +40,7 @@ pub const WIFI_DNS: Option<&str> = option_env_non_empty!("WIFI_DNS");
 /// Unset uses both.
 pub const WIFI_BAND: Option<&str> = option_env_non_empty!("WIFI_BAND");
 
-/// Device hostname. Used as the default MQTT client ID and announced via
-/// DHCP (has no network effect when using static IP).
+/// The board's name for DHCP and mDNS, and the default MQTT client ID.
 pub const DEVICE_HOSTNAME: &str = match option_env_non_empty!("DEVICE_HOSTNAME") {
     Some(v) => v,
     None => "ruuvi2mqtt-esp32",
@@ -53,10 +50,10 @@ pub const DEVICE_HOSTNAME: &str = match option_env_non_empty!("DEVICE_HOSTNAME")
 // MQTT
 // ---------------------------------------------------------------------------
 
-/// Hostname or IP address of the MQTT broker (matches Linux `mqtt.server`).
+/// Hostname or IP address of the MQTT broker (matches the app's `mqtt.server`).
 pub const MQTT_SERVER: &str = env!("MQTT_SERVER");
 
-/// Enable TLS/SSL for the MQTT connection (matches Linux `mqtt.tls`).
+/// Enable TLS/SSL for the MQTT connection (matches the app's `mqtt.tls`).
 ///
 /// Set to "true" to use `mqtts://`. When enabled without `MQTT_CA_FILE`,
 /// the ESP-IDF built-in CA certificate bundle is used for verification.
@@ -69,13 +66,10 @@ pub const MQTT_TLS: bool = konst::eq_str(
 );
 
 /// Path to a custom CA certificate (PEM format) to embed at compile time
-/// (matches Linux `mqtt.ca_file`).
-///
-/// When set, the file is read by the build script and made available as
-/// `MQTT_CA_PEM` via `include_bytes!`.
+/// (matches the app's `mqtt.ca_file`).
 pub const MQTT_CA_FILE: Option<&str> = option_env_non_empty!("MQTT_CA_FILE");
 
-/// Skip the TLS hostname check (matches Linux `mqtt.tls_insecure`). The
+/// Skip the TLS hostname check (matches the app's `mqtt.tls_insecure`). The
 /// certificate chain is still verified.
 ///
 /// WARNING: Only use for testing.
@@ -87,7 +81,7 @@ pub const MQTT_TLS_INSECURE: bool = konst::eq_str(
     "true",
 );
 
-/// MQTT broker port (matches Linux `mqtt.port`).
+/// MQTT broker port (matches the app's `mqtt.port`).
 /// Default: 8883 when TLS is enabled, 1883 otherwise.
 pub const MQTT_PORT: u16 = match option_env_non_empty!("MQTT_PORT") {
     Some(v) => konst::result::unwrap!(u16::from_str_radix(v, 10)),
@@ -100,20 +94,20 @@ pub const MQTT_PORT: u16 = match option_env_non_empty!("MQTT_PORT") {
     }
 };
 
-/// MQTT client identifier (matches Linux `mqtt.client_id`). Also sent as
+/// MQTT client identifier (matches the app's `mqtt.client_id`). Also sent as
 /// `publisher` in each reading. Default: `DEVICE_HOSTNAME`.
 pub const MQTT_CLIENT_ID: &str = match option_env_non_empty!("MQTT_CLIENT_ID") {
     Some(v) => v,
     None => DEVICE_HOSTNAME,
 };
 
-/// Optional MQTT username (matches Linux `mqtt.user`).
+/// Optional MQTT username (matches the app's `mqtt.user`).
 pub const MQTT_USER: &str = match option_env_non_empty!("MQTT_USER") {
     Some(v) => v,
     None => "",
 };
 
-/// Optional MQTT password (matches Linux `mqtt.password`).
+/// Optional MQTT password (matches the app's `mqtt.password`).
 pub const MQTT_PASSWORD: &str = match option_env_non_empty!("MQTT_PASSWORD") {
     Some(v) => v,
     None => "",
@@ -123,7 +117,7 @@ pub const MQTT_PASSWORD: &str = match option_env_non_empty!("MQTT_PASSWORD") {
 // Topics
 // ---------------------------------------------------------------------------
 
-/// Base topic prefix (matches Linux `mqtt.base_topic`).
+/// Base topic prefix (matches the app's `mqtt.base_topic`).
 /// Messages will be published to `{MQTT_BASE_TOPIC}/{MAC_ADDRESS}`.
 pub const MQTT_BASE_TOPIC: &str = match option_env_non_empty!("MQTT_BASE_TOPIC") {
     Some(v) => v,
@@ -151,19 +145,19 @@ pub const BLE_SCAN_CONTINUOUS: bool = konst::eq_str(BLE_SCAN_MODE, "continuous")
 /// In the deep-sleep mode, BLE scanning runs during the Wi-Fi connection,
 /// so increasing this does not necessarily add to the total active time. For
 /// best results, set this close to your typical Wi-Fi + MQTT connect time
-/// (check the boot log) but at least 3 seconds to have the chance to catch
-/// all RuuviTags (~2.5s advertisement interval).
-#[allow(clippy::doc_markdown)] // RuuviTag is a product name, not a code identifier
+/// (check the boot log), but at least 3 seconds, so that each tag gets a few
+/// chances to be heard.
 pub const BLE_SCAN_DURATION: i32 = match option_env_non_empty!("BLE_SCAN_DURATION") {
     Some(v) => konst::result::unwrap!(i32::from_str_radix(v, 10)),
     None if BLE_SCAN_CONTINUOUS => 60,
     None => 5,
 };
 
-/// Deep sleep duration (seconds) between scan-publish cycles. The chip fully
-/// powers off (CPU, RAM, radios) and reboots on wake. The continuous mode
-/// waits this long awake after a failure, then restarts. A cycle timeout
-/// waits a cycle longer, and a cycle that succeeds cancels the restart.
+/// Deep sleep duration (seconds) between scan-publish cycles. The CPU, the
+/// radios and the main RAM power off, and the chip reboots on wake. The
+/// continuous mode waits this long awake after a failure, then restarts. A
+/// cycle timeout waits a cycle longer, and a cycle that succeeds cancels the
+/// restart.
 pub const BLE_SLEEP_DURATION: i32 = match option_env_non_empty!("BLE_SLEEP_DURATION") {
     Some(v) => konst::result::unwrap!(i32::from_str_radix(v, 10)),
     None => 60,

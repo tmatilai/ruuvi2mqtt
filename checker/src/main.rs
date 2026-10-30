@@ -1,4 +1,4 @@
-//! Checks the Linux app and the ESP32 boards on a test bed. See README.md.
+//! Checks the ruuvi2mqtt app and the ESP32 boards on a test bed. See README.md.
 
 mod check;
 mod time;
@@ -40,7 +40,7 @@ struct Options {
     /// The commit under test, at least 7 hex digits
     #[arg(long, value_parser = parse_commit)]
     commit: String,
-    /// A Linux instance's MQTT client ID (repeat for each)
+    /// An app instance's MQTT client ID (repeat for each)
     #[arg(long = "instance", value_name = "CLIENT_ID", required = true)]
     instances: Vec<String>,
     /// An ESP32 board's MQTT client ID (repeat for each). Its firmware and
@@ -208,7 +208,7 @@ fn parse_commit(s: &str) -> Result<String, String> {
     }
 }
 
-/// `F8:17:62:4E:4C:0B` to `f817624e4c0b`, as in the topics
+/// `AA:BB:CC:DD:EE:01` to `aabbccddee01`, as in the topics
 fn parse_mac(s: &str) -> Result<String, String> {
     let hex: String = s.chars().filter(|c| *c != ':').collect();
     if hex.len() == 12 && hex.bytes().all(|b| b.is_ascii_hexdigit()) {
@@ -231,12 +231,12 @@ mod tests {
     #[test]
     fn parses_macs() {
         assert_eq!(
-            parse_mac("F8:17:62:4E:4C:0B").as_deref(),
-            Ok("f817624e4c0b")
+            parse_mac("AA:BB:CC:DD:EE:01").as_deref(),
+            Ok("aabbccddee01")
         );
-        assert_eq!(parse_mac("f817624e4c0b").as_deref(), Ok("f817624e4c0b"));
-        assert!(parse_mac("F8:17:62:4E:4C").is_err());
-        assert!(parse_mac("G8:17:62:4E:4C:0B").is_err());
+        assert_eq!(parse_mac("aabbccddee01").as_deref(), Ok("aabbccddee01"));
+        assert!(parse_mac("AA:BB:CC:DD:EE").is_err());
+        assert!(parse_mac("GA:BB:CC:DD:EE:01").is_err());
     }
 
     #[test]

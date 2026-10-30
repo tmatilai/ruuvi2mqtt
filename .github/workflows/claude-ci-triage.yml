@@ -2,9 +2,9 @@ name: Claude CI triage
 
 # When CI finishes on a Renovate PR, ask Claude to post one analysis comment
 # on the PR: why CI failed, and for risky updates (labeled `breaking-risk` by
-# Renovate: majors, 0.x minors, ESP-IDF, and the Rust nightly) which breaking
-# changes affect this repository even when CI is green. Read-only: it never
-# pushes commits.
+# Renovate: majors, 0.x minors, ESP-IDF, and the Rust toolchains) which
+# breaking changes affect this repository even when CI is green. Read-only: it
+# never pushes commits.
 
 on:
   # workflow_run is safe here: nothing from the PR branch is checked out or
@@ -94,8 +94,9 @@ jobs:
                `gh api` to read.
 
             Part B, if BREAKING CHANGE REVIEW is true: the update is a major
-            version, a 0.x minor which may break just as well, or ESP-IDF. Look
-            for breaking changes that a green CI cannot catch.
+            version, a 0.x minor which may break just as well, ESP-IDF, or a
+            Rust toolchain. Look for breaking changes that a green CI cannot
+            catch.
             1. Identify the dependency and the old and new versions from the
                PR title and body (`gh pr view --json title,body`). Use
                `gh pr diff` only if they are unclear: the Cargo.lock part of

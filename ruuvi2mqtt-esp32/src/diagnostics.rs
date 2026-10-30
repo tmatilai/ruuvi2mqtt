@@ -27,7 +27,7 @@ pub struct Diagnostics<'a> {
     pub free_heap: u32,
     pub scan_start_ms: u32,
     pub scan_end_ms: u32,
-    /// When Wi-Fi connected.
+    /// When Wi-Fi was up.
     pub wifi_ms: u32,
     /// When the broker accepted the connection.
     pub mqtt_ms: u32,
@@ -77,7 +77,7 @@ pub enum CacheUse {
 mod tests {
     use super::*;
 
-    const TAG: Mac = Mac([0xF8, 0x17, 0x62, 0x4E, 0x4C, 0x0B]);
+    const TAG: Mac = Mac([0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0x01]);
 
     fn diagnostics(scan: ScanStats) -> Diagnostics<'static> {
         Diagnostics {
@@ -119,7 +119,7 @@ mod tests {
                 r#""wifi_rssi":-61,"wifi_channel":6,"wifi_bssid":"021122334455","#,
                 r#""wifi_cache":"hit","free_heap":151000,"scan_start_ms":180,"scan_end_ms":5190,"#,
                 r#""wifi_ms":1450,"mqtt_ms":2210,"cycle_ms":5230,"#,
-                r#""tags":{"f817624e4c0b":{"rssi":-74,"adverts":2,"first_ms":1210}},"#,
+                r#""tags":{"aabbccddee01":{"rssi":-74,"adverts":2,"first_ms":1210}},"#,
                 r#""adverts_before_wifi":1,"adverts_after_wifi":1,"#,
                 r#""other_adverts_before_wifi":1,"other_adverts_after_wifi":0}"#
             )

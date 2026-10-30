@@ -1,7 +1,7 @@
 [build]
 target = "riscv32imac-esp-espidf"
 
-# ESP32-C5 / ESP32-C6 / ESP32-H2 (RISC-V)
+# ESP32-C5 / ESP32-C6 (RISC-V)
 [target.riscv32imac-esp-espidf]
 linker = "ldproxy"
 runner = "espflash flash --monitor"
