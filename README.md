@@ -59,6 +59,27 @@ The app exits with an error when it loses Bluetooth, e.g. when the adapter goes
 away or BlueZ restarts. Run it under something that restarts it, such as systemd
 with `Restart=on-failure` or Docker with `--restart`.
 
+### Ruuvi Air
+
+Ruuvi Air support is a preview, tested with a simulator but not yet with a real
+Air. Set `model: air` on an Air's device to give it an Air's Home Assistant
+entities instead of a RuuviTag's. When the model changes, the app removes the
+old model's entities.
+
+An Air sends two data formats. Format 6 is a legacy advertisement with PM2.5
+only. E1 is a Bluetooth 5 extended advertisement with PM1, PM2.5, PM4 and PM10.
+The app publishes E1, and format 6 only when no E1 has arrived from the Air in
+the last minute. E1 needs a Bluetooth 5 adapter that scans for extended
+advertisements, which not all do. The ESP32 firmware receives only format 6 for
+now.
+
+With several instances, any that receives only format 6 publishes too, an ESP32
+included, so PM1, PM4 and PM10 may come and go. Give every app instance that
+hears the Air a Bluetooth 5 adapter.
+
+The Air doesn't broadcast its indoor air quality score, so the app computes
+`iaqs` from PM2.5 and CO2 with Ruuvi's formula.
+
 ### Status
 
 Each instance publishes a retained status message to
