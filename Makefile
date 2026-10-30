@@ -15,7 +15,7 @@ help: ## Display this help
 all: local $(ARCHS) ## Lint and build all architectures
 
 .PHONY: lint
-lint: ## Check the version, format and lint
+lint: fmt-docs ## Check the version, format and lint
 	script/check-version
 	cargo fmt --all
 	cargo clippy --workspace --tests --all-targets --all-features -- -D clippy::all -W clippy::pedantic
@@ -34,6 +34,15 @@ cross: $(ARCHS) ## Build all non-local architectures
 # The same version as CI, so local builds use the release builds' images.
 # renovate: datasource=crate depName=cross
 CROSS_VERSION := 0.2.5
+
+# renovate: datasource=npm depName=prettier
+PRETTIER_VERSION := 3.9.10
+# CI sets --check.
+PRETTIER_MODE := --write
+
+.PHONY: fmt-docs
+fmt-docs: ## Format the Markdown files with Prettier
+	npx --yes prettier@$(PRETTIER_VERSION) $(PRETTIER_MODE) --log-level warn $$(git ls-files '*.md')
 
 .PHONY: setup
 setup: ## Install the tools for the app and the ESP32 firmware
