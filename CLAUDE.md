@@ -84,12 +84,21 @@ configs, and the ESP32 boards' diagnostics. Its `record` mode runs all the time,
 and tells the runs which tags to expect and how often they come. See
 `checker/README.md`.
 
-- `src/check.rs`: the checks, without MQTT. Has unit tests. `TAG_ENTITIES`,
-  `AIR_ENTITIES` and `VALUES` mirror the app's payloads, and `parse_diagnostics`
-  the ESP32 diagnostics. Update them when the payloads change.
+- `src/payload.rs`: the app's readings, discovery configs and statuses, and
+  `src/diagnostics.rs` the ESP32 diagnostics. They mirror the payloads, so
+  update them when the payloads change. `printable` escapes the control
+  characters in text from the broker, so that it can't add lines to the report.
+- `src/topic.rs`: the topics, for both modes.
+- `src/check.rs`: the checks, without MQTT. `src/check/boards.rs` has the ESP32
+  section, `src/check/tests.rs` the tests.
 - `src/record.rs`: the record mode's state, without MQTT. Has unit tests.
-- `src/main.rs`: the CLI and the MQTT loops.
-- `src/time.rs`: parses and formats the durations.
+- `src/cli.rs`: the CLI. clap validates the arguments, and then they become the
+  check's or the record mode's options: clap's derive can't have the check's
+  options beside the subcommand.
+- `src/mqtt.rs`: the broker connection, which subscribes and reconnects.
+  `src/main.rs` has the check's and the recorder's loops on it.
+- `src/time.rs`: the durations, and the longest gap.
+- `src/fixtures.rs`: payloads for the unit tests.
 
 Commands: `cargo test -p ruuvi2mqtt-checker`; `make lint` and `make test` cover
 it.
