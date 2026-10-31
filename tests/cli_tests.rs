@@ -6,21 +6,12 @@ fn cli_tests() {
 #[test]
 fn mqtt_credentials_from_env() {
     for (fixture, user, password, expected_user) in [
-        ("check-config", None, None, "ruuvi2mqtt"),
         (
             "check-config-no-password",
             None,
             Some("env-secret"),
             "ruuvi2mqtt",
         ),
-        ("check-config", Some("env-user"), None, "env-user"),
-        (
-            "check-config",
-            Some("env-user"),
-            Some("env-secret"),
-            "env-user",
-        ),
-        ("check-config", None, Some(""), "ruuvi2mqtt"),
         (
             "check-config-env",
             Some("env-user"),

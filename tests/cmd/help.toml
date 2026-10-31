@@ -1,2 +1,3 @@
 bin.name = "ruuvi2mqtt"
 args = "--help"
+env.remove = ["MQTT_USER", "MQTT_PASSWORD"]

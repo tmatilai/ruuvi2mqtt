@@ -52,11 +52,18 @@ impl Mqtt {
     }
 
     fn apply_env(&mut self) -> Result<()> {
+        self.apply_env_with(|name| env::var(name))
+    }
+
+    fn apply_env_with(
+        &mut self,
+        mut read_env: impl FnMut(&str) -> std::result::Result<String, env::VarError>,
+    ) -> Result<()> {
         for (name, value) in [
             ("MQTT_USER", &mut self.user),
             ("MQTT_PASSWORD", &mut self.password),
         ] {
-            match env::var(name) {
+            match read_env(name) {
                 Ok(override_value) => *value = Some(override_value),
                 Err(env::VarError::NotPresent) => {}
                 // VarError's display includes the value, which may be a password.
@@ -201,6 +208,41 @@ mod tests {
     fn verify_cli() {
         use clap::CommandFactory;
         CliOptions::command().debug_assert();
+    }
+
+    #[test]
+    fn mqtt_env_credentials_override_file_values() {
+        for (user, password, expected_user, expected_password) in [
+            (None, None, "ruuvi2mqtt", "secret"),
+            (Some("env-user"), None, "env-user", "secret"),
+            (None, Some("env-secret"), "ruuvi2mqtt", "env-secret"),
+            (
+                Some("env-user"),
+                Some("env-secret"),
+                "env-user",
+                "env-secret",
+            ),
+            (Some(""), Some(""), "", ""),
+        ] {
+            let mut config: Config = serde_norway::from_str(include_str!(
+                "../tests/cmd/check-config.in/ruuvi2mqtt.yaml"
+            ))
+            .unwrap();
+            config
+                .mqtt
+                .apply_env_with(|name| {
+                    match name {
+                        "MQTT_USER" => user,
+                        "MQTT_PASSWORD" => password,
+                        _ => unreachable!("unexpected environment variable: {name}"),
+                    }
+                    .map(str::to_owned)
+                    .ok_or(env::VarError::NotPresent)
+                })
+                .unwrap();
+            assert_eq!(config.mqtt.user.as_deref(), Some(expected_user));
+            assert_eq!(config.mqtt.password.as_deref(), Some(expected_password));
+        }
     }
 
     #[cfg(unix)]
