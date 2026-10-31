@@ -41,9 +41,8 @@ given with `--config` or the `CONFIG_FILE` environment variable.
 to MQTT or Bluetooth.
 
 `MQTT_USER` and `MQTT_PASSWORD` override `mqtt.user` and `mqtt.password` in the
-configuration file. Unset variables keep the file's values; empty variables
-supply empty strings. Omit either setting from the file when supplying it
-through the environment.
+configuration file. Unset or empty variables keep the file's values. Omit either
+setting from the file when supplying it through the environment.
 
 Example command to run in a Docker container:
 
