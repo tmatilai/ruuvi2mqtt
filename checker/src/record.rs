@@ -1,16 +1,18 @@
-//! The record mode: what the broker sends, all the time, without MQTT. A run
-//! reads its state to know which tags to expect and how often they come.
+//! The record mode's state, without MQTT. A run reads it to know which tags
+//! to expect and how often they come.
 
 use std::collections::{BTreeMap, VecDeque};
 
 use serde_json::{Map, Value, json};
 
-use crate::check::{is_tag_id, parse_discovery_topic};
+use crate::payload::{client_id, device_name, parse_discovery};
+use crate::time::max_gap;
+use crate::topic::Topic;
 
 /// How far back the state's readings and gaps go, in seconds
 pub const WINDOW: u64 = 3600;
-/// A longer break in the recording, without a connection or the recorder
-/// itself, restarts it: its gaps would look like the tags'.
+/// A longer break, with the recorder stopped or disconnected, restarts the
+/// recording. Otherwise the break would look like a gap of every tag.
 const MAX_BREAK: u64 = 120;
 /// A device not heard for this long drops out of the state
 const DEVICE_TTL: u64 = 24 * 3600;
@@ -28,7 +30,8 @@ pub struct Recorder {
 struct Device {
     /// From the discovery configs
     name: Option<String>,
-    /// When, and from which publisher, within the window. The last one stays.
+    /// When, and from which publisher, within the window. The last one stays
+    /// even when older.
     readings: VecDeque<(u64, String)>,
     battery: Option<f64>,
     battery_low: Option<bool>,
@@ -72,8 +75,8 @@ impl Recorder {
         Ok((recorder, number("written")?))
     }
 
-    /// After a break from `from` to `now`, without a connection or a running
-    /// recorder. A long one restarts the recording.
+    /// After a break from `from` to `now`, with the recorder stopped or
+    /// disconnected. A long one restarts the recording.
     pub fn resume(&mut self, from: u64, now: u64) {
         if now.saturating_sub(from) > MAX_BREAK {
             self.since = now;
@@ -81,33 +84,27 @@ impl Recorder {
     }
 
     pub fn on_message(&mut self, now: u64, topic: &str, payload: &[u8], retained: bool) {
-        if let Some(id) = topic
-            .strip_prefix(self.base_topic.as_str())
-            .and_then(|rest| rest.strip_prefix('/'))
-            .filter(|id| is_tag_id(id))
-        {
-            if !retained {
-                self.on_reading(now, id, payload);
+        match Topic::parse(&self.base_topic, topic) {
+            Topic::Reading(id) if !retained => self.on_reading(now, id, payload),
+            Topic::Discovery { id, entity } => {
+                let name = parse_discovery(payload, &self.base_topic, id, entity)
+                    .as_ref()
+                    .and_then(device_name);
+                if let Some(name) = name {
+                    self.devices.entry(id.to_string()).or_default().name = Some(name);
+                }
             }
-        } else if let Some((id, _)) = topic
-            .strip_prefix("homeassistant/")
-            .and_then(parse_discovery_topic)
-        {
-            let name = serde_json::from_slice::<Value>(payload)
-                .ok()
-                .and_then(|config| config.pointer("/device/name")?.as_str().map(str::to_string));
-            if let Some(name) = name {
-                self.devices.entry(id.to_string()).or_default().name = Some(name);
-            }
+            _ => {}
         }
     }
 
-    /// The checker checks the readings; the recorder only needs the publisher.
+    /// The check validates the readings. The recorder needs only the publisher
+    /// and the battery.
     fn on_reading(&mut self, now: u64, id: &str, payload: &[u8]) {
         let Ok(reading) = serde_json::from_slice::<Value>(payload) else {
             return;
         };
-        let Some(publisher) = reading["publisher"].as_str().filter(|p| !p.is_empty()) else {
+        let Some(publisher) = client_id(&reading["publisher"]) else {
             return;
         };
         let device = self.devices.entry(id.to_string()).or_default();
@@ -137,8 +134,7 @@ impl Recorder {
         });
     }
 
-    /// The state to write, as JSON. Per device: its last reading's time, its
-    /// longest gap in the window, the readings by publisher, and the battery.
+    /// The state to write, as JSON. README.md describes its fields.
     pub fn state(&mut self, now: u64) -> Value {
         self.prune(now);
         let start = now.saturating_sub(WINDOW).max(self.since);
@@ -178,30 +174,12 @@ impl Recorder {
     }
 }
 
-/// The longest time without a reading from `start` to `now`
-fn max_gap(times: &[u64], start: u64, now: u64) -> u64 {
-    let mut gap = 0;
-    let mut previous = start;
-    for &at in times.iter().chain(&[now]) {
-        gap = gap.max(at.saturating_sub(previous));
-        previous = at;
-    }
-    gap
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::fixtures::{HOST1, TAG, discovery, reading};
 
     const T0: u64 = 1_800_000_000;
-    const TAG: &str = "aabbccddee01";
-    const HOST1: &str = "ruuvi2mqtt_host1";
-
-    fn reading(publisher: &str) -> String {
-        format!(
-            r#"{{"temperature":21.3,"battery":2.9,"battery_low":false,"publisher":"{publisher}"}}"#
-        )
-    }
 
     fn recorder_with(times: &[u64]) -> Recorder {
         let mut r = Recorder::new("ruuvi2mqtt", T0);
@@ -215,11 +193,10 @@ mod tests {
     #[test]
     fn records_last_gap_publishers_and_battery() {
         let mut r = recorder_with(&[30, 90, 400, 460]);
-        let config = r#"{"state_topic":"ruuvi2mqtt/aabbccddee01","device":{"name":"Cellar"}}"#;
         r.on_message(
             T0,
             &format!("homeassistant/sensor/ruuvi_{TAG}/temperature/config"),
-            config.as_bytes(),
+            discovery(TAG, "temperature", "Cellar").as_bytes(),
             true,
         );
         let state = r.state(T0 + 600);
@@ -238,11 +215,10 @@ mod tests {
     #[test]
     fn keeps_the_name_until_the_first_reading() {
         let mut r = Recorder::new("ruuvi2mqtt", T0);
-        let config = r#"{"state_topic":"ruuvi2mqtt/aabbccddee01","device":{"name":"Cellar"}}"#;
         r.on_message(
             T0,
             &format!("homeassistant/sensor/ruuvi_{TAG}/temperature/config"),
-            config.as_bytes(),
+            discovery(TAG, "temperature", "Cellar").as_bytes(),
             true,
         );
         assert_eq!(r.state(T0 + 60)["devices"], json!({}));
@@ -263,13 +239,6 @@ mod tests {
             false,
         );
         assert_eq!(r.state(now)["devices"][TAG]["name"], "Cellar");
-    }
-
-    #[test]
-    fn gap_counts_from_the_start_and_to_now() {
-        assert_eq!(max_gap(&[], 100, 400), 300);
-        assert_eq!(max_gap(&[150, 200], 100, 400), 200);
-        assert_eq!(max_gap(&[350], 100, 400), 250);
     }
 
     #[test]

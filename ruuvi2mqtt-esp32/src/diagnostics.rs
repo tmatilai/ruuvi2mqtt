@@ -6,8 +6,8 @@ use crate::scan::ScanStats;
 /// The message on `<base topic>/diagnostics/<hostname>`, published every
 /// cycle. The times are in ms from the start of the cycle.
 ///
-/// The test bed's checker parses it (`checker/src/check.rs`), so update that
-/// too.
+/// The test bed's checker parses it (`checker/src/diagnostics.rs`), so update
+/// that too.
 #[derive(Debug, Serialize)]
 pub struct Diagnostics<'a> {
     /// The package version and the git commit.
