@@ -40,6 +40,18 @@ given with `--config` or the `CONFIG_FILE` environment variable.
 `--check-config` validates the configuration file and exits, without connecting
 to MQTT or Bluetooth.
 
+Set `MQTT_USER` and `MQTT_PASSWORD` to supply MQTT credentials through the
+environment. Each variable overrides its corresponding `mqtt.user` or
+`mqtt.password` value in the configuration file. Unset variables leave the
+file's values in use; empty variables override them with empty strings. You can
+omit either setting from the file when supplying it through the environment. For
+example, keep `mqtt.user` in the file and run:
+
+```bash
+export MQTT_PASSWORD='your-password'
+ruuvi2mqtt
+```
+
 Example command to run in a Docker container:
 
 ```bash

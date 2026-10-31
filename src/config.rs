@@ -1,6 +1,6 @@
 use std::{
     collections::HashMap,
-    fs,
+    env, fs,
     path::{Path, PathBuf},
     time::Duration,
 };
@@ -50,6 +50,21 @@ impl Mqtt {
     pub fn port(&self) -> u16 {
         self.port.unwrap_or(if self.tls { 8883 } else { 1883 })
     }
+
+    fn apply_env(&mut self) -> Result<()> {
+        for (name, value) in [
+            ("MQTT_USER", &mut self.user),
+            ("MQTT_PASSWORD", &mut self.password),
+        ] {
+            match env::var(name) {
+                Ok(override_value) => *value = Some(override_value),
+                Err(env::VarError::NotPresent) => {}
+                // VarError's display includes the value, which may be a password.
+                Err(env::VarError::NotUnicode(_)) => bail!("{name} must contain valid Unicode"),
+            }
+        }
+        Ok(())
+    }
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -98,6 +113,7 @@ impl Config {
         warn_if_readable_by_others(config_file);
         let mut config: Self = serde_norway::from_str(&config_str)
             .with_context(|| format!("Failed to load {}", config_file.display()))?;
+        config.mqtt.apply_env()?;
         config.mqtt.base_topic = validate_base_topic(&config.mqtt.base_topic)
             .with_context(|| format!("Invalid mqtt.base_topic in {}", config_file.display()))?;
         Ok(config)
