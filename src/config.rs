@@ -51,11 +51,7 @@ impl Mqtt {
         self.port.unwrap_or(if self.tls { 8883 } else { 1883 })
     }
 
-    fn apply_env(&mut self) -> Result<()> {
-        self.apply_env_with(|name| env::var(name))
-    }
-
-    fn apply_env_with(
+    fn apply_env(
         &mut self,
         mut read_env: impl FnMut(&str) -> std::result::Result<String, env::VarError>,
     ) -> Result<()> {
@@ -120,7 +116,7 @@ impl Config {
         warn_if_readable_by_others(config_file);
         let mut config: Self = serde_norway::from_str(&config_str)
             .with_context(|| format!("Failed to load {}", config_file.display()))?;
-        config.mqtt.apply_env()?;
+        config.mqtt.apply_env(|name| env::var(name))?;
         config.mqtt.base_topic = validate_base_topic(&config.mqtt.base_topic)
             .with_context(|| format!("Invalid mqtt.base_topic in {}", config_file.display()))?;
         Ok(config)
@@ -230,7 +226,7 @@ mod tests {
             .unwrap();
             config
                 .mqtt
-                .apply_env_with(|name| {
+                .apply_env(|name| {
                     match name {
                         "MQTT_USER" => user,
                         "MQTT_PASSWORD" => password,
@@ -242,6 +238,35 @@ mod tests {
                 .unwrap();
             assert_eq!(config.mqtt.user.as_deref(), Some(expected_user));
             assert_eq!(config.mqtt.password.as_deref(), Some(expected_password));
+            let debug = format!("{:?}", config.mqtt);
+            assert!(debug.contains("password: Some(<REDACTED>)"));
+            if !expected_password.is_empty() {
+                assert!(!debug.contains(expected_password));
+            }
+        }
+    }
+
+    #[test]
+    fn mqtt_env_invalid_unicode_does_not_expose_credentials() {
+        for name in ["MQTT_USER", "MQTT_PASSWORD"] {
+            let mut config: Config = serde_norway::from_str(include_str!(
+                "../tests/cmd/check-config.in/ruuvi2mqtt.yaml"
+            ))
+            .unwrap();
+            let error = config
+                .mqtt
+                .apply_env(|key| {
+                    Err(if key == name {
+                        env::VarError::NotUnicode("secret".into())
+                    } else {
+                        env::VarError::NotPresent
+                    })
+                })
+                .unwrap_err();
+            assert_eq!(
+                error.to_string(),
+                format!("{name} must contain valid Unicode")
+            );
         }
     }
 
