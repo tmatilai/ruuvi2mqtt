@@ -1,0 +1,6 @@
+bin.name = "ruuvi2mqtt"
+args = "--check-config"
+
+[env.add]
+MQTT_USER = "env-user"
+MQTT_PASSWORD = "env-secret"

@@ -4,7 +4,13 @@
 
 #### Features
 
+- Read MQTT credentials from the `MQTT_USER` and `MQTT_PASSWORD` environment variables, overriding `mqtt.user` and `mqtt.password` in the configuration file. An empty variable is an error.
+- Allow connecting to MQTT with a username and no password.
 - Support Ruuvi Air, as a preview: publish its CO2, PM1, PM2.5, PM4 and PM10, VOC and NOx indexes, luminosity, calibration flag, and Ruuvi's indoor air quality score `iaqs`. Set `model: air` on its device for its Home Assistant entities. PM1, PM4 and PM10 need a Bluetooth 5 adapter. See [Ruuvi Air](./README.md#ruuvi-air).
+
+#### Fixes
+
+- Fail at startup when `mqtt.password` is set without `mqtt.user`, instead of connecting anonymously.
 
 ### ruuvi2mqtt-esp32
 

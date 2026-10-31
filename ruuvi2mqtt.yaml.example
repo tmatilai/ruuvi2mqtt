@@ -10,6 +10,8 @@ mqtt:
   # Skip TLS certificate verification (default: false)
   # WARNING: Only use for testing — disables all certificate checks
   #tls_insecure: false
+  # MQTT_USER and MQTT_PASSWORD override these values; empty variables are errors.
+  # Omit either setting here to supply it only through the environment.
   user: "ruuvi2mqtt"
   password: "changeme"
   #client_id: "ruuvi2mqtt_<hostname>"
