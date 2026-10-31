@@ -1,6 +1,6 @@
 use std::{
     collections::HashMap,
-    fs,
+    env, fs,
     path::{Path, PathBuf},
     time::Duration,
 };
@@ -50,6 +50,24 @@ impl Mqtt {
     pub fn port(&self) -> u16 {
         self.port.unwrap_or(if self.tls { 8883 } else { 1883 })
     }
+
+    fn apply_env(
+        &mut self,
+        mut read_env: impl FnMut(&str) -> std::result::Result<String, env::VarError>,
+    ) -> Result<()> {
+        for (name, value) in [
+            ("MQTT_USER", &mut self.user),
+            ("MQTT_PASSWORD", &mut self.password),
+        ] {
+            match read_env(name) {
+                Ok(override_value) if !override_value.is_empty() => *value = Some(override_value),
+                Ok(_) | Err(env::VarError::NotPresent) => {}
+                // VarError's display includes the value, which may be a password.
+                Err(env::VarError::NotUnicode(_)) => bail!("{name} must contain valid Unicode"),
+            }
+        }
+        Ok(())
+    }
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -98,6 +116,7 @@ impl Config {
         warn_if_readable_by_others(config_file);
         let mut config: Self = serde_norway::from_str(&config_str)
             .with_context(|| format!("Failed to load {}", config_file.display()))?;
+        config.mqtt.apply_env(|name| env::var(name))?;
         config.mqtt.base_topic = validate_base_topic(&config.mqtt.base_topic)
             .with_context(|| format!("Invalid mqtt.base_topic in {}", config_file.display()))?;
         Ok(config)
@@ -185,6 +204,70 @@ mod tests {
     fn verify_cli() {
         use clap::CommandFactory;
         CliOptions::command().debug_assert();
+    }
+
+    #[test]
+    fn mqtt_env_credentials_override_file_values() {
+        for (user, password, expected_user, expected_password) in [
+            (None, None, "ruuvi2mqtt", "secret"),
+            (Some("env-user"), None, "env-user", "secret"),
+            (None, Some("env-secret"), "ruuvi2mqtt", "env-secret"),
+            (
+                Some("env-user"),
+                Some("env-secret"),
+                "env-user",
+                "env-secret",
+            ),
+            (Some(""), Some(""), "ruuvi2mqtt", "secret"),
+            (Some(""), Some("env-secret"), "ruuvi2mqtt", "env-secret"),
+            (Some("env-user"), Some(""), "env-user", "secret"),
+        ] {
+            let mut config: Config = serde_norway::from_str(include_str!(
+                "../tests/cmd/check-config.in/ruuvi2mqtt.yaml"
+            ))
+            .unwrap();
+            config
+                .mqtt
+                .apply_env(|name| {
+                    match name {
+                        "MQTT_USER" => user,
+                        "MQTT_PASSWORD" => password,
+                        _ => unreachable!("unexpected environment variable: {name}"),
+                    }
+                    .map(str::to_owned)
+                    .ok_or(env::VarError::NotPresent)
+                })
+                .unwrap();
+            assert_eq!(config.mqtt.user.as_deref(), Some(expected_user));
+            assert_eq!(config.mqtt.password.as_deref(), Some(expected_password));
+            let debug = format!("{:?}", config.mqtt);
+            assert!(debug.contains("password: Some(<REDACTED>)"));
+            assert!(!debug.contains(expected_password));
+        }
+    }
+
+    #[test]
+    fn mqtt_env_invalid_unicode_does_not_expose_credentials() {
+        for name in ["MQTT_USER", "MQTT_PASSWORD"] {
+            let mut config: Config = serde_norway::from_str(include_str!(
+                "../tests/cmd/check-config.in/ruuvi2mqtt.yaml"
+            ))
+            .unwrap();
+            let error = config
+                .mqtt
+                .apply_env(|key| {
+                    Err(if key == name {
+                        env::VarError::NotUnicode("secret".into())
+                    } else {
+                        env::VarError::NotPresent
+                    })
+                })
+                .unwrap_err();
+            assert_eq!(
+                error.to_string(),
+                format!("{name} must contain valid Unicode")
+            );
+        }
     }
 
     #[cfg(unix)]
