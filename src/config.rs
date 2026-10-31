@@ -60,8 +60,11 @@ impl Mqtt {
             ("MQTT_PASSWORD", &mut self.password),
         ] {
             match read_env(name) {
-                Ok(override_value) if !override_value.is_empty() => *value = Some(override_value),
-                Ok(_) | Err(env::VarError::NotPresent) => {}
+                Ok(override_value) if override_value.is_empty() => {
+                    bail!("{name} must not be empty")
+                }
+                Ok(override_value) => *value = Some(override_value),
+                Err(env::VarError::NotPresent) => {}
                 // VarError's display includes the value, which may be a password.
                 Err(env::VarError::NotUnicode(_)) => bail!("{name} must contain valid Unicode"),
             }
@@ -218,9 +221,6 @@ mod tests {
                 "env-user",
                 "env-secret",
             ),
-            (Some(""), Some(""), "ruuvi2mqtt", "secret"),
-            (Some(""), Some("env-secret"), "ruuvi2mqtt", "env-secret"),
-            (Some("env-user"), Some(""), "env-user", "secret"),
         ] {
             let mut config: Config = serde_norway::from_str(include_str!(
                 "../tests/cmd/check-config.in/ruuvi2mqtt.yaml"
@@ -243,6 +243,27 @@ mod tests {
             let debug = format!("{:?}", config.mqtt);
             assert!(debug.contains("password: Some(<REDACTED>)"));
             assert!(!debug.contains(expected_password));
+        }
+    }
+
+    #[test]
+    fn mqtt_env_empty_is_an_error() {
+        for name in ["MQTT_USER", "MQTT_PASSWORD"] {
+            let mut config: Config = serde_norway::from_str(include_str!(
+                "../tests/cmd/check-config.in/ruuvi2mqtt.yaml"
+            ))
+            .unwrap();
+            let error = config
+                .mqtt
+                .apply_env(|key| {
+                    if key == name {
+                        Ok(String::new())
+                    } else {
+                        Err(env::VarError::NotPresent)
+                    }
+                })
+                .unwrap_err();
+            assert_eq!(error.to_string(), format!("{name} must not be empty"));
         }
     }
 

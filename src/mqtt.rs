@@ -94,11 +94,17 @@ impl Mqtt {
         let user = config.user.as_deref().filter(|value| !value.is_empty());
         let password = config.password.as_deref().filter(|value| !value.is_empty());
         match (user, password) {
-            (Some(user), password) => {
-                options.set_credentials(user, password.unwrap_or_default());
+            (Some(user), Some(password)) => {
+                log::info!("MQTT login: user '{user}' with a password");
+                options.set_credentials(user, password);
+            }
+            (Some(user), None) => {
+                log::info!("MQTT login: user '{user}' without a password");
+                // rumqttc leaves an empty password out of CONNECT
+                options.set_credentials(user, "");
             }
             (None, Some(_)) => bail!("MQTT username not specified"),
-            (None, None) => {}
+            (None, None) => log::info!("MQTT login: anonymous"),
         }
 
         if !config.tls && config.ca_file.is_some() {
