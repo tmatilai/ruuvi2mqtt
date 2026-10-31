@@ -1,4 +1,4 @@
 mqtt:
   server: localhost
-  user: ruuvi2mqtt
+  password: secret
 devices: {}

@@ -91,12 +91,14 @@ impl Mqtt {
             QoS::AtLeastOnce,
             true,
         ));
-        if let Some(user) = &config.user {
-            let password = config
-                .password
-                .as_ref()
-                .context("MQTT password not specified")?;
-            options.set_credentials(user, password);
+        let user = config.user.as_deref().filter(|value| !value.is_empty());
+        let password = config.password.as_deref().filter(|value| !value.is_empty());
+        match (user, password) {
+            (Some(user), password) => {
+                options.set_credentials(user, password.unwrap_or_default());
+            }
+            (None, Some(_)) => bail!("MQTT username not specified"),
+            (None, None) => {}
         }
 
         if !config.tls && config.ca_file.is_some() {
@@ -221,6 +223,46 @@ impl Mqtt {
 
 fn status_topic(config: &config::Mqtt) -> String {
     format!("{}/status/{}", config.base_topic, config.client_id)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn credentials() {
+        for (user, password, expected) in [
+            (None, None, None),
+            (Some("user"), None, Some(("user", ""))),
+            (Some("user"), Some("secret"), Some(("user", "secret"))),
+            (Some("user"), Some(""), Some(("user", ""))),
+            (Some(""), None, None),
+        ] {
+            let mut config: config::Mqtt = serde_norway::from_str("server: localhost").unwrap();
+            config.user = user.map(str::to_owned);
+            config.password = password.map(str::to_owned);
+            let login = Mqtt::options(&config).unwrap().credentials();
+            assert_eq!(
+                login
+                    .as_ref()
+                    .map(|login| (login.username.as_str(), login.password.as_str())),
+                expected
+            );
+        }
+    }
+
+    #[test]
+    fn password_requires_username() {
+        for user in [None, Some("")] {
+            let mut config: config::Mqtt =
+                serde_norway::from_str("server: localhost\npassword: secret").unwrap();
+            config.user = user.map(str::to_owned);
+            assert_eq!(
+                Mqtt::options(&config).unwrap_err().to_string(),
+                "MQTT username not specified"
+            );
+        }
+    }
 }
 
 #[derive(Debug)]
