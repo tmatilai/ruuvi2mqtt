@@ -3,6 +3,6 @@
 # Xtensa targets (ESP32, ESP32-S3) require the Espressif fork: cargo +esp
 # `make setup` installs it.
 # Pinned: a new nightly can break the build. Renovate bumps it.
-channel = "nightly-2026-10-18"
+channel = "nightly-2026-10-28"
 profile = "minimal"
 components = ["rust-src", "clippy", "rustfmt"]
