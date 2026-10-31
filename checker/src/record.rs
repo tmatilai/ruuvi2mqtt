@@ -12,7 +12,7 @@ pub const WINDOW: u64 = 3600;
 /// A longer break in the recording, without a connection or the recorder
 /// itself, restarts it: its gaps would look like the tags'.
 const MAX_BREAK: u64 = 120;
-/// A device not heard for this long is dropped
+/// A device not heard for this long drops out of the state
 const DEVICE_TTL: u64 = 24 * 3600;
 
 /// All times are Unix seconds.
@@ -116,17 +116,24 @@ impl Recorder {
         device.battery_low = reading["battery_low"].as_bool();
     }
 
-    /// Drops the readings and devices that are too old.
+    /// Drops the readings and devices that are too old. A device with a name
+    /// stays without readings: the discovery configs are retained, so they
+    /// come only once, often before a rare tag's first reading.
     fn prune(&mut self, now: u64) {
         let start = now.saturating_sub(WINDOW);
         self.devices.retain(|_, d| {
             while d.readings.len() > 1 && d.readings[0].0 < start {
                 d.readings.pop_front();
             }
-            // A device known only from its discovery configs has no reading
-            d.readings
+            if d.readings
                 .back()
-                .is_some_and(|(at, _)| *at + DEVICE_TTL >= now)
+                .is_some_and(|(at, _)| *at + DEVICE_TTL < now)
+            {
+                d.readings.clear();
+                d.battery = None;
+                d.battery_low = None;
+            }
+            !d.readings.is_empty() || d.name.is_some()
         });
     }
 
@@ -138,6 +145,7 @@ impl Recorder {
         let devices: Map<String, Value> = self
             .devices
             .iter()
+            .filter(|(_, d)| !d.readings.is_empty())
             .map(|(id, d)| {
                 let times: Vec<u64> = d
                     .readings
@@ -225,6 +233,36 @@ mod tests {
         assert_eq!(d["battery_low"], false);
         assert_eq!(state["since"], T0);
         assert_eq!(state["written"], T0 + 600);
+    }
+
+    #[test]
+    fn keeps_the_name_until_the_first_reading() {
+        let mut r = Recorder::new("ruuvi2mqtt", T0);
+        let config = r#"{"state_topic":"ruuvi2mqtt/aabbccddee01","device":{"name":"Cellar"}}"#;
+        r.on_message(
+            T0,
+            &format!("homeassistant/sensor/ruuvi_{TAG}/temperature/config"),
+            config.as_bytes(),
+            true,
+        );
+        assert_eq!(r.state(T0 + 60)["devices"], json!({}));
+        r.on_message(
+            T0 + 300,
+            &format!("ruuvi2mqtt/{TAG}"),
+            reading(HOST1).as_bytes(),
+            false,
+        );
+        assert_eq!(r.state(T0 + 360)["devices"][TAG]["name"], "Cellar");
+        // Not heard for a day, and back
+        assert_eq!(r.state(T0 + 301 + DEVICE_TTL)["devices"], json!({}));
+        let now = T0 + 400 + DEVICE_TTL;
+        r.on_message(
+            now,
+            &format!("ruuvi2mqtt/{TAG}"),
+            reading(HOST1).as_bytes(),
+            false,
+        );
+        assert_eq!(r.state(now)["devices"][TAG]["name"], "Cellar");
     }
 
     #[test]
