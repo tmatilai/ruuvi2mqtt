@@ -1,6 +1,5 @@
 bin.name = "ruuvi2mqtt"
 args = "--check-config"
-env.remove = ["MQTT_USER", "MQTT_PASSWORD"]
 
 [env.add]
 MQTT_USER = "env-user"

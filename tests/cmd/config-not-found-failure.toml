@@ -1,4 +1,3 @@
 bin.name = "ruuvi2mqtt"
 args = "--config non-existing.yaml"
-env.remove = ["MQTT_USER", "MQTT_PASSWORD"]
 status.code = 1
