@@ -71,7 +71,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       WIFI_SSID: dummy
-      WIFI_PASS: dummy
+      WIFI_PASS: dummy-password
       MQTT_SERVER: dummy
     steps:
       - name: Setup | Checkout
@@ -162,7 +162,7 @@ jobs:
       MCU: ${{ matrix.chip }}
       TARGET: ${{ matrix.target }}
       WIFI_SSID: dummy
-      WIFI_PASS: dummy
+      WIFI_PASS: dummy-password
       MQTT_SERVER: dummy
     steps:
       - name: Setup | Checkout

@@ -21,6 +21,8 @@ The firmware's defaults change in this release, so read the breaking changes bef
 - Scan continuously by default: `BLE_SCAN_MODE=continuous` scans all the time, stays connected to Wi-Fi and MQTT, and publishes once per `BLE_SCAN_DURATION`, 60 s by default. A board on a battery needs `BLE_SCAN_MODE=deep-sleep`, the former `parallel`, to keep deep sleeping. `sequential` is gone.
 - `LED_GPIO` has no default, and `LED_MODE` requires it. The old default, 15, was the Seeed XIAO ESP32-C6's pin, which may drive something else on other boards. The XIAO's LED needs `LED_TYPE=gpio` and `LED_ACTIVE_LOW=true`.
 - `LED_MODE` defaults to `on`, a dim light, when `LED_GPIO` is set. Set `LED_MODE=off` to keep it dark. An unknown `LED_MODE` or `LED_TYPE` fails the build.
+- Fail the build on an empty `WIFI_SSID` or `WIFI_PASS`. An open network needs `WIFI_OPEN=true`, and `WIFI_PASS` must be 8 to 63 characters or 64 hex digits.
+- Fail the build on an empty `MQTT_SERVER`, `MQTT_USER` or `MQTT_PASSWORD`, or on `MQTT_PASSWORD` without `MQTT_USER`.
 
 #### Features
 
@@ -32,6 +34,7 @@ The firmware's defaults change in this release, so read the breaking changes bef
 - In the deep-sleep mode, stay awake while a computer is connected to the chip's built-in USB port, so flashing needs no buttons. A charger doesn't keep the board awake, and `USB_STAY_AWAKE=false` always deep sleeps.
 - List the attached boards by their registered names with `make boards`. `DEVICE` also picks the board's serial port. `make flash` no longer opens the monitor, and `make log` prints the serial output for `SECS` seconds.
 - Build each chip in `target/<chip>/`, so one checkout can build several chips.
+- Log the MQTT login: a user with or without a password, or anonymous.
 
 #### Fixes
 

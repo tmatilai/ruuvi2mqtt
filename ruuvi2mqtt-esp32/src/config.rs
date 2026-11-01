@@ -12,6 +12,17 @@ macro_rules! option_env_non_empty {
     };
 }
 
+/// Like `option_env!` but fails the build on an empty string. An empty
+/// credential is more likely a failed secret lookup than a choice.
+macro_rules! option_env_reject_empty {
+    ($name:literal) => {
+        match option_env!($name) {
+            Some(v) if v.is_empty() => panic!(concat!($name, " is set but empty")),
+            v => v,
+        }
+    };
+}
+
 // ---------------------------------------------------------------------------
 // Wi-Fi
 // ---------------------------------------------------------------------------
@@ -19,8 +30,17 @@ macro_rules! option_env_non_empty {
 /// SSID of the Wi-Fi network to connect to.
 pub const WIFI_SSID: &str = env!("WIFI_SSID");
 
-/// Password of the Wi-Fi network.
-pub const WIFI_PASS: &str = env!("WIFI_PASS");
+/// Password of the Wi-Fi network. Required unless `WIFI_OPEN`.
+pub const WIFI_PASS: Option<&str> = option_env_reject_empty!("WIFI_PASS");
+
+/// `WIFI_OPEN=true` joins an open network. A missing `WIFI_PASS` alone fails
+/// the build, as the board would then join any access point with the SSID.
+pub const WIFI_OPEN: bool = konst::eq_str(WIFI_OPEN_VALUE, "true");
+
+const WIFI_OPEN_VALUE: &str = match option_env_non_empty!("WIFI_OPEN") {
+    Some(v) => v,
+    None => "false",
+};
 
 /// Optional static IP address (e.g. `"192.168.1.50"`). If set, DHCP is
 /// disabled and `WIFI_GATEWAY` must also be provided.
@@ -101,17 +121,12 @@ pub const MQTT_CLIENT_ID: &str = match option_env_non_empty!("MQTT_CLIENT_ID") {
     None => DEVICE_HOSTNAME,
 };
 
-/// Optional MQTT username (matches the app's `mqtt.user`).
-pub const MQTT_USER: &str = match option_env_non_empty!("MQTT_USER") {
-    Some(v) => v,
-    None => "",
-};
+/// MQTT username (matches the app's `mqtt.user`). Unset logs in
+/// anonymously.
+pub const MQTT_USER: Option<&str> = option_env_reject_empty!("MQTT_USER");
 
-/// Optional MQTT password (matches the app's `mqtt.password`).
-pub const MQTT_PASSWORD: &str = match option_env_non_empty!("MQTT_PASSWORD") {
-    Some(v) => v,
-    None => "",
-};
+/// MQTT password (matches the app's `mqtt.password`). Requires `MQTT_USER`.
+pub const MQTT_PASSWORD: Option<&str> = option_env_reject_empty!("MQTT_PASSWORD");
 
 // ---------------------------------------------------------------------------
 // Topics
@@ -255,8 +270,24 @@ pub const LOG_LEVEL: &str = match option_env_non_empty!("LOG_LEVEL") {
 // ---------------------------------------------------------------------------
 // Invalid values fail the build here instead of panicking on the device.
 
+const _: () = assert!(!WIFI_SSID.is_empty(), "WIFI_SSID is empty");
 const _: () = assert!(WIFI_SSID.len() <= 32, "WIFI_SSID is longer than 32 bytes");
-const _: () = assert!(WIFI_PASS.len() <= 64, "WIFI_PASS is longer than 64 bytes");
+const _: () = assert!(
+    WIFI_OPEN || konst::eq_str(WIFI_OPEN_VALUE, "false"),
+    "WIFI_OPEN must be true or false"
+);
+const _: () = assert!(
+    WIFI_OPEN || WIFI_PASS.is_some(),
+    "WIFI_PASS must be set, or WIFI_OPEN=true for an open network"
+);
+const _: () = assert!(
+    !WIFI_OPEN || WIFI_PASS.is_none(),
+    "WIFI_PASS must be unset when WIFI_OPEN=true"
+);
+const _: () = assert!(
+    is_wpa2_key_or_unset(WIFI_PASS),
+    "WIFI_PASS must be 8 to 63 characters or 64 hex digits"
+);
 const _: () = assert!(
     WIFI_IP.is_none() || WIFI_GATEWAY.is_some(),
     "WIFI_GATEWAY must be set when WIFI_IP is set"
@@ -287,6 +318,11 @@ const _: () = assert!(
 const _: () = assert!(
     WIFI_BAND.is_none() || cfg!(esp_idf_soc_wifi_support_5g),
     "WIFI_BAND is only for dual-band chips such as the ESP32-C5"
+);
+const _: () = assert!(!MQTT_SERVER.is_empty(), "MQTT_SERVER is empty");
+const _: () = assert!(
+    MQTT_PASSWORD.is_none() || MQTT_USER.is_some(),
+    "MQTT_USER must be set when MQTT_PASSWORD is set"
 );
 const _: () = assert!(
     BLE_SCAN_DURATION > 0 && BLE_SCAN_DURATION <= i32::MAX / 1000,
@@ -349,6 +385,27 @@ const _: () = assert!(
     LED_COLOR_HEX.len() == 6,
     "LED_COLOR must be six hex digits, RRGGBB"
 );
+
+/// True when `v` is unset, a WPA2 passphrase of 8 to 63 characters, or a key
+/// of 64 hex digits.
+const fn is_wpa2_key_or_unset(v: Option<&str>) -> bool {
+    let Some(s) = v else { return true };
+    let bytes = s.as_bytes();
+    if bytes.len() >= 8 && bytes.len() <= 63 {
+        return true;
+    }
+    if bytes.len() != 64 {
+        return false;
+    }
+    let mut i = 0;
+    while i < bytes.len() {
+        if !bytes[i].is_ascii_hexdigit() {
+            return false;
+        }
+        i += 1;
+    }
+    true
+}
 
 /// True when `v` is unset or a dotted-decimal IPv4 address.
 const fn is_ip4_or_unset(v: Option<&str>) -> bool {

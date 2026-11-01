@@ -51,16 +51,8 @@ impl Mqtt {
 
         let cfg = MqttClientConfiguration {
             client_id: Some(config::MQTT_CLIENT_ID),
-            username: if config::MQTT_USER.is_empty() {
-                None
-            } else {
-                Some(config::MQTT_USER)
-            },
-            password: if config::MQTT_PASSWORD.is_empty() {
-                None
-            } else {
-                Some(config::MQTT_PASSWORD)
-            },
+            username: config::MQTT_USER,
+            password: config::MQTT_PASSWORD,
             keep_alive_interval: Some(std::time::Duration::from_secs(15)),
             server_certificate,
             crt_bundle_attach: crt_bundle_attach(),
@@ -70,6 +62,11 @@ impl Mqtt {
 
         let (client, connection) = EspMqttClient::new(&broker_url, &cfg)?;
         info!("Connecting to MQTT: {broker_url}");
+        match (config::MQTT_USER, config::MQTT_PASSWORD) {
+            (Some(user), Some(_)) => info!("MQTT login: user '{user}' with a password"),
+            (Some(user), None) => info!("MQTT login: user '{user}' without a password"),
+            (None, _) => info!("MQTT login: anonymous"),
+        }
 
         let (tx, events) = mpsc::channel();
         thread::Builder::new()

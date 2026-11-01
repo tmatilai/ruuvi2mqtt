@@ -51,38 +51,18 @@ pub fn connect(
     let events = sysloop.clone();
     let mut wifi = BlockingWifi::wrap(esp_wifi, sysloop)?;
 
-    let auth = if config::WIFI_PASS.is_empty() {
-        AuthMethod::None
-    } else {
-        AuthMethod::WPA2Personal
-    };
-
     let cached = load_wifi_cache();
-    let (channel, bssid, scan_method) = if let Some(cache) = &cached {
+    if let Some(cache) = &cached {
         info!(
             "Fast reconnect: channel {}, BSSID {}",
             cache.channel,
             Mac::from(cache.bssid),
         );
-        (Some(cache.channel), Some(cache.bssid), ScanMethod::FastScan)
     } else {
         info!("No WiFi cache — full channel scan");
-        (None, None, ScanMethod::default())
-    };
+    }
 
-    wifi.set_configuration(&Configuration::Client(ClientConfiguration {
-        ssid: config::WIFI_SSID
-            .try_into()
-            .expect("WIFI_SSID too long (max 32 chars)"),
-        password: config::WIFI_PASS
-            .try_into()
-            .expect("WIFI_PASS too long (max 64 chars)"),
-        auth_method: auth,
-        channel,
-        bssid,
-        scan_method,
-        ..Default::default()
-    }))?;
+    wifi.set_configuration(&client_configuration(cached.as_ref()))?;
 
     wifi.start()?;
     set_band()?;
@@ -100,16 +80,7 @@ pub fn connect(
         Ok(()) => CacheUse::Miss,
         Err(e) if cached.is_some() => {
             log::warn!("Fast reconnect failed ({e}), retrying with full scan");
-            wifi.set_configuration(&Configuration::Client(ClientConfiguration {
-                ssid: config::WIFI_SSID
-                    .try_into()
-                    .expect("WIFI_SSID too long (max 32 chars)"),
-                password: config::WIFI_PASS
-                    .try_into()
-                    .expect("WIFI_PASS too long (max 64 chars)"),
-                auth_method: auth,
-                ..Default::default()
-            }))?;
+            wifi.set_configuration(&client_configuration(None))?;
             wifi.connect()?;
             CacheUse::Stale
         }
@@ -124,6 +95,33 @@ pub fn connect(
     update_wifi_cache(cached.as_ref());
 
     Ok((wifi, cache_use))
+}
+
+/// The station's configuration. A cached access point pins the channel and
+/// BSSID, and skips the full scan.
+fn client_configuration(cache: Option<&WifiCache>) -> Configuration {
+    Configuration::Client(ClientConfiguration {
+        // config.rs checks both lengths at build time.
+        ssid: config::WIFI_SSID.try_into().expect("WIFI_SSID fits"),
+        password: config::WIFI_PASS
+            .unwrap_or_default()
+            .try_into()
+            .expect("WIFI_PASS fits"),
+        // The weakest security the driver accepts from an access point.
+        auth_method: if config::WIFI_OPEN {
+            AuthMethod::None
+        } else {
+            AuthMethod::WPA2Personal
+        },
+        channel: cache.map(|c| c.channel),
+        bssid: cache.map(|c| c.bssid),
+        scan_method: if cache.is_some() {
+            ScanMethod::FastScan
+        } else {
+            ScanMethod::default()
+        },
+        ..Default::default()
+    })
 }
 
 /// When Wi-Fi connected, while it is connected. Set by [`keep_connected`].

@@ -79,16 +79,17 @@ Environment variables set the configuration at compile time.
 
 ### Required
 
-| Variable      | App YAML equivalent | Description                |
-| ------------- | ------------------- | -------------------------- |
-| `WIFI_SSID`   | —                   | Wi-Fi SSID                 |
-| `WIFI_PASS`   | —                   | Wi-Fi password             |
-| `MQTT_SERVER` | `mqtt.server`       | MQTT broker hostname or IP |
+| Variable      | App YAML equivalent | Description                                          |
+| ------------- | ------------------- | ---------------------------------------------------- |
+| `WIFI_SSID`   | —                   | Wi-Fi SSID                                           |
+| `WIFI_PASS`   | —                   | Wi-Fi password: 8 to 63 characters, or 64 hex digits |
+| `MQTT_SERVER` | `mqtt.server`       | MQTT broker hostname or IP                           |
 
 ### Optional
 
 | Variable             | App YAML equivalent | Default              | Description                                                                                                                                                                                                                     |
 | -------------------- | ------------------- | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `WIFI_OPEN`          | —                   | `false`              | Set to `true` for an open network, without `WIFI_PASS`. The board then joins any access point that has the SSID                                                                                                                 |
 | `WIFI_IP`            | —                   | _(DHCP)_             | Static IP address (e.g. `192.168.1.50`)                                                                                                                                                                                         |
 | `WIFI_GATEWAY`       | —                   | —                    | Gateway (required when `WIFI_IP` is set)                                                                                                                                                                                        |
 | `WIFI_NETMASK`       | —                   | `255.255.255.0`      | Subnet mask for static IP                                                                                                                                                                                                       |
@@ -101,7 +102,7 @@ Environment variables set the configuration at compile time.
 | `MQTT_TLS_INSECURE`  | `mqtt.tls_insecure` | `false`              | Set to `true` to skip the certificate's hostname check                                                                                                                                                                          |
 | `MQTT_CLIENT_ID`     | `mqtt.client_id`    | _hostname_           | MQTT client ID, also sent as `publisher` in each reading                                                                                                                                                                        |
 | `MQTT_USER`          | `mqtt.user`         | _(anonymous)_        | MQTT username                                                                                                                                                                                                                   |
-| `MQTT_PASSWORD`      | `mqtt.password`     | _(anonymous)_        | MQTT password                                                                                                                                                                                                                   |
+| `MQTT_PASSWORD`      | `mqtt.password`     | _(no password)_      | MQTT password. Requires `MQTT_USER`                                                                                                                                                                                             |
 | `MQTT_BASE_TOPIC`    | `mqtt.base_topic`   | `ruuvi2mqtt`         | Topic prefix                                                                                                                                                                                                                    |
 | `BLE_SCAN_MODE`      | —                   | `continuous`         | `continuous` scans all the time. `deep-sleep` scans while Wi-Fi connects, then deep sleeps                                                                                                                                      |
 | `BLE_SCAN_DURATION`  | —                   | `60` / `5`           | BLE scan length in seconds. Scanning continuously, this is the cycle. In the deep-sleep mode, set it close to the Wi-Fi and MQTT connect time in the boot log, and at least 3                                                   |
@@ -117,6 +118,10 @@ Environment variables set the configuration at compile time.
 
 These can be set in the environment, in `.envrc` (with direnv), or in per-device
 configuration files (see below).
+
+An empty `WIFI_SSID`, `WIFI_PASS`, `MQTT_SERVER`, `MQTT_USER` or `MQTT_PASSWORD`
+fails the build, as it is more likely a failed secret lookup than a choice. For
+the other variables, empty means the default.
 
 #### LED
 
