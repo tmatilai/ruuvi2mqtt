@@ -36,7 +36,9 @@ serde = { version = "=1.0.229", features = ["derive"] }
 serde_json = "=1.0.154"
 serde_with = "=3.24.0"
 serde_norway = "=0.9.42"
-sysinfo = "=0.39.6"
+# Only for the hostname. The default gpu feature calls statx, which the glibc
+# in the cross images lacks.
+sysinfo = { version = "=0.40.0", default-features = false, features = ["system"] }
 tokio = { version = "=1.54.1", features = ["macros", "rt-multi-thread"] }
 
 [target.'cfg(target_os = "linux")'.dependencies]

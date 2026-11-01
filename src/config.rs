@@ -180,8 +180,8 @@ const fn default_mqtt_throttle() -> Duration {
 }
 
 fn default_mqtt_client_id() -> String {
-    let suffix = System::host_name().unwrap_or_else(|| {
-        log::warn!("Failed to read hostname. Generating random suffix for the client_id.");
+    let suffix = System::host_name().unwrap_or_else(|err| {
+        log::warn!("Failed to read hostname: {err}. Generating random suffix for the client_id.");
         format!("{:03}", rand::rng().random::<u8>())
     });
     format!("ruuvi2mqtt_{suffix}")
