@@ -139,6 +139,17 @@ pub fn parse_discovery(payload: &[u8], base_topic: &str, id: &str, entity: &str)
     .then_some(config)
 }
 
+/// The client ID of an instance's discovery config, if it is one
+pub fn instance_discovery(payload: &[u8], base_topic: &str) -> Option<String> {
+    let config: Value = serde_json::from_slice(payload).ok()?;
+    let id = config["state_topic"]
+        .as_str()?
+        .strip_prefix(&format!("{base_topic}/status/"))?;
+    client_id(&config["device"]["identifiers"][0])
+        .filter(|i| *i == id)
+        .map(str::to_string)
+}
+
 pub fn device_name(config: &Value) -> Option<String> {
     config.pointer("/device/name")?.as_str().map(printable)
 }

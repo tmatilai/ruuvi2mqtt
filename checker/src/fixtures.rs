@@ -39,6 +39,13 @@ pub fn discovery(id: &str, entity: &str, name: &str) -> String {
     )
 }
 
+/// An instance's discovery config
+pub fn instance_discovery(client_id: &str) -> String {
+    format!(
+        r#"{{"state_topic":"ruuvi2mqtt/status/{client_id}","device":{{"identifiers":["{client_id}"]}}}}"#
+    )
+}
+
 /// A board's diagnostics: Wi-Fi connects 1 s into the 5 s scan
 pub fn diagnostics(firmware: &str, cycle: u64, tags: &str) -> String {
     format!(

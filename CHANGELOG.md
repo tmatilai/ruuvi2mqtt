@@ -1,5 +1,11 @@
 ## _Not released yet_
 
+### ruuvi2mqtt
+
+#### Features
+
+- Publish each instance as a Home Assistant device, with its status as a connectivity sensor.
+
 ### ruuvi2mqtt-esp32
 
 #### Features

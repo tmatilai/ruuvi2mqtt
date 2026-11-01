@@ -1,5 +1,6 @@
 use std::time::Duration;
 
+use std::fmt::Debug;
 use std::sync::Arc;
 
 use anyhow::{Context, Result, bail};
@@ -20,7 +21,7 @@ use tokio::time::sleep;
 use crate::Event::{self, MqttConnect, MqttDeviceUpdate};
 use crate::EventSender;
 use crate::config;
-use crate::homeassistant::{Device, SensorData};
+use crate::homeassistant::SensorData;
 use crate::ruuvi::BDAddr;
 
 pub struct Mqtt {
@@ -31,18 +32,18 @@ pub struct Mqtt {
 /// Retained on `<base_topic>/status/<client_id>`. The broker replaces it
 /// with `offline` when the connection drops, as the last will.
 #[derive(Debug, Serialize)]
-struct Status {
-    state: &'static str,
+pub struct Status {
+    pub state: &'static str,
     #[serde(skip_serializing_if = "Option::is_none")]
     version: Option<&'static str>,
 }
 
 impl Status {
-    const ONLINE: Self = Self {
+    pub const ONLINE: Self = Self {
         state: "online",
         version: Some(config::VERSION),
     };
-    const OFFLINE: Self = Self {
+    pub const OFFLINE: Self = Self {
         state: "offline",
         version: None,
     };
@@ -166,21 +167,18 @@ impl Mqtt {
         });
     }
 
-    pub fn publish_device(&mut self, device: Device<'static>) {
+    pub fn publish_discovery(&mut self, topic: String, config: &(impl Serialize + Debug)) {
+        log::debug!("Publishing: {topic} -> {config:?}");
+        let payload = match serde_json::to_vec(config) {
+            Ok(payload) => payload,
+            Err(err) => {
+                log::error!("Failed to serialize discovery config: {err}");
+                return;
+            }
+        };
         let client = self.client.clone();
         tokio::spawn(async move {
-            log::debug!("Publishing: {} -> {:?}", device.topic, device);
-            let payload = match serde_json::to_vec(&device) {
-                Ok(payload) => payload,
-                Err(err) => {
-                    log::error!("Failed to serialize device: {err}");
-                    return;
-                }
-            };
-            match client
-                .publish(device.topic, QoS::AtLeastOnce, true, payload)
-                .await
-            {
+            match client.publish(topic, QoS::AtLeastOnce, true, payload).await {
                 Ok(()) => log::trace!("OK!"),
                 Err(err) => log::error!("Failed to publish: {err}"),
             }
@@ -227,7 +225,7 @@ impl Mqtt {
     }
 }
 
-fn status_topic(config: &config::Mqtt) -> String {
+pub fn status_topic(config: &config::Mqtt) -> String {
     format!("{}/status/{}", config.base_topic, config.client_id)
 }
 

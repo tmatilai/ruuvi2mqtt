@@ -72,6 +72,8 @@ pub struct Report {
 pub struct Watch {
     config: Config,
     statuses: BTreeMap<String, Vec<Status>>,
+    /// The instances' discovery configs: topic to client ID
+    instance_discovery: BTreeMap<String, String>,
     tags: BTreeMap<String, Tag>,
     /// The ESP32 boards' diagnostics, by client ID
     boards: BTreeMap<String, Vec<Diagnostics>>,
@@ -124,6 +126,7 @@ impl Watch {
         Self {
             config,
             statuses: BTreeMap::new(),
+            instance_discovery: BTreeMap::new(),
             tags: BTreeMap::new(),
             boards: BTreeMap::new(),
             invalid_readings: Problems::default(),
@@ -146,6 +149,14 @@ impl Watch {
             Topic::Diagnostics(hostname) => self.on_diagnostics(at, hostname, payload, retained),
             Topic::Reading(id) => self.on_reading(at, id, payload, retained),
             Topic::Discovery { id, entity } => self.on_discovery(topic, id, entity, payload),
+            Topic::StatusDiscovery => {
+                // An empty payload deletes the config
+                match payload::instance_discovery(payload, &self.config.base_topic) {
+                    Some(id) => self.instance_discovery.insert(topic.to_string(), id),
+                    None => self.instance_discovery.remove(topic),
+                };
+                None
+            }
             Topic::Other => {
                 self.other_topics += 1;
                 None
@@ -319,6 +330,10 @@ impl Watch {
         let _ = writeln!(r.text, "\nInstances:");
         for id in &c.instances {
             self.check_status(r, id, &format!("  {id}: "));
+            if !self.instance_discovery.values().any(|i| i == id) {
+                let _ = writeln!(r.text, "    no discovery config");
+                r.failures.push(format!("{id}: no discovery config"));
+            }
         }
         let boards = self.board_ids();
         let others: Vec<_> = self

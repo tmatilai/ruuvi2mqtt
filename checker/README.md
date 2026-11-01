@@ -11,6 +11,7 @@ checks that:
 - Each instance (`--instance <client_id>`) was online at the start and stayed
   online.
 - Each instance runs `--commit`, without local changes.
+- Each instance has its Home Assistant discovery config.
 - Each tag (`--tag <MAC>`) and Ruuvi Air (`--air <MAC>`) has its first reading
   within `--first-reading` (5 minutes), and never goes `--max-gap` (10 minutes)
   without one.
