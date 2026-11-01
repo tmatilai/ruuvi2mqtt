@@ -32,7 +32,7 @@ fn main() {
     info!(
         "{} {} starting",
         env!("CARGO_PKG_NAME"),
-        env!("CARGO_PKG_VERSION")
+        env!("BUILD_VERSION")
     );
 
     let reset_reason = unsafe { sys::esp_reset_reason() };
