@@ -179,7 +179,7 @@ pub const BLE_SLEEP_DURATION: i32 = match option_env_non_empty!("BLE_SLEEP_DURAT
 };
 
 /// Whether `sleep()` in main.rs waits awake while a computer is on the USB
-/// port.
+/// port. The continuous mode always stays awake, so it rejects `false`.
 pub const USB_STAY_AWAKE: bool = konst::eq_str(USB_STAY_AWAKE_VALUE, "true");
 
 const USB_STAY_AWAKE_VALUE: &str = match option_env_non_empty!("USB_STAY_AWAKE") {
@@ -339,6 +339,10 @@ const _: () = assert!(
 const _: () = assert!(
     USB_STAY_AWAKE || konst::eq_str(USB_STAY_AWAKE_VALUE, "false"),
     "USB_STAY_AWAKE must be true or false"
+);
+const _: () = assert!(
+    USB_STAY_AWAKE || !BLE_SCAN_CONTINUOUS,
+    "USB_STAY_AWAKE=false needs BLE_SCAN_MODE=deep-sleep"
 );
 const _: () = assert!(
     match ANTENNA {
