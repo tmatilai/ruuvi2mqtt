@@ -42,6 +42,7 @@ The firmware's defaults change in this release, so read the breaking changes bef
 - Fall back to a full Wi-Fi scan as soon as the cached access point fails, instead of after 15 s. The scan could run out of the cycle's time.
 - Fix the boot loop of a firmware built with `MQTT_CA_FILE`. esp-idf-svc panicked at the first MQTT connection, because the embedded certificate didn't end with a NUL byte.
 - Reboot when the task watchdog fires. It only logged a backtrace, and a board stuck in a busy loop stayed stuck.
+- Log the git commit at boot, as the diagnostics show it.
 
 ## 1.6.0 / 2026-10-14
 
