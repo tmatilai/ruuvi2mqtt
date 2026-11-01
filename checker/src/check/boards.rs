@@ -1,6 +1,6 @@
 //! The ESP32 section of the report. The reception figures are only reported,
-//! since good values are still unknown. With `--board`, the firmware and the
-//! cycle are checked.
+//! since good values are still unknown. With `--board`, the firmware, the cycle
+//! and the status are checked.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Write as _;
@@ -37,6 +37,11 @@ impl Watch {
                 cycles.len(),
                 last.firmware
             );
+            if checked && last.continuous() {
+                self.check_status(r, id, "    status: ");
+            } else if let Some(status) = self.statuses.get(id).and_then(|h| h.last()) {
+                let _ = writeln!(r.text, "    status: {}", status.payload);
+            }
             self.report_board(r, cycles);
             if checked {
                 check_board(r, id, cycles, c, end);

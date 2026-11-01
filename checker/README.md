@@ -30,6 +30,7 @@ checks that:
 - The ESP32 diagnostics are valid.
 - Each board (`--board <client_id>`) runs `--commit`, without local changes, in
   every cycle. Flash the boards before the watch starts.
+- Each board that scans continuously was online at the start and stayed online.
 - Each board publishes its diagnostics about once per `--board-cycle` (60 s, the
   firmware's default; 67 s for the deep-sleep defaults), within 10 %, and never
   goes `--max-gap` without them.

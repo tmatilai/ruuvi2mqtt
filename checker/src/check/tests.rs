@@ -345,13 +345,17 @@ fn other_tags_and_topics_are_reported() {
 /// `minutes` of healthy instances, and a board cycle every 67 s, each
 /// with a reading of TAG
 fn with_board(watch: &mut Watch, minutes: u64, firmware: &str) {
+    with_board_in(watch, minutes, firmware, "deep-sleep");
+}
+
+fn with_board_in(watch: &mut Watch, minutes: u64, firmware: &str, mode: &str) {
     healthy(watch, minutes);
     let topic = format!("ruuvi2mqtt/{TAG}");
     let tags = format!(r#"{{"{TAG}":{{"rssi":-74,"adverts":2,"first_ms":1210}}}}"#);
     for n in 0..minutes * 60 / 67 {
         let at = 31 + n * 67;
         watch.on_message(secs(at), &topic, reading(BOARD).as_bytes(), false);
-        let payload = diagnostics(firmware, 10 + n, &tags);
+        let payload = diagnostics(firmware, 10 + n, &tags).replace("deep-sleep", mode);
         watch.on_message(
             secs(at),
             "ruuvi2mqtt/diagnostics/c6-board",
@@ -434,6 +438,67 @@ fn checked_board_with_a_gap_or_a_wrong_cycle_fails() {
     assert_eq!(
         report.summary,
         "FAIL: ruuvi2mqtt-c6: a cycle every 67s, not 30s"
+    );
+}
+
+/// A checked board that scans continuously, with its retained status
+fn continuous_board(minutes: u64) -> Watch {
+    let mut w = watch_board();
+    let status = online("1.5.2-dev (6534f11)");
+    w.on_message(
+        secs(0),
+        "ruuvi2mqtt/status/ruuvi2mqtt-c6",
+        status.as_bytes(),
+        true,
+    );
+    with_board_in(&mut w, minutes, "1.5.2-dev (6534f11)", "continuous");
+    w
+}
+
+#[test]
+fn continuous_board_with_status_passes() {
+    let report = continuous_board(15).finish(Duration::from_mins(15));
+    assert_eq!(report.failures, Vec::<String>::new(), "{}", report.text);
+    assert!(
+        report.text.contains(concat!(
+            "    status: {\"state\":\"online\",\"version\":\"1.5.2-dev (6534f11)\"}\n",
+            "    settings: continuous 5s\n",
+        )),
+        "{}",
+        report.text
+    );
+    assert!(!report.text.contains("Other statuses"), "{}", report.text);
+}
+
+#[test]
+fn continuous_board_without_status_fails() {
+    let mut w = continuous_board(15);
+    w.statuses.remove(BOARD);
+    let report = w.finish(Duration::from_mins(15));
+    assert_eq!(report.summary, "FAIL: ruuvi2mqtt-c6: no status");
+}
+
+#[test]
+fn continuous_board_going_offline_fails() {
+    let mut w = continuous_board(15);
+    let topic = "ruuvi2mqtt/status/ruuvi2mqtt-c6";
+    let note = w.on_message(secs(300), topic, br#"{"state":"offline"}"#, true);
+    assert_eq!(
+        note.as_deref(),
+        Some(r#"+5:00 ruuvi2mqtt-c6: {"state":"offline"}"#)
+    );
+    let report = w.finish(Duration::from_mins(15));
+    assert_eq!(
+        report.summary,
+        "FAIL: ruuvi2mqtt-c6: the status changed 1 times"
+    );
+    assert!(
+        report.text.contains(concat!(
+            "    status: {\"state\":\"online\",\"version\":\"1.5.2-dev (6534f11)\"}\n",
+            "      +5:00 {\"state\":\"offline\"}\n",
+        )),
+        "{}",
+        report.text
     );
 }
 
