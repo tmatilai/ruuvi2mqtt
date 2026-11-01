@@ -1468,7 +1468,7 @@ dependencies = [
 
 [[package]]
 name = "ruuvi2mqtt"
-version = "1.7.0"
+version = "1.7.1-dev"
 dependencies = [
  "anyhow",
  "btleplug",
