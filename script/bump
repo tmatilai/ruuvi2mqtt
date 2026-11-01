@@ -15,7 +15,7 @@ fi
 script/set-version "$version-dev"
 
 {
-    printf '## _Not released yet_\n\n\n'
+    printf '## _Not released yet_\n\n'
     cat CHANGELOG.md
 } > CHANGELOG.new && mv CHANGELOG.new CHANGELOG.md
 
