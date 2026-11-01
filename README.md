@@ -90,7 +90,8 @@ The Air doesn't broadcast its indoor air quality score, so the app computes
 Each instance publishes a retained status message to
 `<base_topic>/status/<client_id>`. On connect it is
 `{"state":"online","version":"<version> (<commit>)"}`. When the connection
-drops, the broker replaces it with `{"state":"offline"}`.
+drops, the broker replaces it with `{"state":"offline"}`. In Home Assistant,
+each instance is a device with this status as a connectivity sensor.
 
 ### Multiple instances
 

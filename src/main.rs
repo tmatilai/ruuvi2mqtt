@@ -56,8 +56,10 @@ async fn main() -> Result<()> {
             MqttConnect => {
                 log::info!("Connected to Mqtt. Publishing status and devices.");
                 mqtt.publish_status();
+                let instance = homeassistant::Instance::new(&config.mqtt);
+                mqtt.publish_discovery(instance.topic.clone(), &instance);
                 for device in homeassistant::Device::all(&config) {
-                    mqtt.publish_device(device);
+                    mqtt.publish_discovery(device.topic.clone(), &device);
                 }
                 for topic in homeassistant::stale_topics(&config) {
                     mqtt.clear_retained(topic);

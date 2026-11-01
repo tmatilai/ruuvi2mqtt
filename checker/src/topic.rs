@@ -8,7 +8,12 @@ pub enum Topic<'a> {
     Status(&'a str),
     Diagnostics(&'a str),
     Reading(&'a str),
-    Discovery { id: &'a str, entity: &'static str },
+    Discovery {
+        id: &'a str,
+        entity: &'static str,
+    },
+    /// `binary_sensor/<id>/status/config`, maybe an instance's
+    StatusDiscovery,
     Other,
 }
 
@@ -27,11 +32,15 @@ impl<'a> Topic<'a> {
             if is_tag_id(rest) {
                 return Self::Reading(rest);
             }
-        } else if let Some((id, entity)) = topic
-            .strip_prefix("homeassistant/")
-            .and_then(parse_discovery)
-        {
-            return Self::Discovery { id, entity };
+        } else if let Some(rest) = topic.strip_prefix("homeassistant/") {
+            if let Some((id, entity)) = parse_discovery(rest) {
+                return Self::Discovery { id, entity };
+            }
+            if let ["binary_sensor", _, "status", "config"] =
+                rest.split('/').collect::<Vec<_>>()[..]
+            {
+                return Self::StatusDiscovery;
+            }
         }
         Self::Other
     }
@@ -88,6 +97,10 @@ mod tests {
                 id: "aabbccddee01",
                 entity: "battery_low"
             }
+        );
+        assert_eq!(
+            parse("homeassistant/binary_sensor/ruuvi2mqtt_host1/status/config"),
+            Topic::StatusDiscovery
         );
     }
 

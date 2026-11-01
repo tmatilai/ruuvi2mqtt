@@ -1,7 +1,7 @@
 use super::*;
 use crate::fixtures::{
-    AIR, BOARD, COMMIT, HOST1, HOST2, TAG, air_reading, air_reading_e1, diagnostics, online,
-    reading,
+    AIR, BOARD, COMMIT, HOST1, HOST2, TAG, air_reading, air_reading_e1, diagnostics,
+    instance_discovery, online, reading,
 };
 use crate::payload::{AIR_ENTITIES, TAG_ENTITIES};
 
@@ -26,8 +26,8 @@ fn secs(s: u64) -> Duration {
     Duration::from_secs(s)
 }
 
-/// Statuses for both instances, discovery for TAG, and a reading every
-/// minute for `minutes`, the first `duplicates` of them twice
+/// Statuses and discovery for both instances, discovery for TAG, and a
+/// reading every minute for `minutes`, the first `duplicates` of them twice
 fn healthy_with(watch: &mut Watch, minutes: u64, duplicates: u64) {
     for instance in [HOST1, HOST2] {
         let topic = format!("ruuvi2mqtt/status/{instance}");
@@ -35,6 +35,12 @@ fn healthy_with(watch: &mut Watch, minutes: u64, duplicates: u64) {
             secs(0),
             &topic,
             online("1.5.2-dev (6534f11)").as_bytes(),
+            true,
+        );
+        watch.on_message(
+            secs(0),
+            &instance_discovery_topic(instance),
+            instance_discovery(instance).as_bytes(),
             true,
         );
     }
@@ -54,6 +60,10 @@ fn discovery(watch: &mut Watch, id: &str, name: &str, entities: &[(&str, &str)])
         let config = crate::fixtures::discovery(id, entity, name);
         watch.on_message(secs(0), &topic, config.as_bytes(), true);
     }
+}
+
+fn instance_discovery_topic(client_id: &str) -> String {
+    format!("homeassistant/binary_sensor/{client_id}/status/config")
 }
 
 fn healthy(watch: &mut Watch, minutes: u64) {
@@ -88,6 +98,15 @@ fn wrong_or_dirty_version_fails() {
         assert_eq!(report.failures.len(), 1, "{version}: {}", report.text);
         assert!(report.summary.starts_with("FAIL: ruuvi2mqtt_host1: "));
     }
+}
+
+#[test]
+fn instance_without_discovery_fails() {
+    let mut w = watch();
+    healthy(&mut w, 15);
+    w.on_message(secs(60), &instance_discovery_topic(HOST2), b"", true);
+    let report = w.finish(Duration::from_mins(15));
+    assert_eq!(report.failures, ["ruuvi2mqtt_host2: no discovery config"]);
 }
 
 #[test]

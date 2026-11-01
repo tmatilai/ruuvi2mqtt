@@ -2,6 +2,7 @@ use serde::Serialize;
 use std::str;
 
 use crate::config;
+use crate::mqtt::{self, Status};
 use crate::ruuvi::{self, BDAddr};
 
 #[derive(Debug, Serialize)]
@@ -27,6 +28,29 @@ pub struct DeviceInfo<'a> {
     name: String,
     identifiers: Vec<String>,
     manufacturer: &'a str,
+}
+
+/// The instance as a device, with its status as a connectivity sensor
+#[derive(Debug, Serialize)]
+pub struct Instance<'a> {
+    name: &'a str,
+    unique_id: String,
+    device_class: &'a str,
+    state_topic: String,
+    value_template: &'a str,
+    payload_on: &'a str,
+    payload_off: &'a str,
+    device: InstanceInfo<'a>,
+    #[serde(skip)]
+    pub topic: String,
+}
+
+#[derive(Debug, Serialize)]
+struct InstanceInfo<'a> {
+    name: &'a str,
+    identifiers: [&'a str; 1],
+    model: &'a str,
+    sw_version: &'a str,
 }
 
 #[derive(Clone, Copy, Debug, Default, Serialize)]
@@ -116,6 +140,38 @@ impl<'a> Device<'a> {
         }
         devices
     }
+}
+
+impl<'a> Instance<'a> {
+    pub fn new(config: &'a config::Mqtt) -> Self {
+        let id = topic_id(&config.client_id);
+        Self {
+            name: "Status",
+            unique_id: format!("{id}_status"),
+            device_class: "connectivity",
+            state_topic: mqtt::status_topic(config),
+            value_template: "{{ value_json.state }}",
+            payload_on: Status::ONLINE.state,
+            payload_off: Status::OFFLINE.state,
+            device: InstanceInfo {
+                name: &config.client_id,
+                identifiers: [&config.client_id],
+                model: "ruuvi2mqtt",
+                sw_version: config::VERSION,
+            },
+            topic: format!("homeassistant/binary_sensor/{id}/status/config"),
+        }
+    }
+}
+
+/// A discovery topic's IDs allow only ASCII letters, digits, `_` and `-`.
+fn topic_id(s: &str) -> String {
+    s.chars()
+        .map(|c| match c {
+            'a'..='z' | 'A'..='Z' | '0'..='9' | '_' | '-' => c,
+            _ => '_',
+        })
+        .collect()
 }
 
 /// The discovery topics of the entities that only the other models have.
@@ -415,6 +471,24 @@ mod tests {
         assert_eq!(
             discovery[4].1,
             r#"{"name":"Office Battery Low","unique_id":"ruuvi_aa12bb34cc56_battery_low","state_class":"measurement","state_topic":"ruuvi2mqtt/aa12bb34cc56","json_attributes_topic":"ruuvi2mqtt/aa12bb34cc56","value_template":"{{ value_json.battery_low }}","payload_on":true,"payload_off":false,"device_class":"battery","entity_category":"diagnostic","device":{"name":"Office","identifiers":["AA:12:BB:34:CC:56"],"manufacturer":"Ruuvi"}}"#
+        );
+    }
+
+    #[test]
+    fn instance_discovery() {
+        let mut config = mqtt();
+        config.client_id = String::from("ruuvi2mqtt_Mac.home");
+        let instance = Instance::new(&config);
+        assert_eq!(
+            instance.topic,
+            "homeassistant/binary_sensor/ruuvi2mqtt_Mac_home/status/config"
+        );
+        assert_eq!(
+            serde_json::to_string(&instance).unwrap(),
+            format!(
+                r#"{{"name":"Status","unique_id":"ruuvi2mqtt_Mac_home_status","device_class":"connectivity","state_topic":"ruuvi2mqtt/status/ruuvi2mqtt_Mac.home","value_template":"{{{{ value_json.state }}}}","payload_on":"online","payload_off":"offline","device":{{"name":"ruuvi2mqtt_Mac.home","identifiers":["ruuvi2mqtt_Mac.home"],"model":"ruuvi2mqtt","sw_version":"{}"}}}}"#,
+                config::VERSION
+            )
         );
     }
 
