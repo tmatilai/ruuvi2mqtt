@@ -1171,7 +1171,7 @@ dependencies = [
 
 [[package]]
 name = "ruuvi2mqtt-esp32"
-version = "1.7.0"
+version = "1.7.1-dev"
 dependencies = [
  "anyhow",
  "embuild",
