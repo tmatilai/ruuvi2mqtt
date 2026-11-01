@@ -4,11 +4,12 @@ use std::time::{Duration, Instant};
 
 use anyhow::{bail, ensure, Context};
 use esp_idf_svc::mqtt::client::{
-    Details, EspMqttClient, EspMqttConnection, EventPayload, MessageId, MqttClientConfiguration,
-    QoS,
+    Details, EspMqttClient, EspMqttConnection, EventPayload, LwtConfiguration, MessageId,
+    MqttClientConfiguration, QoS,
 };
 use esp_idf_svc::tls::X509;
 use log::{info, warn};
+use ruuvi2mqtt_esp32::payload;
 use ruuvi2mqtt_esp32::status::DISCOVERY_TOPIC;
 
 use crate::config;
@@ -29,6 +30,7 @@ pub struct Mqtt {
     connected_at: Option<Instant>,
     /// Publishes not yet acknowledged by the broker.
     pending: Vec<MessageId>,
+    status_topic: String,
 }
 
 impl Mqtt {
@@ -49,6 +51,21 @@ impl Mqtt {
 
         let server_certificate = ca_certificate();
 
+        // The deep-sleep mode leaves the broker every cycle, so it would be
+        // offline most of the time.
+        let status_topic = format!(
+            "{}/status/{}",
+            config::MQTT_BASE_TOPIC,
+            config::MQTT_CLIENT_ID
+        );
+        let offline = payload::status(None);
+        let lwt = config::BLE_SCAN_CONTINUOUS.then(|| LwtConfiguration {
+            topic: &status_topic,
+            payload: offline.as_bytes(),
+            qos: QoS::AtLeastOnce,
+            retain: true,
+        });
+
         let cfg = MqttClientConfiguration {
             client_id: Some(config::MQTT_CLIENT_ID),
             username: config::MQTT_USER,
@@ -57,6 +74,7 @@ impl Mqtt {
             server_certificate,
             crt_bundle_attach: crt_bundle_attach(),
             skip_cert_common_name_check: config::MQTT_TLS_INSECURE,
+            lwt,
             ..Default::default()
         };
 
@@ -79,6 +97,7 @@ impl Mqtt {
             events,
             connected_at: None,
             pending: Vec::new(),
+            status_topic,
         })
     }
 
@@ -142,6 +161,17 @@ impl Mqtt {
                 if config::BLE_SCAN_CONTINUOUS {
                     if let Err(e) = self.client.subscribe(DISCOVERY_TOPIC, QoS::AtMostOnce) {
                         warn!("Failed to subscribe to {DISCOVERY_TOPIC}: {e}");
+                    }
+                    // Replaces `offline` after a reconnect. Not in `pending`:
+                    // a lost status shouldn't fail the cycle.
+                    let online = payload::status(Some(env!("BUILD_VERSION")));
+                    if let Err(e) = self.client.publish(
+                        &self.status_topic,
+                        QoS::AtLeastOnce,
+                        true,
+                        online.as_bytes(),
+                    ) {
+                        warn!("Failed to publish the status: {e}");
                     }
                 }
             }

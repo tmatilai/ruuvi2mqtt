@@ -167,8 +167,10 @@ impl Watch {
         if retained && history.last().is_some_and(|s| s.payload == payload) {
             return None;
         }
-        let note = (self.config.instances.iter().any(|i| i == client_id)
-            && !(history.is_empty() && retained))
+        let watched = (self.config.instances.iter())
+            .chain(&self.config.boards)
+            .any(|i| i == client_id);
+        let note = (watched && !(history.is_empty() && retained))
             .then(|| format!("+{} {client_id}: {payload}", time::format(at)));
         history.push(Status {
             at,
@@ -316,37 +318,13 @@ impl Watch {
         let c = &self.config;
         let _ = writeln!(r.text, "\nInstances:");
         for id in &c.instances {
-            let Some(history) = self.statuses.get(id) else {
-                let _ = writeln!(r.text, "  {id}: no status");
-                r.failures.push(format!("{id}: no status"));
-                continue;
-            };
-            let first = &history[0];
-            let _ = writeln!(r.text, "  {id}: {}", first.payload);
-            for status in &history[1..] {
-                let _ = writeln!(
-                    r.text,
-                    "    +{} {}",
-                    time::format(status.at),
-                    status.payload
-                );
-            }
-            if !first.retained {
-                r.failures
-                    .push(format!("{id}: came online at +{}", time::format(first.at)));
-            } else if let Err(err) = &first.check {
-                r.failures.push(format!("{id}: {err}"));
-            } else if history.len() > 1 {
-                r.failures.push(format!(
-                    "{id}: the status changed {} times",
-                    history.len() - 1
-                ));
-            }
+            self.check_status(r, id, &format!("  {id}: "));
         }
+        let boards = self.board_ids();
         let others: Vec<_> = self
             .statuses
             .iter()
-            .filter(|(id, _)| !c.instances.contains(id))
+            .filter(|(id, _)| !c.instances.contains(id) && !boards.contains(id.as_str()))
             .collect();
         if !others.is_empty() {
             let _ = writeln!(r.text, "\nOther statuses:");
@@ -522,6 +500,37 @@ impl Watch {
     }
 
     /// The boards given with `--board`, and the ones that sent diagnostics
+    fn check_status(&self, r: &mut Report, id: &str, head: &str) {
+        let Some(history) = self.statuses.get(id) else {
+            let _ = writeln!(r.text, "{head}no status");
+            r.failures.push(format!("{id}: no status"));
+            return;
+        };
+        let first = &history[0];
+        let _ = writeln!(r.text, "{head}{}", first.payload);
+        let indent = head.len() - head.trim_start().len() + 2;
+        for status in &history[1..] {
+            let _ = writeln!(
+                r.text,
+                "{:indent$}+{} {}",
+                "",
+                time::format(status.at),
+                status.payload
+            );
+        }
+        if !first.retained {
+            r.failures
+                .push(format!("{id}: came online at +{}", time::format(first.at)));
+        } else if let Err(err) = &first.check {
+            r.failures.push(format!("{id}: {err}"));
+        } else if history.len() > 1 {
+            r.failures.push(format!(
+                "{id}: the status changed {} times",
+                history.len() - 1
+            ));
+        }
+    }
+
     fn board_ids(&self) -> BTreeSet<&str> {
         self.config
             .boards

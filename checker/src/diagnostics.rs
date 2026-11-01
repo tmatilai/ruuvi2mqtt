@@ -40,6 +40,10 @@ pub struct Diagnostics {
 }
 
 impl Diagnostics {
+    pub fn continuous(&self) -> bool {
+        self.settings.starts_with("continuous ")
+    }
+
     /// The scan time in ms before and after Wi-Fi connected
     pub fn scan_windows(&self) -> [u32; 2] {
         let split = self.wifi_ms.clamp(self.scan_start_ms, self.scan_end_ms);

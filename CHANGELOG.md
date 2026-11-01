@@ -1,5 +1,11 @@
 ## _Not released yet_
 
+### ruuvi2mqtt-esp32
+
+#### Features
+
+- Publish a status with a last will when scanning continuously, like the app.
+
 ## 1.7.0 / 2026-11-01
 
 ### ruuvi2mqtt

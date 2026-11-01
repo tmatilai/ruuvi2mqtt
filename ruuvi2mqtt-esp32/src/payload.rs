@@ -124,9 +124,28 @@ fn iaqs(pm2_5: f32, co2: u16) -> u8 {
     (100.0 - distance).clamp(0.0, 100.0).round() as u8
 }
 
+/// The status, as the app's (`src/mqtt.rs`).
+#[must_use]
+pub fn status(version: Option<&str>) -> String {
+    match version {
+        Some(version) => serde_json::json!({ "state": "online", "version": version }),
+        None => serde_json::json!({ "state": "offline" }),
+    }
+    .to_string()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn status_matches_the_app() {
+        assert_eq!(
+            status(Some("1.7.1-dev (93beb99)")),
+            r#"{"state":"online","version":"1.7.1-dev (93beb99)"}"#
+        );
+        assert_eq!(status(None), r#"{"state":"offline"}"#);
+    }
 
     fn encode_raw(data: &[u8]) -> String {
         let values = SensorValues::from_manufacturer_specific_data(0x0499, data).unwrap();
