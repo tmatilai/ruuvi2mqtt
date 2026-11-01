@@ -1,6 +1,6 @@
 [package]
 name = "ruuvi2mqtt"
-version = "1.6.1-dev"
+version = "1.7.0"
 authors = ["Teemu Matilainen <teemu.matilainen@iki.fi>"]
 license = "MIT"
 repository = "https://github.com/tmatilai/ruuvi2mqtt"
