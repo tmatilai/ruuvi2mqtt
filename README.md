@@ -51,7 +51,7 @@ Example command to run in a Docker container:
 docker run --name ruuvi2mqtt -d --restart=unless-stopped \
     -v /run/dbus/system_bus_socket:/run/dbus/system_bus_socket \
     -v "$PWD/ruuvi2mqtt.yaml:/ruuvi2mqtt.yaml" \
-    ghcr.io/tmatilai/ruuvi2mqtt:v1.6.0 \
+    ghcr.io/tmatilai/ruuvi2mqtt:v1.7.0 \
     --log-level=DEBUG
 ```
 

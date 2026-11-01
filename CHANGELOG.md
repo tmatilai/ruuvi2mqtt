@@ -1,12 +1,12 @@
-## _Not released yet_
+## 1.7.0 / 2026-11-01
 
 ### ruuvi2mqtt
 
 #### Features
 
-- Read MQTT credentials from the `MQTT_USER` and `MQTT_PASSWORD` environment variables, overriding `mqtt.user` and `mqtt.password` in the configuration file. An empty variable is an error.
-- Allow connecting to MQTT with a username and no password.
-- Support Ruuvi Air, as a preview: publish its CO2, PM1, PM2.5, PM4 and PM10, VOC and NOx indexes, luminosity, calibration flag, and Ruuvi's indoor air quality score `iaqs`. Set `model: air` on its device for its Home Assistant entities. PM1, PM4 and PM10 need a Bluetooth 5 adapter. See [Ruuvi Air](./README.md#ruuvi-air).
+- Read `MQTT_USER` and `MQTT_PASSWORD` from the environment, overriding `mqtt.user` and `mqtt.password`. An empty variable is an error.
+- Allow an MQTT username without a password.
+- Support Ruuvi Air, as a preview. Set `model: air` on its device for its Home Assistant entities. PM1, PM4 and PM10 need a Bluetooth 5 adapter. See [Ruuvi Air](./README.md#ruuvi-air).
 
 #### Fixes
 
@@ -14,35 +14,41 @@
 
 ### ruuvi2mqtt-esp32
 
-The firmware's defaults change in this release, so read the breaking changes before flashing a board. It is still a minor release: as far as I know, nobody else runs the firmware yet, and the new defaults suit most boards better. If you do run it, sorry for the extra work.
+The firmware's defaults change in this release, so read the breaking changes before flashing a board. It is still a minor release: as far as I know, nobody else runs the firmware yet. If you do, sorry for the extra work.
 
 #### Breaking changes
 
-- Scan continuously by default: `BLE_SCAN_MODE=continuous` scans all the time, stays connected to Wi-Fi and MQTT, and publishes once per `BLE_SCAN_DURATION`, 60 s by default. A board on a battery needs `BLE_SCAN_MODE=deep-sleep`, the former `parallel`, to keep deep sleeping. `sequential` is gone.
-- `LED_GPIO` has no default, and `LED_MODE` requires it. The old default, 15, was the Seeed XIAO ESP32-C6's pin, which may drive something else on other boards. The XIAO's LED needs `LED_TYPE=gpio` and `LED_ACTIVE_LOW=true`.
-- `LED_MODE` defaults to `on`, a dim light, when `LED_GPIO` is set. Set `LED_MODE=off` to keep it dark. An unknown `LED_MODE` or `LED_TYPE` fails the build.
+- Scan continuously by default. `BLE_SCAN_MODE=continuous` stays connected to Wi-Fi and MQTT, and publishes every `BLE_SCAN_DURATION`, 60 s by default.
+- Rename `BLE_SCAN_MODE=parallel` to `deep-sleep`, which a board on a battery now needs. Remove `sequential`.
+- Remove the `LED_GPIO` default, 15, the Seeed XIAO ESP32-C6's pin, which may drive something else on other boards. `LED_MODE` requires `LED_GPIO`, and the XIAO's LED needs `LED_TYPE=gpio` and `LED_ACTIVE_LOW=true`.
+- Default `LED_MODE` to `on`, a dim light, when `LED_GPIO` is set. `LED_MODE=off` keeps it dark.
+- Fail the build on an unknown `LED_MODE` or `LED_TYPE`.
 - Fail the build on an empty `WIFI_SSID` or `WIFI_PASS`. An open network needs `WIFI_OPEN=true`, and `WIFI_PASS` must be 8 to 63 characters or 64 hex digits.
 - Fail the build on an empty `MQTT_SERVER`, `MQTT_USER` or `MQTT_PASSWORD`, or on `MQTT_PASSWORD` without `MQTT_USER`.
 
 #### Features
 
-- Serve a status page on `http://<DEVICE_HOSTNAME>.local/` when scanning continuously, for finding a good spot for a board. It grades the Wi-Fi, the publishing and the target tags chosen on the page, and `/api/status` returns the same data as JSON.
-- Roam between access points when scanning continuously. After a drop, the board retries its access point and then the strongest one. Below −70 dBm, it moves to one at least 8 dB stronger. The diagnostics show the BSSID.
-- Publish a Ruuvi Air's readings, like the app. The firmware receives only data format 6, without PM1, PM4 and PM10.
-- Blink the LED twice every 3 s while Wi-Fi is down or a cycle failed, and breathe it when scanning continuously. `LED_MODE=errors` shows only the blinks. `LED_COLOR` sets the WS2812's color, a dim blue instead of full white by default, and `LED_ACTIVE_LOW` is for an LED that lights when its pin is low.
-- Support the ESP32-C5: `CHIP=esp32c5`. `WIFI_BAND` keeps a dual-band chip on 2.4 or 5 GHz.
-- In the deep-sleep mode, stay awake while a computer is connected to the chip's built-in USB port, so flashing needs no buttons. A charger doesn't keep the board awake, and `USB_STAY_AWAKE=false` always deep sleeps.
-- List the attached boards by their registered names with `make boards`. `DEVICE` also picks the board's serial port. `make flash` no longer opens the monitor, and `make log` prints the serial output for `SECS` seconds.
+- Serve a status page on `http://<DEVICE_HOSTNAME>.local/` when scanning continuously, to help find a good spot for a board. It grades the Wi-Fi, the publishing and the tags chosen on the page. `/api/status` returns the same data as JSON.
+- Roam between access points when scanning continuously: below −70 dBm, move to one at least 8 dB stronger. The diagnostics show the BSSID.
+- Publish Ruuvi Air readings, like the app, except PM1, PM4 and PM10: the firmware receives only data format 6.
+- Blink the LED twice every 3 s while Wi-Fi is down or a cycle failed, and breathe it when scanning continuously. `LED_MODE=errors` shows only the blinks.
+- Add `LED_COLOR` for the WS2812's color, a dim blue by default instead of full white.
+- Add `LED_ACTIVE_LOW` for an LED that lights when its pin is low.
+- Support the ESP32-C5: `CHIP=esp32c5`.
+- Add `WIFI_BAND` to keep a dual-band chip on 2.4 or 5 GHz.
+- In the deep-sleep mode, stay awake while a computer is on the chip's USB port, so flashing needs no buttons. `USB_STAY_AWAKE=false` turns this off.
+- Add `make boards` to list the attached boards by their registered names. `DEVICE` also picks the board's serial port.
+- Add `make log` to print the serial output for `SECS` seconds. `make flash` no longer opens the monitor.
 - Build each chip in `target/<chip>/`, so one checkout can build several chips.
 - Log the MQTT login: a user with or without a password, or anonymous.
 
 #### Fixes
 
-- A Seeed XIAO ESP32-C6 needs `ANTENNA`: without it, the RF switch gets no power and the board hears little.
-- Fall back to a full Wi-Fi scan as soon as the cached access point fails, instead of after 15 s. The scan could run out of the cycle's time.
-- Fix the boot loop of a firmware built with `MQTT_CA_FILE`. esp-idf-svc panicked at the first MQTT connection, because the embedded certificate didn't end with a NUL byte.
-- Reboot when the task watchdog fires. It only logged a backtrace, and a board stuck in a busy loop stayed stuck.
-- Log the git commit at boot, as the diagnostics show it.
+- Document that a Seeed XIAO ESP32-C6 needs `ANTENNA`. Without it, the RF switch gets no power and the board hears little.
+- Fall back to a full Wi-Fi scan as soon as the cached access point fails, instead of after 15 s, which could use up the cycle's time.
+- Fix a boot loop with `MQTT_CA_FILE`: the embedded certificate lacked the NUL byte that esp-idf-svc needs.
+- Reboot when the task watchdog fires, instead of only logging a backtrace.
+- Log the git commit at boot, like the diagnostics.
 
 ## 1.6.0 / 2026-10-14
 
