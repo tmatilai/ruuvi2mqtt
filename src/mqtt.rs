@@ -27,6 +27,7 @@ use crate::ruuvi::BDAddr;
 pub struct Mqtt {
     client: AsyncClient,
     status_topic: String,
+    diagnostics_topic: String,
 }
 
 /// Retained on `<base_topic>/status/<client_id>`. The broker replaces it
@@ -75,6 +76,7 @@ impl Mqtt {
         Ok(Self {
             client,
             status_topic: status_topic(config),
+            diagnostics_topic: diagnostics_topic(config),
         })
     }
 
@@ -199,34 +201,58 @@ impl Mqtt {
         });
     }
 
-    /// Sensor data is periodic, so it is dropped instead of queued when the
-    /// request channel is full (e.g. during a broker outage). Awaiting
-    /// `publish()` would pile up blocked tasks and flush stale readings on
-    /// reconnect.
-    pub fn publish_sensor_data(&mut self, data: SensorData) {
+    /// Returns whether the reading was queued.
+    pub fn publish_sensor_data(&mut self, data: SensorData) -> bool {
         log::debug!("Publishing: {} -> {:?}", data.topic, data);
-        let payload = match serde_json::to_vec(&data) {
-            Ok(payload) => payload,
+        match serde_json::to_vec(&data) {
+            Ok(payload) => self.try_publish(data.topic, payload),
             Err(err) => {
                 log::error!("Failed to serialize sensor data: {err}");
-                return;
+                false
             }
-        };
+        }
+    }
+
+    pub fn publish_diagnostics(&mut self, payload: Vec<u8>) {
+        log::debug!(
+            "Publishing: {} -> {}",
+            self.diagnostics_topic,
+            String::from_utf8_lossy(&payload)
+        );
+        self.try_publish(self.diagnostics_topic.clone(), payload);
+    }
+
+    /// Readings and diagnostics are periodic, so they are dropped instead of
+    /// queued when the request channel is full (e.g. during a broker outage).
+    /// Awaiting `publish()` would pile up blocked tasks and flush stale
+    /// messages on reconnect.
+    fn try_publish(&self, topic: String, payload: Vec<u8>) -> bool {
         match self
             .client
-            .try_publish(data.topic, QoS::AtLeastOnce, false, payload)
+            .try_publish(topic, QoS::AtLeastOnce, false, payload)
         {
-            Ok(()) => log::trace!("OK!"),
-            Err(ClientError::TryRequest(_)) => {
-                log::debug!("MQTT request queue full; dropping reading");
+            Ok(()) => {
+                log::trace!("OK!");
+                true
             }
-            Err(err) => log::error!("Failed to publish: {err}"),
+            Err(ClientError::TryRequest(_)) => {
+                log::debug!("MQTT request queue full; dropping the message");
+                false
+            }
+            Err(err) => {
+                log::error!("Failed to publish: {err}");
+                false
+            }
         }
     }
 }
 
 pub fn status_topic(config: &config::Mqtt) -> String {
     format!("{}/status/{}", config.base_topic, config.client_id)
+}
+
+pub fn diagnostics_topic(config: &config::Mqtt) -> String {
+    format!("{}/diagnostics/{}", config.base_topic, config.client_id)
 }
 
 #[cfg(test)]

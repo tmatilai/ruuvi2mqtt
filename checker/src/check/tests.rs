@@ -1,7 +1,7 @@
 use super::*;
 use crate::fixtures::{
     AIR, BOARD, COMMIT, HOST1, HOST2, TAG, air_reading, air_reading_e1, board_discovery,
-    diagnostics, instance_discovery, online, reading,
+    diagnostics, instance_diagnostics, instance_discovery, online, reading,
 };
 use crate::payload::{AIR_ENTITIES, TAG_ENTITIES};
 
@@ -29,6 +29,19 @@ fn secs(s: u64) -> Duration {
 /// Statuses and discovery for both instances, discovery for TAG, and a
 /// reading every minute for `minutes`, the first `duplicates` of them twice
 fn healthy_with(watch: &mut Watch, minutes: u64, duplicates: u64) {
+    no_readings(watch, minutes);
+    let topic = format!("ruuvi2mqtt/{TAG}");
+    for m in 0..minutes {
+        watch.on_message(secs(30 + m * 60), &topic, reading(HOST2).as_bytes(), false);
+        if m < duplicates {
+            watch.on_message(secs(31 + m * 60), &topic, reading(HOST1).as_bytes(), false);
+        }
+    }
+}
+
+/// Statuses, discovery and diagnostics every minute for both instances, and
+/// discovery for TAG
+fn no_readings(watch: &mut Watch, minutes: u64) {
     for instance in [HOST1, HOST2] {
         let topic = format!("ruuvi2mqtt/status/{instance}");
         watch.on_message(
@@ -45,11 +58,15 @@ fn healthy_with(watch: &mut Watch, minutes: u64, duplicates: u64) {
         );
     }
     discovery(watch, TAG, "Cellar", &TAG_ENTITIES);
-    let topic = format!("ruuvi2mqtt/{TAG}");
     for m in 0..minutes {
-        watch.on_message(secs(30 + m * 60), &topic, reading(HOST2).as_bytes(), false);
-        if m < duplicates {
-            watch.on_message(secs(31 + m * 60), &topic, reading(HOST1).as_bytes(), false);
+        for instance in [HOST1, HOST2] {
+            let tags = format!(r#"{{"{TAG}":{{"rssi":-70,"readings":45}}}}"#);
+            watch.on_message(
+                secs(59 + m * 60),
+                &format!("ruuvi2mqtt/diagnostics/{instance}"),
+                instance_diagnostics(instance, &tags).as_bytes(),
+                false,
+            );
         }
     }
 }
@@ -110,6 +127,86 @@ fn instance_without_discovery_fails() {
 }
 
 #[test]
+fn instance_diagnostics_are_reported() {
+    let mut w = watch();
+    healthy(&mut w, 15);
+    let report = w.finish(Duration::from_mins(15));
+    assert!(
+        report.text.contains(concat!(
+            "    15 minutes of diagnostics, hci0: Example BT Adapter (1234:5678), 0 MQTT reconnects, ",
+            "readings per minute: 1.0 published, 2.0 throttled\n",
+            "    Cellar (aabbccddee01): 15 of 15 minutes, RSSI -70 (-70..-70), ",
+            "45.0 readings per minute heard\n"
+        )),
+        "{}",
+        report.text
+    );
+    // Not a board
+    assert!(!report.text.contains("ESP32"), "{}", report.text);
+}
+
+#[test]
+fn instance_without_diagnostics_fails() {
+    let mut w = watch();
+    w.config.instances.push("ruuvi2mqtt_host3".into());
+    healthy(&mut w, 15);
+    for (topic, payload) in [
+        (
+            "ruuvi2mqtt/status/ruuvi2mqtt_host3",
+            online("1.5.2-dev (6534f11)"),
+        ),
+        (
+            "homeassistant/binary_sensor/ruuvi2mqtt_host3/status/config",
+            instance_discovery("ruuvi2mqtt_host3"),
+        ),
+    ] {
+        w.on_message(secs(0), topic, payload.as_bytes(), true);
+    }
+    let report = w.finish(Duration::from_mins(15));
+    assert_eq!(report.failures, ["ruuvi2mqtt_host3: no diagnostics"]);
+}
+
+#[test]
+fn gap_in_instance_diagnostics_fails() {
+    let mut w = watch();
+    healthy(&mut w, 15);
+    let report = w.finish(Duration::from_mins(30));
+    assert!(
+        report
+            .failures
+            .contains(&"ruuvi2mqtt_host1: no diagnostics for 15:01".to_string()),
+        "{:?}",
+        report.failures
+    );
+}
+
+#[test]
+fn invalid_instance_diagnostics_fail() {
+    let mut w = watch();
+    healthy(&mut w, 15);
+    let topic = "ruuvi2mqtt/diagnostics/ruuvi2mqtt_host1";
+    for (payload, error) in [
+        (
+            instance_diagnostics(HOST1, r#"{"aabbccddee01":{"rssi":null,"readings":-1}}"#),
+            r#"tag aabbccddee01: {"readings":-1,"rssi":null}"#,
+        ),
+        (
+            instance_diagnostics(HOST1, "{}")
+                .replace(r#""adapter":"hci0: Example BT Adapter (1234:5678)","#, ""),
+            "adapter: null",
+        ),
+    ] {
+        w.on_message(secs(100), topic, payload.as_bytes(), false);
+        let report = w.finish(Duration::from_mins(15));
+        assert!(report.text.contains(error), "{error}: {}", report.text);
+    }
+    // An unknown RSSI is valid
+    let unknown = instance_diagnostics(HOST1, r#"{"aabbccddee01":{"rssi":null,"readings":1}}"#);
+    w.on_message(secs(100), topic, unknown.as_bytes(), false);
+    assert_eq!(w.invalid_diagnostics.count, 2);
+}
+
+#[test]
 fn status_change_fails() {
     let mut w = watch();
     healthy(&mut w, 15);
@@ -159,7 +256,7 @@ fn missing_status_fails() {
 #[test]
 fn missing_tag_fails() {
     let mut w = watch();
-    healthy(&mut w, 0);
+    no_readings(&mut w, 15);
     let report = w.finish(Duration::from_mins(15));
     assert_eq!(report.summary, "FAIL: Cellar (aabbccddee01): no readings");
 }
@@ -167,7 +264,7 @@ fn missing_tag_fails() {
 #[test]
 fn late_first_reading_and_gap_fail() {
     let mut w = watch();
-    healthy(&mut w, 0);
+    no_readings(&mut w, 20);
     w.on_message(
         secs(400),
         &format!("ruuvi2mqtt/{TAG}"),
@@ -192,7 +289,7 @@ fn gap_before_the_watch_extends_the_limits() {
         if let Some(gap) = gap {
             w.config.gaps.insert(TAG.into(), secs(gap));
         }
-        healthy(&mut w, 0);
+        no_readings(&mut w, end / 60);
         let topic = format!("ruuvi2mqtt/{TAG}");
         for at in [700, 1500] {
             w.on_message(secs(at), &topic, reading(HOST1).as_bytes(), false);

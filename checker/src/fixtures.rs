@@ -53,6 +53,13 @@ pub fn board_discovery() -> String {
     )
 }
 
+/// An instance's diagnostics for a minute
+pub fn instance_diagnostics(client_id: &str, tags: &str) -> String {
+    format!(
+        r#"{{"version":"1.5.2-dev (6534f11)","client_id":"{client_id}","adapter":"hci0: Example BT Adapter (1234:5678)","uptime_s":600,"mqtt_reconnects":0,"readings_published":1,"readings_throttled":2,"tags":{tags}}}"#
+    )
+}
+
 /// A board's diagnostics: Wi-Fi connects 1 s into the 5 s scan
 pub fn diagnostics(firmware: &str, cycle: u64, tags: &str) -> String {
     format!(

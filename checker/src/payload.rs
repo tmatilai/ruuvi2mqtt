@@ -1,9 +1,15 @@
-//! The app's payloads: readings, discovery configs and statuses. They mirror
-//! `src/homeassistant.rs` and `src/mqtt.rs`; update them when those change.
+//! The app's payloads: readings, discovery configs, statuses and
+//! diagnostics. They mirror `src/homeassistant.rs`, `src/mqtt.rs` and
+//! `src/diagnostics.rs`; update them when those change.
 
+use std::collections::BTreeMap;
 use std::fmt::Write as _;
+use std::time::Duration;
 
 use serde_json::Value;
+
+use crate::diagnostics::number;
+use crate::topic::is_tag_id;
 
 /// A tag's Home Assistant entities, as `src/homeassistant.rs` publishes
 /// them: (component, entity).
@@ -122,6 +128,63 @@ pub fn validate_reading(payload: &[u8], model: Model) -> Result<Reading, String>
             .iter()
             .all(|key| reading[key].is_number()),
     })
+}
+
+/// A minute of an instance's diagnostics
+pub struct Diagnostics {
+    /// When the checker got them
+    pub at: Duration,
+    pub client_id: String,
+    pub adapter: String,
+    /// Since the instance started
+    pub mqtt_reconnects: u32,
+    pub readings_published: u32,
+    pub readings_throttled: u32,
+    /// Tag ID to (the strongest RSSI, if known, and readings)
+    pub tags: BTreeMap<String, (Option<i8>, u32)>,
+}
+
+/// An instance's diagnostics, or `None` for a board's, which have `firmware`
+/// instead of `version`.
+pub fn parse_diagnostics(at: Duration, payload: &[u8]) -> Option<Result<Diagnostics, String>> {
+    let d: Value = serde_json::from_slice(payload).ok()?;
+    d.get("version")?;
+    let parse = || {
+        let number = |key: &str| number(&d, key);
+        Ok(Diagnostics {
+            at,
+            client_id: client_id(&d["client_id"])
+                .ok_or_else(|| format!("client_id: {}", d["client_id"]))?
+                .to_string(),
+            adapter: d["adapter"]
+                .as_str()
+                .map(printable)
+                .ok_or_else(|| format!("adapter: {}", d["adapter"]))?,
+            mqtt_reconnects: number("mqtt_reconnects")?,
+            readings_published: number("readings_published")?,
+            readings_throttled: number("readings_throttled")?,
+            tags: parse_tags(&d["tags"])?,
+        })
+    };
+    Some(parse())
+}
+
+fn parse_tags(tags: &Value) -> Result<BTreeMap<String, (Option<i8>, u32)>, String> {
+    let Value::Object(tags) = tags else {
+        return Err(format!("tags: {tags}"));
+    };
+    tags.iter()
+        .map(|(id, tag)| {
+            let rssi = match &tag["rssi"] {
+                Value::Null => Some(None),
+                rssi => rssi.as_i64().and_then(|r| i8::try_from(r).ok()).map(Some),
+            };
+            match (rssi, number(tag, "readings")) {
+                (Some(rssi), Ok(readings)) if is_tag_id(id) => Ok((id.clone(), (rssi, readings))),
+                _ => Err(format!("tag {}: {tag}", printable(id))),
+            }
+        })
+        .collect()
 }
 
 /// An MQTT client ID, such as a reading's publisher. The report shows it

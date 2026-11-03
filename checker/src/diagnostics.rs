@@ -104,8 +104,8 @@ pub fn discovery(payload: &[u8], base_topic: &str) -> Option<String> {
     client_id(&config["device"]["identifiers"][0]).map(str::to_string)
 }
 
-/// A `u32`, as the firmware sends
-fn number(v: &Value, key: &str) -> Result<u32, String> {
+/// A `u32`, as the firmware and the app send
+pub fn number(v: &Value, key: &str) -> Result<u32, String> {
     v[key]
         .as_u64()
         .and_then(|n| u32::try_from(n).ok())

@@ -5,6 +5,7 @@
 #### Features
 
 - Publish each instance as a Home Assistant device, with its status as a connectivity sensor.
+- Publish diagnostics once a minute to `<base_topic>/diagnostics/<client_id>`.
 
 ### ruuvi2mqtt-esp32
 

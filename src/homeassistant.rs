@@ -45,7 +45,25 @@ pub struct Instance<'a> {
     pub topic: String,
 }
 
+/// A sensor of the instance, from its diagnostics
 #[derive(Debug, Serialize)]
+pub struct InstanceSensor<'a> {
+    name: &'a str,
+    unique_id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    state_class: Option<&'a str>,
+    state_topic: String,
+    value_template: String,
+    availability_topic: String,
+    availability_template: &'a str,
+    #[serde(flatten)]
+    device_type: DeviceType<'a>,
+    device: InstanceInfo<'a>,
+    #[serde(skip)]
+    pub topic: String,
+}
+
+#[derive(Clone, Copy, Debug, Serialize)]
 struct InstanceInfo<'a> {
     name: &'a str,
     identifiers: [&'a str; 1],
@@ -153,13 +171,43 @@ impl<'a> Instance<'a> {
             value_template: "{{ value_json.state }}",
             payload_on: Status::ONLINE.state,
             payload_off: Status::OFFLINE.state,
-            device: InstanceInfo {
-                name: &config.client_id,
-                identifiers: [&config.client_id],
-                model: "ruuvi2mqtt",
-                sw_version: config::VERSION,
-            },
+            device: InstanceInfo::new(config),
             topic: format!("homeassistant/binary_sensor/{id}/status/config"),
+        }
+    }
+}
+
+impl<'a> InstanceSensor<'a> {
+    pub fn all(config: &'a config::Mqtt) -> Vec<Self> {
+        let id = topic_id(&config.client_id);
+        INSTANCE_SENSORS
+            .iter()
+            .map(|&(device_type, state_class)| {
+                let key = device_type.key;
+                Self {
+                    name: device_type.name,
+                    unique_id: format!("{id}_{key}"),
+                    state_class,
+                    state_topic: mqtt::diagnostics_topic(config),
+                    value_template: format!("{{{{ value_json.{key} }}}}"),
+                    availability_topic: mqtt::status_topic(config),
+                    availability_template: "{{ value_json.state }}",
+                    device_type,
+                    device: InstanceInfo::new(config),
+                    topic: format!("homeassistant/sensor/{id}/{key}/config"),
+                }
+            })
+            .collect()
+    }
+}
+
+impl<'a> InstanceInfo<'a> {
+    fn new(config: &'a config::Mqtt) -> Self {
+        Self {
+            name: &config.client_id,
+            identifiers: [&config.client_id],
+            model: "ruuvi2mqtt",
+            sw_version: config::VERSION,
         }
     }
 }
@@ -297,6 +345,29 @@ impl DeviceType<'static> {
     }
 }
 
+/// The instance's sensors, each a diagnostics field, with its state class
+const INSTANCE_SENSORS: [(DeviceType, Option<&str>); 5] = [
+    (DeviceType::sensor("Adapter", "adapter").diagnostic(), None),
+    (
+        DeviceType::sensor("MQTT reconnects", "mqtt_reconnects"),
+        Some("total_increasing"),
+    ),
+    (
+        DeviceType::sensor("Uptime", "uptime_s")
+            .class("duration")
+            .unit("s"),
+        None,
+    ),
+    (
+        DeviceType::sensor("Readings published", "readings_published"),
+        Some("measurement"),
+    ),
+    (
+        DeviceType::sensor("Readings throttled", "readings_throttled"),
+        Some("measurement"),
+    ),
+];
+
 const TEMPERATURE: DeviceType = DeviceType::sensor("Temperature", "temperature")
     .class("temperature")
     .unit("°C");
@@ -391,7 +462,7 @@ mod tests {
     fn reading(payload: &[u8]) -> String {
         let config = mqtt();
         let values = SensorValues::from_manufacturer_specific_data(0x0499, payload).unwrap();
-        let data = ruuvi::SensorData::new(BDAddr::from([0u8; 6]), payload[0], values);
+        let data = ruuvi::SensorData::new(BDAddr::from([0u8; 6]), payload[0], None, values);
         serde_json::to_string(&SensorData::new(&data, &config)).unwrap()
     }
 
@@ -487,6 +558,30 @@ mod tests {
             serde_json::to_string(&instance).unwrap(),
             format!(
                 r#"{{"name":"Status","unique_id":"ruuvi2mqtt_Mac_home_status","device_class":"connectivity","state_topic":"ruuvi2mqtt/status/ruuvi2mqtt_Mac.home","value_template":"{{{{ value_json.state }}}}","payload_on":"online","payload_off":"offline","device":{{"name":"ruuvi2mqtt_Mac.home","identifiers":["ruuvi2mqtt_Mac.home"],"model":"ruuvi2mqtt","sw_version":"{}"}}}}"#,
+                config::VERSION
+            )
+        );
+    }
+
+    #[test]
+    fn instance_sensors() {
+        let mut config = mqtt();
+        config.client_id = String::from("ruuvi2mqtt_Mac.home");
+        let sensors = InstanceSensor::all(&config);
+        assert_eq!(
+            sensors.iter().map(|s| s.topic.as_str()).collect::<Vec<_>>(),
+            [
+                "homeassistant/sensor/ruuvi2mqtt_Mac_home/adapter/config",
+                "homeassistant/sensor/ruuvi2mqtt_Mac_home/mqtt_reconnects/config",
+                "homeassistant/sensor/ruuvi2mqtt_Mac_home/uptime_s/config",
+                "homeassistant/sensor/ruuvi2mqtt_Mac_home/readings_published/config",
+                "homeassistant/sensor/ruuvi2mqtt_Mac_home/readings_throttled/config",
+            ]
+        );
+        assert_eq!(
+            serde_json::to_string(&sensors[2]).unwrap(),
+            format!(
+                r#"{{"name":"Uptime","unique_id":"ruuvi2mqtt_Mac_home_uptime_s","state_topic":"ruuvi2mqtt/diagnostics/ruuvi2mqtt_Mac.home","value_template":"{{{{ value_json.uptime_s }}}}","availability_topic":"ruuvi2mqtt/status/ruuvi2mqtt_Mac.home","availability_template":"{{{{ value_json.state }}}}","device_class":"duration","unit_of_measurement":"s","device":{{"name":"ruuvi2mqtt_Mac.home","identifiers":["ruuvi2mqtt_Mac.home"],"model":"ruuvi2mqtt","sw_version":"{}"}}}}"#,
                 config::VERSION
             )
         );

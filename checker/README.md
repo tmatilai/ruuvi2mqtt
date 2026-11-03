@@ -12,6 +12,8 @@ checks that:
   online.
 - Each instance runs `--commit`, without local changes.
 - Each instance has its Home Assistant discovery config.
+- Each instance publishes its diagnostics, and never goes `--max-gap` without
+  them. The report shows how each instance hears each tag.
 - Each tag (`--tag <MAC>`) and Ruuvi Air (`--air <MAC>`) has its first reading
   within `--first-reading` (5 minutes), and never goes `--max-gap` (10 minutes)
   without one.
@@ -28,7 +30,7 @@ checks that:
   readings don't count.
 - Each tag has all its Home Assistant discovery configs, and none of another
   model's.
-- The ESP32 diagnostics are valid.
+- The instances' and the ESP32 boards' diagnostics are valid.
 - Each board (`--board <client_id>`) runs `--commit`, without local changes, in
   every cycle. Flash the boards before the watch starts.
 - Each board that scans continuously was online at the start and stayed online.
