@@ -42,6 +42,10 @@ impl Watch {
             } else if let Some(status) = self.statuses.get(id).and_then(|h| h.last()) {
                 let _ = writeln!(r.text, "    status: {}", status.payload);
             }
+            if checked && !self.board_discovery.values().any(|b| b == id) {
+                let _ = writeln!(r.text, "    no discovery config");
+                r.failures.push(format!("{id}: no discovery config"));
+            }
             self.report_board(r, cycles);
             if checked {
                 check_board(r, id, cycles, c, end);

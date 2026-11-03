@@ -1,7 +1,7 @@
 use super::*;
 use crate::fixtures::{
-    AIR, BOARD, COMMIT, HOST1, HOST2, TAG, air_reading, air_reading_e1, diagnostics,
-    instance_discovery, online, reading,
+    AIR, BOARD, COMMIT, HOST1, HOST2, TAG, air_reading, air_reading_e1, board_discovery,
+    diagnostics, instance_discovery, online, reading,
 };
 use crate::payload::{AIR_ENTITIES, TAG_ENTITIES};
 
@@ -369,6 +369,12 @@ fn with_board(watch: &mut Watch, minutes: u64, firmware: &str) {
 
 fn with_board_in(watch: &mut Watch, minutes: u64, firmware: &str, mode: &str) {
     healthy(watch, minutes);
+    watch.on_message(
+        secs(0),
+        BOARD_DISCOVERY_TOPIC,
+        board_discovery().as_bytes(),
+        true,
+    );
     let topic = format!("ruuvi2mqtt/{TAG}");
     let tags = format!(r#"{{"{TAG}":{{"rssi":-74,"adverts":2,"first_ms":1210}}}}"#);
     for n in 0..minutes * 60 / 67 {
@@ -430,6 +436,17 @@ fn checked_board_with_wrong_firmware_fails() {
         report.summary,
         "FAIL: ruuvi2mqtt-c6: ruuvi2mqtt-esp32 1.5.2-dev (6534f11-dirty) has local changes"
     );
+}
+
+const BOARD_DISCOVERY_TOPIC: &str = "homeassistant/sensor/ruuvi2mqtt-c6/scan_mode/config";
+
+#[test]
+fn checked_board_without_discovery_fails() {
+    let mut w = watch_board();
+    with_board(&mut w, 15, "1.5.2-dev (6534f11)");
+    w.on_message(secs(60), BOARD_DISCOVERY_TOPIC, b"", true);
+    let report = w.finish(Duration::from_mins(15));
+    assert_eq!(report.summary, "FAIL: ruuvi2mqtt-c6: no discovery config");
 }
 
 #[test]

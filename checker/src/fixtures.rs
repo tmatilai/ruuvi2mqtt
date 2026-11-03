@@ -46,6 +46,13 @@ pub fn instance_discovery(client_id: &str) -> String {
     )
 }
 
+/// A board's scan mode discovery config
+pub fn board_discovery() -> String {
+    format!(
+        r#"{{"state_topic":"ruuvi2mqtt/diagnostics/c6-board","device":{{"identifiers":["{BOARD}"]}}}}"#
+    )
+}
+
 /// A board's diagnostics: Wi-Fi connects 1 s into the 5 s scan
 pub fn diagnostics(firmware: &str, cycle: u64, tags: &str) -> String {
     format!(

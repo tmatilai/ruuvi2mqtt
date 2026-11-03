@@ -74,6 +74,8 @@ pub struct Watch {
     statuses: BTreeMap<String, Vec<Status>>,
     /// The instances' discovery configs: topic to client ID
     instance_discovery: BTreeMap<String, String>,
+    /// The boards' scan mode discovery configs, the same way
+    board_discovery: BTreeMap<String, String>,
     tags: BTreeMap<String, Tag>,
     /// The ESP32 boards' diagnostics, by client ID
     boards: BTreeMap<String, Vec<Diagnostics>>,
@@ -127,6 +129,7 @@ impl Watch {
             config,
             statuses: BTreeMap::new(),
             instance_discovery: BTreeMap::new(),
+            board_discovery: BTreeMap::new(),
             tags: BTreeMap::new(),
             boards: BTreeMap::new(),
             invalid_readings: Problems::default(),
@@ -154,6 +157,13 @@ impl Watch {
                 match payload::instance_discovery(payload, &self.config.base_topic) {
                     Some(id) => self.instance_discovery.insert(topic.to_string(), id),
                     None => self.instance_discovery.remove(topic),
+                };
+                None
+            }
+            Topic::ScanModeDiscovery => {
+                match diagnostics::discovery(payload, &self.config.base_topic) {
+                    Some(id) => self.board_discovery.insert(topic.to_string(), id),
+                    None => self.board_discovery.remove(topic),
                 };
                 None
             }

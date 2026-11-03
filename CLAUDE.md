@@ -55,10 +55,11 @@ Configuration is compile-time via environment variables, see
 - `src/lib.rs`: the pure-Rust modules, `mac.rs` (MAC addresses), `payload.rs`
   (the reading's JSON, and an Air's format 6 versus E1), `roam.rs` (when to
   switch access points), `scan.rs` (BLE reception statistics), `diagnostics.rs`
-  (the diagnostics JSON), `status.rs` (the status page's report and grades) and
-  `led_pattern.rs` (the LED's breath and blinks). esp-idf-svc and esp32-nimble
-  are espidf-only dependencies, so the lib's unit tests run on the host with
-  stable Rust (`--target host-tuple`). The bin has `test = false`.
+  (the diagnostics JSON), `homeassistant.rs` (the board's discovery configs),
+  `status.rs` (the status page's report and grades) and `led_pattern.rs` (the
+  LED's breath and blinks). esp-idf-svc and esp32-nimble are espidf-only
+  dependencies, so the lib's unit tests run on the host with stable Rust
+  (`--target host-tuple`). The bin has `test = false`.
 - `build.rs`: embuild glue for ESP-IDF, the embedded CA certificate, and
   `BUILD_VERSION`.
 - `boards.sh`: finds the attached boards and their serial ports for the

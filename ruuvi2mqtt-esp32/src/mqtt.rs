@@ -9,10 +9,11 @@ use esp_idf_svc::mqtt::client::{
 };
 use esp_idf_svc::tls::X509;
 use log::{info, warn};
+use ruuvi2mqtt_esp32::homeassistant::{self, Board, Mode};
 use ruuvi2mqtt_esp32::payload;
 use ruuvi2mqtt_esp32::status::DISCOVERY_TOPIC;
 
-use crate::config;
+use crate::{config, system};
 
 /// Events forwarded from the event-loop thread to [`Mqtt`].
 #[derive(Clone, Copy)]
@@ -31,13 +32,18 @@ pub struct Mqtt {
     /// Publishes not yet acknowledged by the broker.
     pending: Vec<MessageId>,
     status_topic: String,
+    /// Topic and payload.
+    discovery: Vec<(String, String)>,
+    /// The last connect enqueued every discovery config.
+    discovery_enqueued: bool,
 }
 
 impl Mqtt {
     /// Create the client and start connecting in the background.
     ///
-    /// Call [`Mqtt::wait_connected`] before publishing.
-    pub fn connect() -> anyhow::Result<Self> {
+    /// Call [`Mqtt::wait_connected`] before publishing. With `discovery`, it
+    /// publishes the discovery configs on connect.
+    pub fn connect(discovery: bool) -> anyhow::Result<Self> {
         let scheme = if config::MQTT_TLS { "mqtts" } else { "mqtt" };
         let broker_url = format!("{scheme}://{}:{}", config::MQTT_SERVER, config::MQTT_PORT);
 
@@ -98,6 +104,12 @@ impl Mqtt {
             connected_at: None,
             pending: Vec::new(),
             status_topic,
+            discovery: if discovery {
+                discovery_configs()
+            } else {
+                Vec::new()
+            },
+            discovery_enqueued: false,
         })
     }
 
@@ -174,11 +186,59 @@ impl Mqtt {
                         warn!("Failed to publish the status: {e}");
                     }
                 }
+                self.publish_discovery();
             }
             Event::Disconnected => self.connected_at = None,
             Event::Published(id) => self.pending.retain(|&p| p != id),
         }
     }
+
+    /// Deep sleep waits for the broker to acknowledge them, so that the next
+    /// cycles can leave them out.
+    fn publish_discovery(&mut self) {
+        self.discovery_enqueued = true;
+        for (topic, json) in &self.discovery {
+            match self
+                .client
+                .publish(topic, QoS::AtLeastOnce, true, json.as_bytes())
+            {
+                Ok(id) if !config::BLE_SCAN_CONTINUOUS => self.pending.push(id),
+                Ok(_) => {}
+                Err(e) => {
+                    warn!("Failed to publish {topic}: {e}");
+                    self.discovery_enqueued = false;
+                }
+            }
+        }
+    }
+
+    /// Whether the broker has every discovery config, once
+    /// [`Mqtt::wait_published`] has succeeded.
+    pub fn discovery_published(&self) -> bool {
+        self.discovery_enqueued
+    }
+}
+
+fn discovery_configs() -> Vec<(String, String)> {
+    homeassistant::configs(&Board {
+        client_id: config::MQTT_CLIENT_ID,
+        hostname: config::DEVICE_HOSTNAME,
+        base_topic: config::MQTT_BASE_TOPIC,
+        version: env!("BUILD_VERSION"),
+        chip: system::chip(),
+        mode: if config::BLE_SCAN_CONTINUOUS {
+            Mode::Continuous
+        } else {
+            // Three cycles, and half a cycle more, as a cycle is also awake
+            // before and after its scan.
+            Mode::DeepSleep {
+                expire_after: (config::BLE_SCAN_DURATION + config::BLE_SLEEP_DURATION)
+                    .unsigned_abs()
+                    * 7
+                    / 2,
+            }
+        },
+    })
 }
 
 /// Return the embedded CA certificate, if `MQTT_CA_FILE` was set at build time.

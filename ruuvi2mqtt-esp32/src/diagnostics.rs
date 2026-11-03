@@ -17,6 +17,10 @@ pub struct Diagnostics<'a> {
     pub chip: &'a str,
     /// Cycles since a cold boot or a crash, this one included.
     pub cycle: u32,
+    /// Of those, the ones that failed.
+    pub cycles_failed: u32,
+    /// Seconds since boot.
+    pub uptime_s: u32,
     pub settings: Settings<'a>,
     /// The access point's signal, in dBm.
     pub wifi_rssi: Option<i8>,
@@ -85,6 +89,8 @@ mod tests {
             client_id: "esp32-test",
             chip: "esp32c6",
             cycle: 42,
+            cycles_failed: 3,
+            uptime_s: 5,
             settings: Settings {
                 scan_mode: "deep-sleep",
                 scan_duration: 5,
@@ -115,7 +121,8 @@ mod tests {
             diagnostics(scan).to_json(),
             concat!(
                 r#"{"firmware":"ruuvi2mqtt-esp32 1.5.2-dev (c43f162)","client_id":"esp32-test","#,
-                r#""chip":"esp32c6","cycle":42,"settings":{"scan_mode":"deep-sleep","scan_duration":5},"#,
+                r#""chip":"esp32c6","cycle":42,"cycles_failed":3,"uptime_s":5,"#,
+                r#""settings":{"scan_mode":"deep-sleep","scan_duration":5},"#,
                 r#""wifi_rssi":-61,"wifi_channel":6,"wifi_bssid":"021122334455","#,
                 r#""wifi_cache":"hit","free_heap":151000,"scan_start_ms":180,"scan_end_ms":5190,"#,
                 r#""wifi_ms":1450,"mqtt_ms":2210,"cycle_ms":5230,"#,

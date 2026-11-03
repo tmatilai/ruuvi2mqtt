@@ -34,10 +34,11 @@ beside app instances.
 Each cycle also publishes [diagnostics](#diagnostics). Scanning continuously,
 the board serves a [status page](#status-page) for finding a good spot for it.
 
-The firmware does **not** publish the Home Assistant discovery configs. For Home
-Assistant to know the sensors, run at least one instance of the
+The firmware does **not** publish the tags' Home Assistant discovery configs.
+For Home Assistant to know the sensors, run at least one instance of the
 [`ruuvi2mqtt`](../README.md) app on the same broker. The app publishes the
-configs, with the names, units and entity types, and keeps them retained.
+configs, with the names, units and entity types, and keeps them retained. The
+board publishes [its own](#home-assistant).
 
 ---
 
@@ -316,6 +317,15 @@ When scanning continuously, the board keeps a
 
 ---
 
+## Home Assistant
+
+The board is a device in Home Assistant, with sensors from its
+[diagnostics](#diagnostics). Scanning continuously, its [status](#status) is a
+connectivity sensor, and the device links to the status page. In deep sleep, the
+sensors expire after three cycles without diagnostics.
+
+---
+
 ## Diagnostics
 
 Each cycle ends with a message on
@@ -328,6 +338,8 @@ and when, so a missed tag can be traced to range or to the radio.
   "client_id": "ruuvi2mqtt-kitchen",
   "chip": "esp32c6",
   "cycle": 42,
+  "cycles_failed": 1,
+  "uptime_s": 5,
   "settings": {
     "scan_mode": "deep-sleep",
     "scan_duration": 5,
@@ -359,6 +371,8 @@ and when, so a missed tag can be traced to range or to the radio.
 | `client_id`                                             | `MQTT_CLIENT_ID`, the `publisher` in the readings                                                                                                                                                     |
 | `chip`                                                  | ESP-IDF target                                                                                                                                                                                        |
 | `cycle`                                                 | Cycles since a cold boot or a crash, this one included. A gap means cycles without diagnostics                                                                                                        |
+| `cycles_failed`                                         | Of those, the ones that failed                                                                                                                                                                        |
+| `uptime_s`                                              | Seconds since boot                                                                                                                                                                                    |
 | `settings`                                              | The build-time settings that A/B tests compare: `BLE_SCAN_MODE`, `BLE_SCAN_DURATION` and `ANTENNA` (left out when unset)                                                                              |
 | `wifi_rssi`, `wifi_channel`, `wifi_bssid`               | The access point's signal (dBm), channel and BSSID, which roaming changes                                                                                                                             |
 | `wifi_cache`                                            | `hit`: connected with the cached channel and BSSID. `miss`: nothing cached. `stale`: the cached values failed, so the board scanned. When scanning continuously, from the first connection after boot |

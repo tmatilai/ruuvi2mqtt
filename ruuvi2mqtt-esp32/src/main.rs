@@ -56,15 +56,31 @@ fn main() {
         warn!("LED failed: {e:#}");
     }
 
-    // Deep sleep and sleep()'s restart continue the count, other resets start
-    // it over. Only this thread uses it, so a plain load and store will do.
-    let cycle = match reset_reason {
-        sys::esp_reset_reason_t_ESP_RST_DEEPSLEEP | sys::esp_reset_reason_t_ESP_RST_SW => {
-            CYCLE.load(Ordering::Relaxed).wrapping_add(1)
-        }
-        _ => 1,
+    // Deep sleep and sleep()'s restart continue the counts, other resets start
+    // them over. Only this thread uses them, so a plain load and store will do.
+    let continued = matches!(
+        reset_reason,
+        sys::esp_reset_reason_t_ESP_RST_DEEPSLEEP | sys::esp_reset_reason_t_ESP_RST_SW
+    );
+    let cycle = if continued {
+        CYCLE.load(Ordering::Relaxed).wrapping_add(1)
+    } else {
+        1
     };
     CYCLE.store(cycle, Ordering::Relaxed);
+    // A failed deep-sleep cycle may publish nothing, so the next wake counts
+    // it.
+    let cycles_failed = if continued {
+        CYCLES_FAILED
+            .load(Ordering::Relaxed)
+            .wrapping_add(u32::from(failed_before && !config::BLE_SCAN_CONTINUOUS))
+    } else {
+        0
+    };
+    CYCLES_FAILED.store(cycles_failed, Ordering::Relaxed);
+    if !continued {
+        DISCOVERY_PUBLISHED.store(0, Ordering::Relaxed);
+    }
 
     // A panic or watchdog reset restarts main() immediately. Sleep instead, so
     // that a persistent failure costs one cycle per sleep period rather than a
@@ -114,6 +130,15 @@ static CYCLE: AtomicU32 = AtomicU32::new(0);
 /// restarts only after a failure, so it never clears it.
 #[link_section = ".rtc_noinit.last_cycle_failed"]
 static LAST_CYCLE_FAILED: AtomicU8 = AtomicU8::new(0);
+
+/// The failed cycles among `CYCLE`. Uninitialized, as `CYCLE`.
+#[link_section = ".rtc_noinit.cycles_failed"]
+static CYCLES_FAILED: AtomicU32 = AtomicU32::new(0);
+
+/// 1 once the broker has the retained discovery configs, which deep sleep
+/// then leaves out. Uninitialized, as `CYCLE`.
+#[link_section = ".rtc_noinit.discovery_published"]
+static DISCOVERY_PUBLISHED: AtomicU8 = AtomicU8::new(0);
 
 /// Set while `sleep()` waits awake, so the cycle timeout doesn't fire.
 static STAYING_AWAKE: AtomicBool = AtomicBool::new(false);
@@ -280,7 +305,7 @@ fn run(number: u32) -> anyhow::Result<()> {
     let wifi_ms = ms_since(start);
     ble::set_wifi_connected(true);
 
-    let mut mqtt = mqtt::Mqtt::connect()?;
+    let mut mqtt = mqtt::Mqtt::connect(DISCOVERY_PUBLISHED.load(Ordering::Relaxed) != 1)?;
 
     let (scan, error) = finish_scan(ble_handle, start);
     let cycle = Cycle {
@@ -293,6 +318,11 @@ fn run(number: u32) -> anyhow::Result<()> {
     // blinks in the next wake.
     let scan_failed = error.is_some();
     publish(&mut mqtt, &cycle, scan, error)?;
+    // A config that failed to publish doesn't fail the cycle, but the next
+    // cycle tries again.
+    if mqtt.discovery_published() {
+        DISCOVERY_PUBLISHED.store(1, Ordering::Relaxed);
+    }
     anyhow::ensure!(!scan_failed, "BLE scan failed");
     Ok(())
 }
@@ -337,7 +367,7 @@ fn run_continuous(mut number: u32) -> anyhow::Result<Infallible> {
     let _web = web::start()
         .inspect_err(|e| warn!("Status page failed: {e:#}"))
         .ok();
-    let mut mqtt = mqtt::Mqtt::connect()?;
+    let mut mqtt = mqtt::Mqtt::connect(true)?;
     // Subscribes to the tag names for the page now, not after the first
     // scan. The cycles wait for the broker anyway.
     if let Err(e) = mqtt.wait_connected(MQTT_CONNECT_TIMEOUT) {
@@ -368,7 +398,9 @@ fn run_continuous(mut number: u32) -> anyhow::Result<Infallible> {
                 true
             }
         };
-        if !failed {
+        if failed {
+            CYCLES_FAILED.fetch_add(1, Ordering::Relaxed);
+        } else {
             extend_deadline();
         }
         led::set_failed(failed);
@@ -416,6 +448,8 @@ fn publish(
         client_id: config::MQTT_CLIENT_ID,
         chip: system::chip(),
         cycle: cycle.number,
+        cycles_failed: CYCLES_FAILED.load(Ordering::Relaxed),
+        uptime_s: uptime_secs(),
         settings: Settings {
             scan_mode: config::BLE_SCAN_MODE,
             scan_duration: config::BLE_SCAN_DURATION.unsigned_abs(),
