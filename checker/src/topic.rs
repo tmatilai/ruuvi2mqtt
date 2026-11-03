@@ -14,6 +14,8 @@ pub enum Topic<'a> {
     },
     /// `binary_sensor/<id>/status/config`, maybe an instance's
     StatusDiscovery,
+    /// `sensor/<id>/scan_mode/config`, maybe a board's
+    ScanModeDiscovery,
     Other,
 }
 
@@ -36,10 +38,10 @@ impl<'a> Topic<'a> {
             if let Some((id, entity)) = parse_discovery(rest) {
                 return Self::Discovery { id, entity };
             }
-            if let ["binary_sensor", _, "status", "config"] =
-                rest.split('/').collect::<Vec<_>>()[..]
-            {
-                return Self::StatusDiscovery;
+            match rest.split('/').collect::<Vec<_>>()[..] {
+                ["binary_sensor", _, "status", "config"] => return Self::StatusDiscovery,
+                ["sensor", _, "scan_mode", "config"] => return Self::ScanModeDiscovery,
+                _ => {}
             }
         }
         Self::Other
@@ -101,6 +103,10 @@ mod tests {
         assert_eq!(
             parse("homeassistant/binary_sensor/ruuvi2mqtt_host1/status/config"),
             Topic::StatusDiscovery
+        );
+        assert_eq!(
+            parse("homeassistant/sensor/ruuvi2mqtt-c6/scan_mode/config"),
+            Topic::ScanModeDiscovery
         );
     }
 

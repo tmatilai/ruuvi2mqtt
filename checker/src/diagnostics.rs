@@ -1,5 +1,6 @@
-//! The ESP32 boards' diagnostics. They mirror
-//! `ruuvi2mqtt-esp32/src/diagnostics.rs`; update them when that changes.
+//! The ESP32 boards' diagnostics and discovery configs. They mirror
+//! `ruuvi2mqtt-esp32/src/diagnostics.rs` and `homeassistant.rs`; update them
+//! when those change.
 
 use std::collections::BTreeMap;
 use std::fmt::Write as _;
@@ -92,6 +93,15 @@ pub fn parse(at: Duration, hostname: &str, payload: &[u8]) -> Result<Diagnostics
         ));
     }
     Ok(diagnostics)
+}
+
+/// The client ID of a board's discovery config, if it is one
+pub fn discovery(payload: &[u8], base_topic: &str) -> Option<String> {
+    let config: Value = serde_json::from_slice(payload).ok()?;
+    config["state_topic"]
+        .as_str()?
+        .strip_prefix(&format!("{base_topic}/diagnostics/"))?;
+    client_id(&config["device"]["identifiers"][0]).map(str::to_string)
 }
 
 /// A `u32`, as the firmware sends

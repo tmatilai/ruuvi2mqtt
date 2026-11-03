@@ -11,6 +11,7 @@
 #### Features
 
 - Publish a status with a last will when scanning continuously, like the app.
+- Publish each board as a Home Assistant device, with sensors from its diagnostics.
 
 ## 1.7.0 / 2026-11-01
 
