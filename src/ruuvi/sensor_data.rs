@@ -11,14 +11,17 @@ pub struct SensorData {
     pub bdaddr: BDAddr,
     /// The data format, the payload's first byte
     pub format: u8,
+    /// The last RSSI `BlueZ` reported, in dBm
+    pub rssi: Option<i16>,
     values: SensorValues,
 }
 
 impl SensorData {
-    pub const fn new(bdaddr: BDAddr, format: u8, values: SensorValues) -> Self {
+    pub const fn new(bdaddr: BDAddr, format: u8, rssi: Option<i16>, values: SensorValues) -> Self {
         Self {
             bdaddr,
             format,
+            rssi,
             values,
         }
     }
@@ -159,12 +162,12 @@ mod tests {
             5, t1, t2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, pow1, pow2, 0, 0, 0, 0, 0, 0, 0, 0, 0,
         ];
         let values = SensorValues::from_manufacturer_specific_data(0x0499, payload).unwrap();
-        SensorData::new(BDAddr::from([0u8; 6]), 5, values)
+        SensorData::new(BDAddr::from([0u8; 6]), 5, None, values)
     }
 
     fn decode(payload: &[u8]) -> SensorData {
         let values = SensorValues::from_manufacturer_specific_data(0x0499, payload).unwrap();
-        SensorData::new(BDAddr::from([0u8; 6]), payload[0], values)
+        SensorData::new(BDAddr::from([0u8; 6]), payload[0], None, values)
     }
 
     // Test vectors from the Ruuvi data format E1 and 6 specifications.

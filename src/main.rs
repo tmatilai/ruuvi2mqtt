@@ -1,5 +1,6 @@
 mod config;
 mod devices;
+mod diagnostics;
 mod homeassistant;
 mod mqtt;
 mod ruuvi;
@@ -9,6 +10,7 @@ use tokio::sync::mpsc;
 
 use crate::config::{CliOptions, Config};
 use crate::devices::{Devices, ThrottleResult};
+use crate::diagnostics::Diagnostics;
 use crate::homeassistant::SensorData;
 use crate::mqtt::Mqtt;
 use crate::ruuvi::{BDAddr, FormatFilter, RuuviListener};
@@ -21,6 +23,7 @@ pub enum Event {
     MqttDeviceUpdate(BDAddr),
     MqttConnect,
     BleStopped,
+    PublishDiagnostics,
 }
 
 #[tokio::main]
@@ -46,18 +49,24 @@ async fn main() -> Result<()> {
 
     let (tx, mut rx) = mpsc::channel(32);
     let mut mqtt = Mqtt::init(tx.clone(), &config.mqtt)?;
-    RuuviListener::new(tx).await?.start().await?;
+    let adapter = RuuviListener::new(tx.clone()).await?.start().await?;
+    let mut diagnostics = Diagnostics::new(adapter);
+    tokio::spawn(diagnostics::tick(tx));
 
     while let Some(event) = rx.recv().await {
-        use Event::{BleStopped, MqttConnect, MqttDeviceUpdate, RuuviUpdate};
+        use Event::{BleStopped, MqttConnect, MqttDeviceUpdate, PublishDiagnostics, RuuviUpdate};
 
         log::trace!("Received event: {event:?}");
         match event {
             MqttConnect => {
                 log::info!("Connected to Mqtt. Publishing status and devices.");
+                diagnostics.mqtt_connected();
                 mqtt.publish_status();
                 let instance = homeassistant::Instance::new(&config.mqtt);
                 mqtt.publish_discovery(instance.topic.clone(), &instance);
+                for sensor in homeassistant::InstanceSensor::all(&config.mqtt) {
+                    mqtt.publish_discovery(sensor.topic.clone(), &sensor);
+                }
                 for device in homeassistant::Device::all(&config) {
                     mqtt.publish_discovery(device.topic.clone(), &device);
                 }
@@ -71,6 +80,7 @@ async fn main() -> Result<()> {
                 }
             }
             RuuviUpdate(sensor) => {
+                diagnostics.reading(sensor.bdaddr, sensor.rssi);
                 if !formats.keep(&sensor) {
                     log::debug!("Dropped format 6 after E1: [{}]", sensor.bdaddr);
                     continue;
@@ -82,6 +92,7 @@ async fn main() -> Result<()> {
                         log::debug!("Unknown device: [{}]", sensor.bdaddr);
                     }
                     ThrottleResult::Throttle => {
+                        diagnostics.throttled();
                         log::debug!(
                             "Throttled: '{}' [{}]",
                             device_name.unwrap_or("?"),
@@ -95,9 +106,14 @@ async fn main() -> Result<()> {
                             sensor.bdaddr,
                         );
                         let data = SensorData::new(&sensor, &config.mqtt);
-                        mqtt.publish_sensor_data(data);
+                        if mqtt.publish_sensor_data(data) {
+                            diagnostics.published();
+                        }
                     }
                 }
+            }
+            PublishDiagnostics => {
+                mqtt.publish_diagnostics(diagnostics.take(&config.mqtt.client_id));
             }
             BleStopped => bail!("BLE scanning stopped; exiting"),
         }

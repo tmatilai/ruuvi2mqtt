@@ -1,4 +1,6 @@
 use std::collections::HashMap;
+use std::fs;
+use std::path::Path;
 
 use anyhow::{Context, Result};
 use btleplug::api::{
@@ -34,13 +36,12 @@ impl RuuviListener {
         Ok(Self { central, tx })
     }
 
-    pub async fn start(self) -> Result<()> {
+    /// Returns the adapter's description.
+    pub async fn start(self) -> Result<String> {
         let mut events = self.central.events().await?;
 
-        log::info!(
-            "Starting BLE scan on {}...",
-            self.central.adapter_info().await?
-        );
+        let adapter = adapter_description(self.central.adapter_info().await?);
+        log::info!("Starting BLE scan on {adapter}...");
         self.central.start_scan(ScanFilter::default()).await?;
 
         tokio::spawn(async move {
@@ -67,7 +68,7 @@ impl RuuviListener {
             }
         });
 
-        Ok(())
+        Ok(adapter)
     }
 
     /// `BlueZ` reports a device's first advertisement with the device object
@@ -126,7 +127,7 @@ impl RuuviListener {
             rssi.map_or_else(|| "unknown".to_string(), |r| format!("{r} dBm")),
             delay.as_millis(),
         );
-        let data = SensorData::new(address, format, values);
+        let data = SensorData::new(address, format, rssi, values);
         send_delayed(&self.tx, data, delay).await
     }
 
@@ -136,6 +137,43 @@ impl RuuviListener {
             .await
             .context("Failed to find peripheral")
     }
+}
+
+/// `BlueZ`'s adapter info is like `hci0 (usb:v1D6Bp0246d0548)`, the modalias
+/// of `BlueZ` itself. sysfs names a USB controller. Other adapters keep the
+/// info.
+fn adapter_description(info: String) -> String {
+    let Some(hci) = info.split_whitespace().next() else {
+        return info;
+    };
+    let device = Path::new("/sys/class/bluetooth")
+        .join(hci)
+        .join("device/..");
+    let read = |file| {
+        fs::read_to_string(device.join(file))
+            .map(|s| s.trim().to_string())
+            .unwrap_or_default()
+    };
+    usb_description(
+        hci,
+        [&read("idVendor"), &read("idProduct")],
+        [&read("manufacturer"), &read("product")],
+    )
+    .unwrap_or(info)
+}
+
+/// `hci0: <manufacturer> <product> (<vendor ID>:<product ID>)`, without the
+/// names that are missing
+fn usb_description(hci: &str, [vendor, product]: [&str; 2], names: [&str; 2]) -> Option<String> {
+    if vendor.is_empty() || product.is_empty() {
+        return None;
+    }
+    let names: Vec<&str> = names.into_iter().filter(|n| !n.is_empty()).collect();
+    Some(if names.is_empty() {
+        format!("{hci}: {vendor}:{product}")
+    } else {
+        format!("{hci}: {} ({vendor}:{product})", names.join(" "))
+    })
 }
 
 /// `SensorValues` doesn't tell the data format, so it's kept from the
@@ -197,7 +235,7 @@ mod tests {
         // Data format 3 has no MAC in the payload.
         let payload = [3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
         let values = SensorValues::from_manufacturer_specific_data(0x0499, payload).unwrap();
-        SensorData::new(address, 3, values)
+        SensorData::new(address, 3, None, values)
     }
 
     #[test]
@@ -269,6 +307,29 @@ mod tests {
             reading_address(&values(&payload), advertiser()),
             advertiser()
         );
+    }
+
+    #[test]
+    fn describes_usb_controllers() {
+        assert_eq!(
+            usb_description("hci0", ["1234", "5678"], ["Example Corp.", "BT Adapter"]).as_deref(),
+            Some("hci0: Example Corp. BT Adapter (1234:5678)")
+        );
+        assert_eq!(
+            usb_description("hci0", ["1234", "5678"], ["", "Example BT Adapter"]).as_deref(),
+            Some("hci0: Example BT Adapter (1234:5678)")
+        );
+        assert_eq!(
+            usb_description("hci1", ["1234", "5678"], ["", ""]).as_deref(),
+            Some("hci1: 1234:5678")
+        );
+        assert_eq!(usb_description("hci0", ["", ""], ["", ""]), None);
+    }
+
+    #[test]
+    fn keeps_the_info_without_sysfs() {
+        assert_eq!(adapter_description("CoreBluetooth".into()), "CoreBluetooth");
+        assert_eq!(adapter_description(String::new()), "");
     }
 
     #[test]

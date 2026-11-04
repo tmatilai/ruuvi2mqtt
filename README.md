@@ -93,6 +93,32 @@ Each instance publishes a retained status message to
 drops, the broker replaces it with `{"state":"offline"}`. In Home Assistant,
 each instance is a device with this status as a connectivity sensor.
 
+### Diagnostics
+
+Once a minute, each instance publishes its diagnostics to
+`<base_topic>/diagnostics/<client_id>`, beside the
+[ESP32 boards'](./ruuvi2mqtt-esp32/README.md#diagnostics):
+
+```json
+{
+  "version": "1.8.0 (c43f162)",
+  "client_id": "ruuvi2mqtt_host1",
+  "adapter": "hci0: Example BT Adapter (1234:5678)",
+  "uptime_s": 86400,
+  "mqtt_reconnects": 0,
+  "readings_published": 12,
+  "readings_throttled": 30,
+  "tags": { "aabbccddee01": { "rssi": -74, "readings": 46 } }
+}
+```
+
+The counts are for the last minute. `mqtt_reconnects` counts from the start.
+`tags` has each Ruuvi heard, with its strongest RSSI and its readings. BlueZ
+passes on an advertisement only when its payload changed, so a tag can have
+fewer readings than an ESP32 counts advertisements. BlueZ after 5.86 reports the
+RSSI only when it changes by 8 dB or more. The instance's Home Assistant device
+has sensors for the adapter, the uptime, the MQTT reconnects and the readings.
+
 ### Multiple instances
 
 Several instances, and the [ESP32 firmware](./ruuvi2mqtt-esp32/), can hear the

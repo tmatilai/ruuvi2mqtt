@@ -139,30 +139,12 @@ impl Watch {
             heard * 100 / expected.max(1)
         );
         for id in &c.tags {
-            let seen: Vec<(i8, u32)> = cycles
+            let seen: Vec<(Option<i8>, u32)> = cycles
                 .iter()
                 .filter_map(|cy| cy.tags.get(id))
-                .copied()
+                .map(|&(rssi, adverts)| (Some(rssi), adverts))
                 .collect();
-            let _ = write!(
-                r.text,
-                "    {}: {} of {n} cycles",
-                self.label(id),
-                seen.len()
-            );
-            if !seen.is_empty() {
-                let rssi: Vec<i64> = seen.iter().map(|(rssi, _)| i64::from(*rssi)).collect();
-                let adverts: u64 = seen.iter().map(|(_, a)| u64::from(*a)).sum();
-                let _ = write!(
-                    r.text,
-                    ", RSSI {} ({}..{}), {:.1} adverts per cycle heard",
-                    mean(&rssi),
-                    rssi.iter().min().unwrap_or(&0),
-                    rssi.iter().max().unwrap_or(&0),
-                    ratio(adverts, seen.len() as u64)
-                );
-            }
-            let _ = writeln!(r.text);
+            report_tag(r, &self.label(id), &seen, n, "cycle", "adverts");
         }
         let others: BTreeSet<&String> = cycles
             .iter()
@@ -173,6 +155,36 @@ impl Watch {
             let _ = writeln!(r.text, "    {} other tags", others.len());
         }
     }
+}
+
+/// A tag's line. `seen` has the periods that heard it, out of `n`, and
+/// what they counted.
+pub(super) fn report_tag(
+    r: &mut Report,
+    label: &str,
+    seen: &[(Option<i8>, u32)],
+    n: usize,
+    period: &str,
+    counted: &str,
+) {
+    let _ = write!(r.text, "    {label}: {} of {n} {period}s", seen.len());
+    let rssi: Vec<i64> = seen
+        .iter()
+        .filter_map(|(rssi, _)| *rssi)
+        .map(i64::from)
+        .collect();
+    if let (Some(min), Some(max)) = (rssi.iter().min(), rssi.iter().max()) {
+        let _ = write!(r.text, ", RSSI {} ({min}..{max})", mean(&rssi));
+    }
+    if !seen.is_empty() {
+        let count: u64 = seen.iter().map(|(_, c)| u64::from(*c)).sum();
+        let _ = write!(
+            r.text,
+            ", {:.1} {counted} per {period} heard",
+            ratio(count, seen.len() as u64)
+        );
+    }
+    let _ = writeln!(r.text);
 }
 
 /// With `--board`: the board runs the commit under test, publishes about
@@ -235,7 +247,7 @@ fn sum_pairs(pairs: impl Iterator<Item = [u32; 2]>) -> [u64; 2] {
 }
 
 #[allow(clippy::cast_precision_loss)] // counts are far below 2^52
-fn ratio(n: u64, d: u64) -> f64 {
+pub(super) fn ratio(n: u64, d: u64) -> f64 {
     n as f64 / d.max(1) as f64
 }
 

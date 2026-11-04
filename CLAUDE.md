@@ -28,6 +28,8 @@ the optional `dbus` dependency is Linux-only.
 - `src/homeassistant.rs`: the reading's JSON, and the Home Assistant discovery
   payloads and topics.
 - `src/devices.rs`: per-device state and update throttling.
+- `src/diagnostics.rs`: the instance's diagnostics, counted per minute. Has unit
+  tests.
 - `build.rs`: sets `BUILD_VERSION`, the package version plus the git commit. The
   ESP32 `build.rs` has a copy.
 - `tests/cmd/`: trycmd CLI tests: help output, and config checks with
@@ -80,18 +82,20 @@ be running tests.
 
 A member of the root crate's workspace, so it shares the lockfile. The ESP32
 crate is not a member. The checker watches a test bed's broker after a commit is
-deployed there. It checks the instances' statuses, readings and discovery
-configs, and the ESP32 boards' diagnostics. Its `record` mode runs all the time,
-and tells the runs which tags to expect and how often they come. See
+deployed there. It checks the instances' statuses, readings, discovery configs
+and diagnostics, and the ESP32 boards' diagnostics. Its `record` mode runs all
+the time, and tells the runs which tags to expect and how often they come. See
 `checker/README.md`.
 
-- `src/payload.rs`: the app's readings, discovery configs and statuses, and
-  `src/diagnostics.rs` the ESP32 diagnostics. They mirror the payloads, so
-  update them when the payloads change. `printable` escapes the control
-  characters in text from the broker, so that it can't add lines to the report.
+- `src/payload.rs`: the app's readings, discovery configs, statuses and
+  diagnostics, and `src/diagnostics.rs` the ESP32 diagnostics. They mirror the
+  payloads, so update them when the payloads change. `printable` escapes the
+  control characters in text from the broker, so that it can't add lines to the
+  report.
 - `src/topic.rs`: the topics, for both modes.
 - `src/check.rs`: the checks, without MQTT. `src/check/boards.rs` has the ESP32
-  section, `src/check/tests.rs` the tests.
+  section, `src/check/instances.rs` the instances' diagnostics,
+  `src/check/tests.rs` the tests.
 - `src/record.rs`: the record mode's state, without MQTT. Has unit tests.
 - `src/cli.rs`: the CLI. clap validates the arguments, and then they become the
   check's or the record mode's options: clap's derive can't have the check's

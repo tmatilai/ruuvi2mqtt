@@ -1,6 +1,7 @@
 //! The checks, without MQTT, so that unit tests can run them.
 
 mod boards;
+mod instances;
 #[cfg(test)]
 mod tests;
 
@@ -79,6 +80,8 @@ pub struct Watch {
     tags: BTreeMap<String, Tag>,
     /// The ESP32 boards' diagnostics, by client ID
     boards: BTreeMap<String, Vec<Diagnostics>>,
+    /// The instances' diagnostics, the same way
+    instance_minutes: BTreeMap<String, Vec<payload::Diagnostics>>,
     invalid_readings: Problems,
     invalid_discovery: Problems,
     invalid_diagnostics: Problems,
@@ -132,6 +135,7 @@ impl Watch {
             board_discovery: BTreeMap::new(),
             tags: BTreeMap::new(),
             boards: BTreeMap::new(),
+            instance_minutes: BTreeMap::new(),
             invalid_readings: Problems::default(),
             invalid_discovery: Problems::default(),
             invalid_diagnostics: Problems::default(),
@@ -239,21 +243,25 @@ impl Watch {
     ) -> Option<String> {
         let result = if retained {
             Err("retained".to_string())
+        } else if let Some(minute) = payload::parse_diagnostics(at, payload) {
+            minute.map(|minute| {
+                self.instance_minutes
+                    .entry(minute.client_id.clone())
+                    .or_default()
+                    .push(minute);
+            })
         } else {
-            diagnostics::parse(at, hostname, payload)
-        };
-        match result {
-            Ok(cycle) => {
+            diagnostics::parse(at, hostname, payload).map(|cycle| {
                 self.boards
                     .entry(cycle.client_id.clone())
                     .or_default()
                     .push(cycle);
-                None
-            }
-            Err(err) => self
-                .invalid_diagnostics
-                .add(format!("+{} {hostname}: {err}", time::format(at))),
-        }
+            })
+        };
+        result.err().and_then(|err| {
+            self.invalid_diagnostics
+                .add(format!("+{} {hostname}: {err}", time::format(at)))
+        })
     }
 
     fn on_discovery(
@@ -311,7 +319,7 @@ impl Watch {
         };
         let short = &self.config.commit[..7];
         let _ = writeln!(r.text, "Commit {short}, watched for {}", time::format(end));
-        self.check_instances(&mut r);
+        self.check_instances(&mut r, end);
         self.check_tags(&mut r, end);
         self.check_boards(&mut r, end);
         self.check_messages(&mut r);
@@ -335,7 +343,7 @@ impl Watch {
         r
     }
 
-    fn check_instances(&self, r: &mut Report) {
+    fn check_instances(&self, r: &mut Report, end: Duration) {
         let c = &self.config;
         let _ = writeln!(r.text, "\nInstances:");
         for id in &c.instances {
@@ -344,6 +352,7 @@ impl Watch {
                 let _ = writeln!(r.text, "    no discovery config");
                 r.failures.push(format!("{id}: no discovery config"));
             }
+            self.check_instance_diagnostics(r, id, end);
         }
         let boards = self.board_ids();
         let others: Vec<_> = self
