@@ -7,6 +7,10 @@
 - Publish each instance as a Home Assistant device, with its status as a connectivity sensor.
 - Publish diagnostics once a minute to `<base_topic>/diagnostics/<client_id>`.
 
+#### Fixes
+
+- Include the git commit in the Linux binaries' version.
+
 ### ruuvi2mqtt-esp32
 
 #### Features
