@@ -44,17 +44,26 @@ fn main() {
 }
 
 /// The short commit hash, with `-dirty` for uncommitted changes.
+///
+/// The same as in the app's `build.rs`, which works with git 2.7.
 fn git_revision() -> Option<String> {
-    // HEAD and its reflog change on commit and checkout, the index on
-    // staging, and src on edits.
-    let git_dir = git(&["rev-parse", "--absolute-git-dir"])?;
+    // Rerun when a commit, checkout or staging changes HEAD, its reflog or
+    // the index, and when src changes. git and Cargo both take a relative
+    // git dir as relative to the package directory.
+    let git_dir = git(&["rev-parse", "--git-dir"])?;
     for path in ["HEAD", "logs/HEAD", "index"] {
         println!("cargo:rerun-if-changed={git_dir}/{path}");
     }
     println!("cargo:rerun-if-changed=src");
 
-    // `--exclude=*` skips the tags, so the output is only the hash.
-    git(&["describe", "--always", "--dirty", "--exclude=*"])
+    let hash = git(&["rev-parse", "--short", "HEAD"])?;
+    // Untracked files don't count, as with `git describe --dirty`.
+    let changes = git(&["status", "--porcelain", "--untracked-files=no"])?;
+    Some(if changes.is_empty() {
+        hash
+    } else {
+        format!("{hash}-dirty")
+    })
 }
 
 fn git(args: &[&str]) -> Option<String> {
