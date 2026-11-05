@@ -31,6 +31,12 @@
       rangeStrategy: 'pin',
     },
     {
+      // Cargo versioning reads the exact `cargo install` pins as ^x.y.z.
+      matchManagers: ['custom.regex'],
+      matchDatasources: ['crate'],
+      versioning: 'semver',
+    },
+    {
       matchManagers: ['cargo'],
       // The checker pins the same versions as the app
       matchFileNames: ['Cargo.toml', 'checker/Cargo.toml'],
