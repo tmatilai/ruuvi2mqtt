@@ -26,6 +26,7 @@ pub enum Mode {
 pub fn configs(board: &Board) -> Vec<(String, String)> {
     let id = topic_id(board.client_id);
     let status_topic = format!("{}/status/{}", board.base_topic, board.client_id);
+    let diagnostics_topic = format!("{}/diagnostics/{}", board.base_topic, board.hostname);
     let mut device = json!({
         "name": board.client_id,
         "identifiers": [board.client_id],
@@ -50,9 +51,20 @@ pub fn configs(board: &Board) -> Vec<(String, String)> {
             "value_template": "{{ value_json.settings.scan_mode }}",
         }),
     ));
+    configs.push((
+        "sensor",
+        "tags",
+        json!({
+            "name": "Tags heard",
+            "icon": "mdi:bluetooth",
+            "state_class": "measurement",
+            "value_template": "{{ value_json.tags | count }}",
+            "json_attributes_topic": diagnostics_topic,
+            "json_attributes_template": "{{ value_json.tags | tojson }}",
+        }),
+    ));
     for (_, _, config) in &mut configs {
-        config["state_topic"] =
-            format!("{}/diagnostics/{}", board.base_topic, board.hostname).into();
+        config["state_topic"] = diagnostics_topic.clone().into();
         match board.mode {
             Mode::Continuous => {
                 config["availability_topic"] = status_topic.clone().into();
@@ -183,11 +195,12 @@ mod tests {
                 "homeassistant/sensor/kitchen_esp32/cycles_failed/config",
                 "homeassistant/sensor/kitchen_esp32/uptime_s/config",
                 "homeassistant/sensor/kitchen_esp32/scan_mode/config",
+                "homeassistant/sensor/kitchen_esp32/tags/config",
                 "homeassistant/binary_sensor/kitchen_esp32/status/config",
                 "homeassistant/sensor/kitchen_esp32/cycle/config",
             ]
         );
-        assert_eq!(config(&configs, topics[7]), "");
+        assert_eq!(config(&configs, topics[8]), "");
         assert_eq!(
             config(&configs, topics[0]),
             [
@@ -206,6 +219,23 @@ mod tests {
         );
         assert_eq!(
             config(&configs, topics[6]),
+            [
+                r#"{"availability_template":"{{ value_json.state }}","#,
+                r#""availability_topic":"ruuvi2mqtt/status/kitchen.esp32","#,
+                r#""device":{"configuration_url":"http://ruuvi2mqtt-kitchen.local/","#,
+                DEVICE,
+                r#","icon":"mdi:bluetooth","#,
+                r#""json_attributes_template":"{{ value_json.tags | tojson }}","#,
+                r#""json_attributes_topic":"ruuvi2mqtt/diagnostics/ruuvi2mqtt-kitchen","#,
+                r#""name":"Tags heard","state_class":"measurement","#,
+                r#""state_topic":"ruuvi2mqtt/diagnostics/ruuvi2mqtt-kitchen","#,
+                r#""unique_id":"kitchen_esp32_tags","#,
+                r#""value_template":"{{ value_json.tags | count }}"}"#,
+            ]
+            .concat()
+        );
+        assert_eq!(
+            config(&configs, topics[7]),
             [
                 r#"{"device":{"configuration_url":"http://ruuvi2mqtt-kitchen.local/","#,
                 DEVICE,
@@ -232,12 +262,28 @@ mod tests {
                 "homeassistant/sensor/kitchen_esp32/cycles_failed/config",
                 "homeassistant/sensor/kitchen_esp32/cycle/config",
                 "homeassistant/sensor/kitchen_esp32/scan_mode/config",
+                "homeassistant/sensor/kitchen_esp32/tags/config",
                 "homeassistant/sensor/kitchen_esp32/uptime_s/config",
                 "homeassistant/binary_sensor/kitchen_esp32/status/config",
             ]
         );
-        assert_eq!(config(&configs, topics[6]), "");
         assert_eq!(config(&configs, topics[7]), "");
+        assert_eq!(config(&configs, topics[8]), "");
+        assert_eq!(
+            config(&configs, topics[6]),
+            [
+                r#"{"device":{"#,
+                DEVICE,
+                r#","expire_after":195,"icon":"mdi:bluetooth","#,
+                r#""json_attributes_template":"{{ value_json.tags | tojson }}","#,
+                r#""json_attributes_topic":"ruuvi2mqtt/diagnostics/ruuvi2mqtt-kitchen","#,
+                r#""name":"Tags heard","state_class":"measurement","#,
+                r#""state_topic":"ruuvi2mqtt/diagnostics/ruuvi2mqtt-kitchen","#,
+                r#""unique_id":"kitchen_esp32_tags","#,
+                r#""value_template":"{{ value_json.tags | count }}"}"#,
+            ]
+            .concat()
+        );
         assert_eq!(
             config(&configs, topics[5]),
             [

@@ -322,7 +322,8 @@ When scanning continuously, the board keeps a
 The board is a device in Home Assistant, with sensors from its
 [diagnostics](#diagnostics). Scanning continuously, its [status](#status) is a
 connectivity sensor, and the device links to the status page. In deep sleep, the
-sensors expire after three cycles without diagnostics.
+sensors expire after three cycles without diagnostics. The Tags heard sensor
+counts the cycle's tags, with `tags` as its attributes.
 
 ---
 

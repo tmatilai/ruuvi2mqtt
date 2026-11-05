@@ -118,6 +118,7 @@ passes on an advertisement only when its payload changed, so a tag can have
 fewer readings than an ESP32 counts advertisements. BlueZ after 5.86 reports the
 RSSI only when it changes by 8 dB or more. The instance's Home Assistant device
 has sensors for the adapter, the uptime, the MQTT reconnects and the readings.
+Its Tags heard sensor counts the tags, with `tags` as its attributes.
 
 ### Multiple instances
 
