@@ -54,6 +54,10 @@ pub struct InstanceSensor<'a> {
     state_class: Option<&'a str>,
     state_topic: String,
     value_template: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    json_attributes_topic: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    json_attributes_template: Option<&'a str>,
     availability_topic: String,
     availability_template: &'a str,
     #[serde(flatten)]
@@ -179,25 +183,40 @@ impl<'a> Instance<'a> {
 
 impl<'a> InstanceSensor<'a> {
     pub fn all(config: &'a config::Mqtt) -> Vec<Self> {
-        let id = topic_id(&config.client_id);
-        INSTANCE_SENSORS
+        let mut sensors: Vec<Self> = INSTANCE_SENSORS
             .iter()
-            .map(|&(device_type, state_class)| {
-                let key = device_type.key;
-                Self {
-                    name: device_type.name,
-                    unique_id: format!("{id}_{key}"),
-                    state_class,
-                    state_topic: mqtt::diagnostics_topic(config),
-                    value_template: format!("{{{{ value_json.{key} }}}}"),
-                    availability_topic: mqtt::status_topic(config),
-                    availability_template: "{{ value_json.state }}",
-                    device_type,
-                    device: InstanceInfo::new(config),
-                    topic: format!("homeassistant/sensor/{id}/{key}/config"),
-                }
-            })
-            .collect()
+            .map(|&(device_type, state_class)| Self::new(config, device_type, state_class))
+            .collect();
+        sensors.push(Self {
+            value_template: "{{ value_json.tags | count }}".into(),
+            json_attributes_topic: Some(mqtt::diagnostics_topic(config)),
+            json_attributes_template: Some("{{ value_json.tags | tojson }}"),
+            ..Self::new(config, TAGS_HEARD, Some("measurement"))
+        });
+        sensors
+    }
+
+    fn new(
+        config: &'a config::Mqtt,
+        device_type: DeviceType<'a>,
+        state_class: Option<&'a str>,
+    ) -> Self {
+        let id = topic_id(&config.client_id);
+        let key = device_type.key;
+        Self {
+            name: device_type.name,
+            unique_id: format!("{id}_{key}"),
+            state_class,
+            state_topic: mqtt::diagnostics_topic(config),
+            value_template: format!("{{{{ value_json.{key} }}}}"),
+            json_attributes_topic: None,
+            json_attributes_template: None,
+            availability_topic: mqtt::status_topic(config),
+            availability_template: "{{ value_json.state }}",
+            device_type,
+            device: InstanceInfo::new(config),
+            topic: format!("homeassistant/sensor/{id}/{key}/config"),
+        }
     }
 }
 
@@ -367,6 +386,9 @@ const INSTANCE_SENSORS: [(DeviceType, Option<&str>); 5] = [
         Some("measurement"),
     ),
 ];
+
+/// The tags heard in the last minute
+const TAGS_HEARD: DeviceType = DeviceType::sensor("Tags heard", "tags").icon("mdi:bluetooth");
 
 const TEMPERATURE: DeviceType = DeviceType::sensor("Temperature", "temperature")
     .class("temperature")
@@ -576,12 +598,20 @@ mod tests {
                 "homeassistant/sensor/ruuvi2mqtt_Mac_home/uptime_s/config",
                 "homeassistant/sensor/ruuvi2mqtt_Mac_home/readings_published/config",
                 "homeassistant/sensor/ruuvi2mqtt_Mac_home/readings_throttled/config",
+                "homeassistant/sensor/ruuvi2mqtt_Mac_home/tags/config",
             ]
         );
         assert_eq!(
             serde_json::to_string(&sensors[2]).unwrap(),
             format!(
                 r#"{{"name":"Uptime","unique_id":"ruuvi2mqtt_Mac_home_uptime_s","state_topic":"ruuvi2mqtt/diagnostics/ruuvi2mqtt_Mac.home","value_template":"{{{{ value_json.uptime_s }}}}","availability_topic":"ruuvi2mqtt/status/ruuvi2mqtt_Mac.home","availability_template":"{{{{ value_json.state }}}}","device_class":"duration","unit_of_measurement":"s","device":{{"name":"ruuvi2mqtt_Mac.home","identifiers":["ruuvi2mqtt_Mac.home"],"model":"ruuvi2mqtt","sw_version":"{}"}}}}"#,
+                config::VERSION
+            )
+        );
+        assert_eq!(
+            serde_json::to_string(&sensors[5]).unwrap(),
+            format!(
+                r#"{{"name":"Tags heard","unique_id":"ruuvi2mqtt_Mac_home_tags","state_class":"measurement","state_topic":"ruuvi2mqtt/diagnostics/ruuvi2mqtt_Mac.home","value_template":"{{{{ value_json.tags | count }}}}","json_attributes_topic":"ruuvi2mqtt/diagnostics/ruuvi2mqtt_Mac.home","json_attributes_template":"{{{{ value_json.tags | tojson }}}}","availability_topic":"ruuvi2mqtt/status/ruuvi2mqtt_Mac.home","availability_template":"{{{{ value_json.state }}}}","icon":"mdi:bluetooth","device":{{"name":"ruuvi2mqtt_Mac.home","identifiers":["ruuvi2mqtt_Mac.home"],"model":"ruuvi2mqtt","sw_version":"{}"}}}}"#,
                 config::VERSION
             )
         );
