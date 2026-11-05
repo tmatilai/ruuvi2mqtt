@@ -111,3 +111,45 @@ the break doesn't count as a gap.
 
 Its client ID is `ruuvi2mqtt-recorder`, so that a checker on the same broker
 doesn't disconnect it. It exits only on an error, with status 1.
+
+## Site table
+
+`ruuvi2mqtt-checker site` shows how well each instance and board hears each tag,
+on any broker. It listens for `--duration` (10 minutes), then prints the table,
+or fails if no publisher sent diagnostics.
+
+```sh
+printf '%s\n' "$PASSWORD" | target/release/ruuvi2mqtt-checker site \
+    --server broker.example --ca-file ca.crt --user viewer
+```
+
+```text
+Over 10:00, the diagnostics of 2 instances and 1 board.
+
+Problems:
+  ! Attic: no publisher hears it well
+  ! c6-board: restarted once
+
+           host1     host2  c6-board
+        instance  instance     board
+Attic   !-93 40%         -         -
+Cellar  -70 100%    ? 100%  ~-81 80%
+```
+
+A row is a tag with a discovery config, and a column a publisher that sent
+diagnostics. A cell has the tag's RSSI, `?` if the adapter doesn't report it,
+and the share of the publisher's minutes (instance) or cycles (board) that heard
+the tag. The RSSI is the mean of the strongest per minute or cycle, so it reads
+stronger than on a board's status page, though graded with the same thresholds.
+The share is good from 90 % and fair from 50 %. `~` marks a fair cell, `!` a
+poor one.
+
+The problems come first, worst first:
+
+- a tag that no publisher hears, or none better than poor;
+- a tag that only instances hear well, when there are boards: a spot for one;
+- a tag that only one publisher hears well;
+- a board that restarted, on a fair or poor Wi-Fi signal, or with other firmware
+  than most boards.
+
+An offline publisher and a low battery are left to Home Assistant's alerts.

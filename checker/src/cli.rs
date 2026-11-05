@@ -1,4 +1,5 @@
-//! The command line: the check by default, or the `record` subcommand.
+//! The command line: the check by default, or the `record` or `site`
+//! subcommand.
 
 use std::collections::BTreeMap;
 use std::ffi::OsString;
@@ -13,6 +14,7 @@ use crate::time;
 pub enum Mode {
     Check(CheckOptions),
     Record(RecordOptions),
+    Site(SiteOptions),
 }
 
 /// Built by hand: clap's derive can't have the check's options beside the
@@ -23,11 +25,16 @@ fn command() -> clap::Command {
         "Record the readings all the time, so that the runs know which tags to expect. \
          Writes the state file every minute",
     );
+    let site = clap::Command::new("site").about(
+        "Show how well each instance and board hears each tag, and the coverage problems. \
+         Listens for --duration, then prints a table",
+    );
     CheckOptions::augment_args(clap::Command::new(env!("CARGO_PKG_NAME")))
         .about(env!("CARGO_PKG_DESCRIPTION"))
         .args_conflicts_with_subcommands(true)
         .subcommand_negates_reqs(true)
         .subcommand(RecordOptions::augment_args(record))
+        .subcommand(SiteOptions::augment_args(site))
 }
 
 pub fn parse() -> Mode {
@@ -41,8 +48,12 @@ where
 {
     let mut matches = command().try_get_matches_from(args)?;
     let mode = match matches.remove_subcommand() {
-        Some((_, mut record)) => RecordOptions::from_arg_matches_mut(&mut record).map(Mode::Record),
         None => CheckOptions::from_arg_matches_mut(&mut matches).map(Mode::Check),
+        Some((name, mut sub)) => match name.as_str() {
+            "record" => RecordOptions::from_arg_matches_mut(&mut sub).map(Mode::Record),
+            "site" => SiteOptions::from_arg_matches_mut(&mut sub).map(Mode::Site),
+            _ => unreachable!("clap knows no other subcommand"),
+        },
     };
     mode.map_err(|err| err.format(&mut command()))
 }
@@ -76,6 +87,19 @@ pub struct RecordOptions {
     /// The state file, JSON. The recorder continues from it after a restart
     #[arg(long, value_name = "FILE")]
     pub state: PathBuf,
+}
+
+#[derive(Debug, Args)]
+pub struct SiteOptions {
+    #[command(flatten)]
+    pub broker: Broker,
+    /// Not the checker's or the recorder's, or the broker would disconnect
+    /// one of them
+    #[arg(long, default_value = "ruuvi2mqtt-site")]
+    pub client_id: String,
+    /// How long to listen, e.g. 10m or 1h
+    #[arg(long, default_value = "10m", value_parser = time::parse)]
+    pub duration: Duration,
 }
 
 #[derive(Debug, Args)]
@@ -201,7 +225,7 @@ mod tests {
     fn check(args: &[&str]) -> Result<CheckOptions, clap::Error> {
         match try_parse_from(CHECK.iter().chain(args))? {
             Mode::Check(options) => Ok(options),
-            Mode::Record(_) => panic!("a record"),
+            Mode::Record(_) | Mode::Site(_) => panic!("not a check"),
         }
     }
 
@@ -237,7 +261,7 @@ mod tests {
             "state.json",
         ])
         .unwrap() else {
-            panic!("a check");
+            panic!("not a record");
         };
         assert_eq!(options.broker.server, "broker");
         assert_eq!(options.client_id, "ruuvi2mqtt-recorder");
@@ -249,6 +273,19 @@ mod tests {
             ])
             .is_err()
         );
+    }
+
+    #[test]
+    fn parses_a_site() {
+        let Mode::Site(options) =
+            try_parse_from(["checker", "site", "--server", "broker", "--duration", "1h"]).unwrap()
+        else {
+            panic!("not a site");
+        };
+        assert_eq!(options.broker.server, "broker");
+        assert_eq!(options.client_id, "ruuvi2mqtt-site");
+        assert_eq!(options.duration, Duration::from_hours(1));
+        assert!(try_parse_from(["checker", "site"]).is_err());
     }
 
     #[test]

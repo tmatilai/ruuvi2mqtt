@@ -84,7 +84,8 @@ A member of the root crate's workspace, so it shares the lockfile. The ESP32
 crate is not a member. The checker watches a test bed's broker after a commit is
 deployed there. It checks the instances' statuses, readings, discovery configs
 and diagnostics, and the ESP32 boards' diagnostics. Its `record` mode runs all
-the time, and tells the runs which tags to expect and how often they come. See
+the time, and tells the runs which tags to expect and how often they come. Its
+`site` mode prints how well each publisher hears each tag, on any broker. See
 `checker/README.md`.
 
 - `src/payload.rs`: the app's readings, discovery configs, statuses and
@@ -92,17 +93,20 @@ the time, and tells the runs which tags to expect and how often they come. See
   payloads, so update them when the payloads change. `printable` escapes the
   control characters in text from the broker, so that it can't add lines to the
   report.
-- `src/topic.rs`: the topics, for both modes.
+- `src/topic.rs`: the topics, for all modes.
 - `src/check.rs`: the checks, without MQTT. `src/check/boards.rs` has the ESP32
   section, `src/check/instances.rs` the instances' diagnostics,
   `src/check/tests.rs` the tests.
 - `src/record.rs`: the record mode's state, without MQTT. Has unit tests.
+- `src/site.rs`: the site table, how well each publisher hears each tag, and the
+  coverage problems, without MQTT. Has unit tests.
 - `src/cli.rs`: the CLI. clap validates the arguments, and then they become the
-  check's or the record mode's options: clap's derive can't have the check's
+  check's or a subcommand's options: clap's derive can't have the check's
   options beside the subcommand.
 - `src/mqtt.rs`: the broker connection, which subscribes and reconnects.
-  `src/main.rs` has the check's and the recorder's loops on it.
+  `src/main.rs` has the check's, the recorder's and the site's loops on it.
 - `src/time.rs`: the durations, and the longest gap.
+- `src/stats.rs`: counts and means, for the check and the site.
 - `src/fixtures.rs`: payloads for the unit tests.
 
 Commands: `cargo test -p ruuvi2mqtt-checker`; `make lint` and `make test` cover

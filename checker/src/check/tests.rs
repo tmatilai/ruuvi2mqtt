@@ -640,7 +640,7 @@ fn missed_cycles_and_restarts_are_counted() {
     let mut w = watch();
     healthy(&mut w, 5);
     let topic = "ruuvi2mqtt/diagnostics/c6-board";
-    for (at, cycle) in [(0, 7), (67, 8), (201, 10), (268, 2)] {
+    for (at, cycle) in [(0, 7), (67, 8), (68, 8), (201, 10), (268, 2)] {
         let payload = diagnostics("1.5.2-dev (6534f11)", cycle, "{}");
         w.on_message(secs(at), topic, payload.as_bytes(), false);
     }

@@ -68,6 +68,8 @@ fn mqtt_options(broker: &Broker, client_id: &str) -> Result<MqttOptions> {
         .unwrap_or(if broker.ca_file.is_some() { 8883 } else { 1883 });
     let mut options = MqttOptions::new(client_id, &broker.server, port);
     options.set_keep_alive(Duration::from_secs(15));
+    // Other apps on a broker may send more than the default 10 KiB
+    options.set_max_packet_size(1024 * 1024, 10 * 1024);
     // clap requires TLS with a user
     if let Some(user) = &broker.user {
         options.set_credentials(user, read_password()?);

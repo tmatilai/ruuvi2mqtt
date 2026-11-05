@@ -8,6 +8,8 @@ mod fixtures;
 mod mqtt;
 mod payload;
 mod record;
+mod site;
+mod stats;
 mod time;
 mod topic;
 
@@ -20,9 +22,10 @@ use anyhow::{Context, Result, bail};
 use tokio::time::{Instant, sleep_until};
 
 use crate::check::{Report, Watch};
-use crate::cli::{CheckOptions, Mode, RecordOptions};
+use crate::cli::{CheckOptions, Mode, RecordOptions, SiteOptions};
 use crate::mqtt::{Received, Session};
 use crate::record::Recorder;
+use crate::site::Site;
 
 const PROGRESS_INTERVAL: Duration = Duration::from_mins(5);
 const WRITE_INTERVAL: Duration = Duration::from_mins(1);
@@ -43,6 +46,16 @@ async fn main() -> ExitCode {
             Err(err) => {
                 println!("FAIL: {err:#}");
                 ExitCode::from(2)
+            }
+        },
+        Mode::Site(options) => match site(&options).await {
+            Ok(table) => {
+                print!("{table}");
+                ExitCode::SUCCESS
+            }
+            Err(err) => {
+                eprintln!("{err:#}");
+                ExitCode::FAILURE
             }
         },
         Mode::Record(options) => {
@@ -92,6 +105,36 @@ async fn check(options: &CheckOptions) -> Result<Report> {
         }
     }
     Ok(watch.finish(start.elapsed()))
+}
+
+async fn site(options: &SiteOptions) -> Result<String> {
+    let mut session = Session::new(&options.broker, &options.client_id)?;
+    let mut site = Site::new(&options.broker.base_topic);
+    let start = Instant::now();
+    let deadline = start + options.duration;
+    let mut connected = false;
+    eprintln!("listening for {}", time::format(options.duration));
+    loop {
+        let received = tokio::select! {
+            () = sleep_until(deadline) => break,
+            received = session.next() => received?,
+        };
+        match received {
+            Received::Connected => connected = true,
+            Received::Message(msg) => site.on_message(&msg.topic, &msg.payload),
+            Received::Lost(err) if !connected => {
+                bail!("Failed to connect to {}: {err}", options.broker.server);
+            }
+            Received::Lost(err) => eprintln!("MQTT: {err}"),
+        }
+    }
+    if site.is_empty() {
+        bail!(
+            "No diagnostics in {}/diagnostics/",
+            options.broker.base_topic
+        );
+    }
+    Ok(site.render(start.elapsed()))
 }
 
 async fn record(options: &RecordOptions) -> Result<Infallible> {

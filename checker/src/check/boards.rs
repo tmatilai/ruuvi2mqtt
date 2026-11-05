@@ -2,13 +2,14 @@
 //! since good values are still unknown. With `--board`, the firmware, the cycle
 //! and the status are checked.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeSet;
 use std::fmt::Write as _;
 use std::time::Duration;
 
 use super::{Config, MAX_EXAMPLES, Report, Watch};
 use crate::diagnostics::Diagnostics;
 use crate::payload::check_version;
+use crate::stats::{Mean, count};
 use crate::time;
 
 impl Watch {
@@ -78,7 +79,12 @@ impl Watch {
         );
 
         let ms = |f: fn(&Diagnostics) -> u32| -> i64 {
-            mean(&cycles.iter().map(|cy| i64::from(f(cy))).collect::<Vec<_>>())
+            cycles
+                .iter()
+                .map(|cy| i64::from(f(cy)))
+                .collect::<Mean>()
+                .get()
+                .unwrap_or(0)
         };
         let max_cycle_ms = cycles
             .iter()
@@ -173,8 +179,9 @@ pub(super) fn report_tag(
         .filter_map(|(rssi, _)| *rssi)
         .map(i64::from)
         .collect();
-    if let (Some(min), Some(max)) = (rssi.iter().min(), rssi.iter().max()) {
-        let _ = write!(r.text, ", RSSI {} ({min}..{max})", mean(&rssi));
+    let mean = rssi.iter().copied().collect::<Mean>().get();
+    if let (Some(mean), Some(min), Some(max)) = (mean, rssi.iter().min(), rssi.iter().max()) {
+        let _ = write!(r.text, ", RSSI {mean} ({min}..{max})");
     }
     if !seen.is_empty() {
         let count: u64 = seen.iter().map(|(_, c)| u64::from(*c)).sum();
@@ -232,14 +239,6 @@ fn missed_cycles(cycles: &[Diagnostics]) -> (u64, usize) {
     (missed, restarts)
 }
 
-fn count<'a>(values: impl Iterator<Item = &'a str>) -> BTreeMap<&'a str, usize> {
-    let mut counts = BTreeMap::new();
-    for value in values {
-        *counts.entry(value).or_default() += 1;
-    }
-    counts
-}
-
 fn sum_pairs(pairs: impl Iterator<Item = [u32; 2]>) -> [u64; 2] {
     pairs.fold([0, 0], |acc, p| {
         [acc[0] + u64::from(p[0]), acc[1] + u64::from(p[1])]
@@ -258,13 +257,6 @@ fn per_second(n: u64, ms: u64) -> String {
     } else {
         format!("{:.1}", ratio(n, ms) * 1000.0)
     }
-}
-
-/// The rounded mean, 0 for none
-fn mean(values: &[i64]) -> i64 {
-    let n = i64::try_from(values.len()).unwrap_or(i64::MAX).max(1);
-    let sum: i64 = values.iter().sum();
-    (sum + sum.signum() * n / 2) / n
 }
 
 #[cfg(test)]
