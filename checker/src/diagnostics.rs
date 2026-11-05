@@ -25,6 +25,8 @@ pub struct Diagnostics {
     /// The board's cycle counter, which restarts on a cold boot or crash
     pub cycle: u32,
     pub settings: String,
+    /// The access point's signal, in dBm, if connected
+    pub wifi_rssi: Option<i8>,
     pub wifi_cache: String,
     pub scan_start_ms: u32,
     pub scan_end_ms: u32,
@@ -75,6 +77,14 @@ pub fn parse(at: Duration, hostname: &str, payload: &[u8]) -> Result<Diagnostics
         chip: string("chip")?,
         cycle: number("cycle")?,
         settings: parse_settings(&d["settings"])?,
+        wifi_rssi: match &d["wifi_rssi"] {
+            Value::Null => None,
+            rssi => Some(
+                rssi.as_i64()
+                    .and_then(|r| i8::try_from(r).ok())
+                    .ok_or_else(|| format!("wifi_rssi: {rssi}"))?,
+            ),
+        },
         wifi_cache: string("wifi_cache")?,
         scan_start_ms: number("scan_start_ms")?,
         scan_end_ms: number("scan_end_ms")?,

@@ -252,10 +252,11 @@ impl Watch {
             })
         } else {
             diagnostics::parse(at, hostname, payload).map(|cycle| {
-                self.boards
-                    .entry(cycle.client_id.clone())
-                    .or_default()
-                    .push(cycle);
+                let cycles = self.boards.entry(cycle.client_id.clone()).or_default();
+                // A QoS 1 message can arrive twice
+                if cycles.last().is_none_or(|last| last.cycle != cycle.cycle) {
+                    cycles.push(cycle);
+                }
             })
         };
         result.err().and_then(|err| {

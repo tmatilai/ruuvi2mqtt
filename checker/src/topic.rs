@@ -1,5 +1,4 @@
-//! The topics that the app and the ESP32 boards publish, for both the check
-//! and the recorder.
+//! The topics that the app and the ESP32 boards publish, for all the modes.
 
 use crate::payload::{AIR_ENTITIES, TAG_ENTITIES};
 
