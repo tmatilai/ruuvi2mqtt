@@ -117,7 +117,7 @@ help: ## Show this help
 # --- Toolchain setup -------------------------------------------------------
 # Tool versions are bumped by Renovate. Re-run `make setup` after pulling.
 # renovate: datasource=crate depName=espflash
-ESPFLASH_VERSION := 4.6.0
+ESPFLASH_VERSION := 4.7.0
 # renovate: datasource=crate depName=espup
 ESPUP_VERSION := 0.19.0
 # renovate: datasource=crate depName=ldproxy
