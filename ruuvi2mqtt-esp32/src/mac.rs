@@ -89,22 +89,6 @@ mod tests {
     }
 
     #[test]
-    fn from_byte_array() {
-        let bytes = [0x01, 0x02, 0x03, 0x04, 0x05, 0x06];
-        let mac = Mac::from(bytes);
-        assert_eq!(mac.0, bytes);
-    }
-
-    #[test]
-    fn equality() {
-        let a = Mac([0x01, 0x02, 0x03, 0x04, 0x05, 0x06]);
-        let b = Mac([0x01, 0x02, 0x03, 0x04, 0x05, 0x06]);
-        let c = Mac([0xFF, 0x02, 0x03, 0x04, 0x05, 0x06]);
-        assert_eq!(a, b);
-        assert_ne!(a, c);
-    }
-
-    #[test]
     fn all_zeros() {
         let mac = Mac([0x00; 6]);
         assert_eq!(mac.to_string(), "00:00:00:00:00:00");

@@ -223,7 +223,7 @@ fn problems_section(out: &mut String, r: &Recorder, now: u64, problems: &[Proble
     }
     out.push_str("<ul>\n");
     for p in problems {
-        let lasted = time::format(Duration::from_secs(now - since(r, now, p)));
+        let lasted = time::format(Duration::from_secs(now.saturating_sub(since(r, now, p))));
         let _ = writeln!(
             out,
             "<li>{} {} <small>for {lasted}</small></li>",

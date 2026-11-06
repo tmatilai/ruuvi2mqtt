@@ -32,7 +32,8 @@ pub struct Mqtt {
     /// Publishes not yet acknowledged by the broker.
     pending: Vec<MessageId>,
     status_topic: String,
-    /// Topic and payload.
+    /// The discovery configs, and in deep sleep the status to delete: topic
+    /// and payload.
     discovery: Vec<(String, String)>,
     /// The last connect enqueued every discovery config.
     discovery_enqueued: bool,
@@ -49,10 +50,10 @@ impl Mqtt {
 
         if config::MQTT_TLS {
             if config::MQTT_TLS_INSECURE {
-                log::warn!("TLS hostname check is disabled (MQTT_TLS_INSECURE=true)");
+                warn!("TLS hostname check is disabled (MQTT_TLS_INSECURE=true)");
             }
         } else if config::MQTT_CA_FILE.is_some() {
-            log::warn!("MQTT_CA_FILE is set but TLS is disabled; the CA file is ignored");
+            warn!("MQTT_CA_FILE is set but TLS is disabled; the CA file is ignored");
         }
 
         let server_certificate = ca_certificate();
@@ -76,7 +77,7 @@ impl Mqtt {
             client_id: Some(config::MQTT_CLIENT_ID),
             username: config::MQTT_USER,
             password: config::MQTT_PASSWORD,
-            keep_alive_interval: Some(std::time::Duration::from_secs(15)),
+            keep_alive_interval: Some(Duration::from_secs(15)),
             server_certificate,
             crt_bundle_attach: crt_bundle_attach(),
             skip_cert_common_name_check: config::MQTT_TLS_INSECURE,
@@ -103,12 +104,12 @@ impl Mqtt {
             events,
             connected_at: None,
             pending: Vec::new(),
-            status_topic,
             discovery: if discovery {
-                discovery_configs()
+                discovery_configs(&status_topic)
             } else {
                 Vec::new()
             },
+            status_topic,
             discovery_enqueued: false,
         })
     }
@@ -219,8 +220,8 @@ impl Mqtt {
     }
 }
 
-fn discovery_configs() -> Vec<(String, String)> {
-    homeassistant::configs(&Board {
+fn discovery_configs(status_topic: &str) -> Vec<(String, String)> {
+    let mut configs = homeassistant::configs(&Board {
         client_id: config::MQTT_CLIENT_ID,
         hostname: config::DEVICE_HOSTNAME,
         base_topic: config::MQTT_BASE_TOPIC,
@@ -238,7 +239,13 @@ fn discovery_configs() -> Vec<(String, String)> {
                     / 2,
             }
         },
-    })
+    });
+    // Deep sleep has no status. Deletes the one that scanning continuously
+    // left, which would stay offline.
+    if !config::BLE_SCAN_CONTINUOUS {
+        configs.push((status_topic.to_string(), String::new()));
+    }
+    configs
 }
 
 /// Return the embedded CA certificate, if `MQTT_CA_FILE` was set at build time.
@@ -298,5 +305,5 @@ fn run_event_loop(mut connection: EspMqttConnection, events: &mpsc::Sender<Event
         // The receiver is dropped when the cycle ends; nothing to do then.
         let _ = events.send(event);
     }
-    log::warn!("MQTT event loop ended");
+    warn!("MQTT event loop ended");
 }

@@ -4,7 +4,7 @@
 
 #### Features
 
-- Publish each instance as a Home Assistant device, with its status as a connectivity sensor.
+- Publish each instance as a Home Assistant device, with its status as a connectivity sensor and sensors from its diagnostics.
 - Publish diagnostics once a minute to `<base_topic>/diagnostics/<client_id>`.
 
 #### Fixes
@@ -15,8 +15,9 @@
 
 #### Features
 
-- Publish a status with a last will when scanning continuously, like the app.
 - Publish each board as a Home Assistant device, with sensors from its diagnostics.
+- Publish a status with a last will when scanning continuously, like the app.
+- Add `cycles_failed` and `uptime_s` to the diagnostics.
 
 ## 1.7.0 / 2026-11-01
 
