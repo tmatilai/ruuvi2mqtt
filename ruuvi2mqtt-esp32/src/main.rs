@@ -104,6 +104,9 @@ fn main() {
         info!("Cycle: {}s continuous BLE scan", config::BLE_SCAN_DURATION);
         let Err(e) = run_continuous(cycle);
         error!("Continuous scan failed: {e:#}");
+        // A failed start used a cycle number too. The next boot counts only a
+        // deep-sleep cycle's failure.
+        CYCLES_FAILED.fetch_add(1, Ordering::Relaxed);
     } else {
         info!(
             "Cycle: {}s {} BLE scan, {}s deep sleep",

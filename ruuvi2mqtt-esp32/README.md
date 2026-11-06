@@ -313,7 +313,8 @@ sets the targets, with the MACs written as in the topics.
 
 When scanning continuously, the board keeps a
 [status like the app's](../README.md#status) on
-`{MQTT_BASE_TOPIC}/status/{MQTT_CLIENT_ID}`. The deep-sleep mode has none.
+`{MQTT_BASE_TOPIC}/status/{MQTT_CLIENT_ID}`. The deep-sleep mode has none, and
+deletes the one that scanning continuously left.
 
 ---
 

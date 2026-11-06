@@ -540,22 +540,20 @@ fn load_wifi_cache() -> Option<WifiCache> {
 
 /// Read current AP info and update NVS cache if channel or BSSID changed.
 fn update_wifi_cache(cached: Option<&WifiCache>) {
-    unsafe {
-        let mut ap_info: sys::wifi_ap_record_t = std::mem::zeroed();
-        if sys::esp_wifi_sta_get_ap_info(&raw mut ap_info) != sys::ESP_OK {
-            log::warn!("Could not read AP info for WiFi cache");
+    let Some(ap_info) = system::ap_record() else {
+        log::warn!("Could not read AP info for WiFi cache");
+        return;
+    };
+    let channel = ap_info.primary;
+    let bssid = ap_info.bssid;
+
+    if let Some(cached) = cached {
+        if cached.channel == channel && cached.bssid == bssid {
             return;
         }
+    }
 
-        let channel = ap_info.primary;
-        let bssid = ap_info.bssid;
-
-        if let Some(cached) = cached {
-            if cached.channel == channel && cached.bssid == bssid {
-                return;
-            }
-        }
-
+    unsafe {
         let mut handle: sys::nvs_handle_t = 0;
         if sys::nvs_open(
             c"wifi".as_ptr(),

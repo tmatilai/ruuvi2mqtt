@@ -133,7 +133,7 @@ The problems, and which notify through `problems.json`:
 
 | Problem                                                    | Notifies |
 | ---------------------------------------------------------- | -------- |
-| An instance offline                                        | yes      |
+| An instance or board offline                               | yes      |
 | A publisher without diagnostics for 5 minutes              | yes      |
 | A publisher doesn't hear an expected tag that another does | yes      |
 | The same when no publisher hears it                        | no       |

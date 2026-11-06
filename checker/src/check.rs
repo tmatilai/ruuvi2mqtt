@@ -534,7 +534,7 @@ impl Watch {
         }
     }
 
-    /// The boards given with `--board`, and the ones that sent diagnostics
+    /// `head` starts the first line, and the changes are indented under it.
     fn check_status(&self, r: &mut Report, id: &str, head: &str) {
         let Some(history) = self.statuses.get(id) else {
             let _ = writeln!(r.text, "{head}no status");
@@ -566,6 +566,7 @@ impl Watch {
         }
     }
 
+    /// The boards given with `--board`, and the ones that sent diagnostics
     fn board_ids(&self) -> BTreeSet<&str> {
         self.config
             .boards

@@ -9,7 +9,6 @@ rust-version = "1.85"
 
 [[bin]]
 name = "ruuvi2mqtt-esp32"
-harness = false # required: ESP-IDF entry point is not compatible with the test harness
 test = false # needs ESP-IDF; the host tests are in the lib
 
 [profile.release]
