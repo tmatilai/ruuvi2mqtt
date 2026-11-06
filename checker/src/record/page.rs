@@ -89,9 +89,14 @@ pub fn render(
     }
     problems_section(&mut out, r, now, &problems);
     runs_section(&mut out, runs);
-    tags_section(&mut out, r, now, &day);
-    coverage_section(&mut out, "last hour", &hour);
-    coverage_section(&mut out, "last day", &day);
+    // The tables leave out the tags that no publisher heard in a day, such
+    // as ones from before a move. The problems still tell an expected one.
+    let columns = day.columns();
+    let heard = |id: &str| columns.iter().any(|(_, p)| p.cell(id).is_some());
+    let (heard_hour, heard_day) = (hour.with_tags(heard), day.with_tags(heard));
+    tags_section(&mut out, r, now, &heard_day);
+    coverage_section(&mut out, "last hour", &heard_hour);
+    coverage_section(&mut out, "last day", &heard_day);
     boards_section(&mut out, r, now, &hour, &day);
     instances_section(&mut out, r, now, &day);
     out.push_str("</body>\n</html>\n");
@@ -736,7 +741,6 @@ mod tests {
              <br>🟡 &lt;x&gt; restarted</td>",
             "<a href=\"runs/20261106T020001Z-canary.log\">log</a>",
             "<td>🔴 failure</td><td class=\"wrap\">a &lt;script&gt;</td><td></td>",
-            "<tr><td>⚠️</td><td>Attic &lt;b&gt;</td><td>-</td><td>-</td></tr>",
             "<tr><td></td><td>Cellar</td><td>1:00 ago</td><td>2.90 V</td></tr>",
             "<h2>Coverage, last hour <small>dBm, share of minutes heard</small></h2>",
             "<tr><th>Tag</th><th>host1</th><th>host2</th></tr>",
@@ -749,6 +753,8 @@ mod tests {
         }
         assert!(!page.contains("passwd"));
         assert!(!page.contains("<script>"));
+        // Not heard in a day: a problem, but in no table
+        assert!(!page.contains("<td>Attic &lt;b&gt;</td>"));
     }
 
     #[test]
