@@ -21,7 +21,7 @@ opt-level = "z"
 
 [dependencies]
 anyhow = "=1.0.104"
-log = "=0.4.34"
+log = "=0.4.35"
 
 # Only on the ESP32, so the lib builds and tests on the host.
 [target.'cfg(target_os = "espidf")'.dependencies]
