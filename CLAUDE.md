@@ -84,9 +84,9 @@ A member of the root crate's workspace, so it shares the lockfile. The ESP32
 crate is not a member. The checker watches a test bed's broker after a commit is
 deployed there. It checks the instances' statuses, readings, discovery configs
 and diagnostics, and the ESP32 boards' diagnostics. Its `record` mode runs all
-the time, and tells the runs which tags to expect and how often they come. Its
-`site` mode prints how well each publisher hears each tag, on any broker. See
-`checker/README.md`.
+the time, tells the runs which tags to expect and how often they come, and
+writes the test bed's status page. Its `site` mode prints how well each
+publisher hears each tag, on any broker. See `checker/README.md`.
 
 - `src/payload.rs`: the app's readings, discovery configs, statuses and
   diagnostics, and `src/diagnostics.rs` the ESP32 diagnostics. They mirror the
@@ -98,6 +98,8 @@ the time, and tells the runs which tags to expect and how often they come. Its
   section, `src/check/instances.rs` the instances' diagnostics,
   `src/check/tests.rs` the tests.
 - `src/record.rs`: the record mode's state, without MQTT. Has unit tests.
+  `src/record/page.rs` renders the status page, and `src/history.rs` keeps the
+  diagnostics for it.
 - `src/site.rs`: the site table, how well each publisher hears each tag, and the
   coverage problems, without MQTT. Has unit tests.
 - `src/cli.rs`: the CLI. clap validates the arguments, and then they become the

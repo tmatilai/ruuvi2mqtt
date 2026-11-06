@@ -1,11 +1,14 @@
 //! The record mode's state, without MQTT. A run reads it to know which tags
-//! to expect and how often they come.
+//! to expect and how often they come. The status page shows it.
+
+mod page;
 
 use std::collections::{BTreeMap, VecDeque};
 
 use serde_json::{Map, Value, json};
 
-use crate::payload::{client_id, device_name, parse_discovery};
+use crate::history::History;
+use crate::payload::{client_id, device_name, parse_discovery, printable};
 use crate::time::max_gap;
 use crate::topic::Topic;
 
@@ -24,6 +27,16 @@ pub struct Recorder {
     since: u64,
     /// By tag ID
     devices: BTreeMap<String, Device>,
+    history: History,
+    /// By client ID, from the retained statuses, so not in the state
+    statuses: BTreeMap<String, Status>,
+    /// Since when each of the page's problems has lasted, by its key
+    problems: BTreeMap<String, u64>,
+}
+
+struct Status {
+    online: bool,
+    version: Option<String>,
 }
 
 #[derive(Default)]
@@ -43,6 +56,9 @@ impl Recorder {
             base_topic: base_topic.to_string(),
             since: now,
             devices: BTreeMap::new(),
+            history: History::default(),
+            statuses: BTreeMap::new(),
+            problems: BTreeMap::new(),
         }
     }
 
@@ -52,6 +68,13 @@ impl Recorder {
         let state: Value = serde_json::from_str(state).map_err(|err| format!("not JSON: {err}"))?;
         let number = |key: &str| state[key].as_u64().ok_or(format!("{key}: {}", state[key]));
         let mut recorder = Self::new(base_topic, number("since")?);
+        recorder.history = History::load(&state["history"]);
+        recorder.problems = state["problems"]
+            .as_object()
+            .into_iter()
+            .flatten()
+            .filter_map(|(key, since)| Some((key.clone(), since.as_u64()?)))
+            .collect();
         let devices = state["devices"]
             .as_object()
             .ok_or(format!("devices: {}", state["devices"]))?;
@@ -86,6 +109,19 @@ impl Recorder {
     pub fn on_message(&mut self, now: u64, topic: &str, payload: &[u8], retained: bool) {
         match Topic::parse(&self.base_topic, topic) {
             Topic::Reading(id) if !retained => self.on_reading(now, id, payload),
+            Topic::Diagnostics(name) if !retained => {
+                self.history.on_diagnostics(now, name, payload);
+            }
+            Topic::Status(client_id) => {
+                let Ok(status) = serde_json::from_slice::<Value>(payload) else {
+                    return;
+                };
+                let status = Status {
+                    online: status["state"] == "online",
+                    version: status["version"].as_str().map(printable),
+                };
+                self.statuses.insert(client_id.to_string(), status);
+            }
             Topic::Discovery { id, entity } => {
                 let name = parse_discovery(payload, &self.base_topic, id, entity)
                     .as_ref()
@@ -117,6 +153,7 @@ impl Recorder {
     /// stays without readings: the discovery configs are retained, so they
     /// come only once, often before a rare tag's first reading.
     fn prune(&mut self, now: u64) {
+        self.history.prune(now);
         let start = now.saturating_sub(WINDOW);
         self.devices.retain(|_, d| {
             while d.readings.len() > 1 && d.readings[0].0 < start {
@@ -170,7 +207,20 @@ impl Recorder {
             "since": self.since,
             "window": WINDOW,
             "devices": devices,
+            "history": self.history.state(),
+            "problems": self.problems,
         })
+    }
+
+    /// The status page and its problems. `expect` has (publisher, tag ID)
+    /// pairs, and `runs` the runner's `runs.json`, if any.
+    pub fn page(
+        &mut self,
+        now: u64,
+        expect: &[(String, String)],
+        runs: &Result<Option<Value>, String>,
+    ) -> page::Page {
+        page::render(self, now, expect, runs)
     }
 }
 
