@@ -21,6 +21,20 @@ impl Mean {
     pub fn get(self) -> Option<i64> {
         (self.n > 0).then(|| (self.sum + self.sum.signum() * self.n / 2) / self.n)
     }
+
+    pub fn merge(&mut self, other: Self) {
+        self.sum += other.sum;
+        self.n += other.n;
+    }
+
+    /// `[sum, n]`, for the recorder's state
+    pub fn parts(self) -> [i64; 2] {
+        [self.sum, self.n]
+    }
+
+    pub fn from_parts([sum, n]: [i64; 2]) -> Self {
+        Self { sum, n }
+    }
 }
 
 impl Extend<i64> for Mean {

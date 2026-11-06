@@ -5,6 +5,7 @@ mod cli;
 mod diagnostics;
 #[cfg(test)]
 mod fixtures;
+mod history;
 mod mqtt;
 mod payload;
 mod record;
@@ -145,7 +146,18 @@ async fn record(options: &RecordOptions) -> Result<Infallible> {
     loop {
         tokio::select! {
             () = sleep_until(next_write) => {
-                write_state(&options.state, &recorder.state(unix_now()))?;
+                let now = unix_now();
+                // The page first: it updates the problems in the state. A
+                // failed page doesn't stop the recording.
+                if let Some(dir) = &options.page {
+                    let page = recorder.page(now, &options.expect, &read_runs(dir));
+                    let written = write_file(dir, "index.html", &page.html)
+                        .and_then(|()| write_file(dir, "problems.json", &page.problems.to_string()));
+                    if let Err(err) = written {
+                        eprintln!("{err:#}");
+                    }
+                }
+                write_state(&options.state, &recorder.state(now))?;
                 next_write += WRITE_INTERVAL;
             }
             received = session.next() => match received? {
@@ -191,6 +203,26 @@ fn write_state(path: &Path, state: &serde_json::Value) -> Result<()> {
     let tmp = path.with_extension("tmp");
     std::fs::write(&tmp, state.to_string())
         .and_then(|()| std::fs::rename(&tmp, path))
+        .with_context(|| format!("Failed to write {}", path.display()))
+}
+
+/// The runner's `runs.json` in the page's directory, if it has written one
+fn read_runs(dir: &Path) -> Result<Option<serde_json::Value>, String> {
+    match std::fs::read_to_string(dir.join("runs.json")) {
+        Ok(runs) => serde_json::from_str(&runs)
+            .map(Some)
+            .map_err(|err| format!("not JSON: {err}")),
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(err) => Err(err.to_string()),
+    }
+}
+
+/// Writes a page's file through a temporary file, like the state
+fn write_file(dir: &Path, name: &str, contents: &str) -> Result<()> {
+    let path = dir.join(name);
+    let tmp = dir.join(format!(".{name}.tmp"));
+    std::fs::write(&tmp, contents)
+        .and_then(|()| std::fs::rename(&tmp, &path))
         .with_context(|| format!("Failed to write {}", path.display()))
 }
 

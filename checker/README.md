@@ -105,12 +105,87 @@ reading. The times are Unix seconds. `written` is when it wrote the file,
 `since` when the recording started, and `window` the hour in seconds. The gaps
 count only from `since`.
 
+`history` has each publisher's diagnostics for the [status page](#status-page),
+summed in 10-minute buckets for a day. `problems` has when each of the page's
+problems began.
+
 After a restart, it continues from the file. A break longer than 2 minutes, with
 the recorder stopped or disconnected, moves `since` to the reconnect, so that
 the break doesn't count as a gap.
 
 Its client ID is `ruuvi2mqtt-recorder`, so that a checker on the same broker
 doesn't disconnect it. It exits only on an error, with status 1.
+
+### Status page
+
+With `--page <dir>`, the recorder also writes a static `index.html` there every
+minute, which reloads itself. It shows the problems, the runs from `runs.json`
+in the same directory, and tables of the tags, the site table over the last hour
+and day, the boards and the instances. The hour and the day are the 10-minute
+buckets that overlap them.
+
+Each `--expect <name>=<MAC>` is a tag or Air that a publisher should hear, by
+the name in its diagnostics topic. With them, the site table's problems cover
+only the expected tags, and a tag that one publisher should hear needs no other.
+
+The problems, and which notify through `problems.json`:
+
+| Problem                                                    | Notifies |
+| ---------------------------------------------------------- | -------- |
+| An instance offline                                        | yes      |
+| A publisher without diagnostics for 5 minutes              | yes      |
+| A publisher doesn't hear an expected tag that another does | yes      |
+| The same when no publisher hears it                        | no       |
+| A board restarted, or on poor Wi-Fi                        | yes      |
+| The site table's other problems                            | no       |
+| A low battery                                              | no       |
+
+A tag's own problems are left to its own alerts, such as Home Assistant's for
+the same tags.
+
+The runner writes `runs.json`, newest first. `maintenance` and `pin` are text or
+`null`, `kind` is `run` or `check` (the daily check), `started` is UTC, and
+`faults` are the test bed's own. A `log` must be in `runs/`.
+
+```json
+{
+  "maintenance": null,
+  "pin": "my-branch",
+  "runs": [
+    {
+      "kind": "run",
+      "ref": "my-branch",
+      "sha": "6534f11d0c2e5a7b9f8e1d2c3b4a5968778695a4",
+      "result": "success",
+      "summary": "2 instances, 6 tags, 15:00, test bed faults: 1",
+      "faults": ["host2: no Bluetooth adapter"],
+      "started": "2026-11-06T09:20:12Z",
+      "log": "runs/20261106T092012Z.log"
+    }
+  ]
+}
+```
+
+The recorder writes the problems to `problems.json` for notifications. `key`
+stays the same while a problem lasts, and `since` is when it began, also across
+restarts. The times are Unix seconds.
+
+```json
+{
+  "written": 1793958300,
+  "problems": [
+    {
+      "key": "missing ruuvi2mqtt_host2 aabbccddee01",
+      "text": "Cellar: host2 doesn't hear it",
+      "grade": "poor",
+      "since": 1793957100,
+      "notify": true,
+      "publisher": "ruuvi2mqtt_host2",
+      "tag": "AA:BB:CC:DD:EE:01"
+    }
+  ]
+}
+```
 
 ## Site table
 

@@ -15,7 +15,7 @@ use crate::topic::Topic;
 /// How good something is, worst last. The RSSI and Wi-Fi thresholds are the
 /// boards' status page's, in `ruuvi2mqtt-esp32/src/status.rs`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
-enum Grade {
+pub enum Grade {
     Good,
     Fair,
     Poor,
@@ -23,7 +23,7 @@ enum Grade {
 
 impl Grade {
     /// Wi-Fi below −75 dBm drops and retries.
-    fn wifi(rssi: i64) -> Self {
+    pub fn wifi(rssi: i64) -> Self {
         match rssi {
             -67.. => Self::Good,
             -75.. => Self::Fair,
@@ -50,7 +50,7 @@ impl Grade {
         }
     }
 
-    fn mark(self) -> &'static str {
+    pub fn mark(self) -> &'static str {
         match self {
             Self::Good => "",
             Self::Fair => "~",
@@ -68,37 +68,37 @@ pub struct Site {
     publishers: BTreeMap<String, Publisher>,
 }
 
-#[derive(Default)]
-struct Publisher {
-    board: bool,
+#[derive(Clone, Default)]
+pub struct Publisher {
+    pub board: bool,
     /// The diagnostics it sent: an instance's minutes or a board's cycles
-    periods: u64,
+    pub periods: u64,
     /// By tag ID
-    tags: BTreeMap<String, Heard>,
+    pub tags: BTreeMap<String, Heard>,
     /// A board's, from its last cycle
-    firmware: Option<String>,
-    cycle: Option<u32>,
-    restarts: u64,
-    wifi_rssi: Mean,
+    pub firmware: Option<String>,
+    pub cycle: Option<u32>,
+    pub restarts: u64,
+    pub wifi_rssi: Mean,
 }
 
 /// The periods that heard a tag, and the mean of their strongest RSSIs
-#[derive(Default)]
-struct Heard {
-    periods: u64,
-    rssi: Mean,
+#[derive(Clone, Copy, Default)]
+pub struct Heard {
+    pub periods: u64,
+    pub rssi: Mean,
 }
 
 /// How well a publisher hears a tag
 #[derive(Clone, Copy)]
-struct Cell {
-    rssi: Option<i64>,
+pub struct Cell {
+    pub rssi: Option<i64>,
     /// Percent of the periods
-    heard: u64,
+    pub heard: u64,
 }
 
 impl Cell {
-    fn grade(&self) -> Grade {
+    pub fn grade(&self) -> Grade {
         let rssi = self.rssi.map_or(Grade::Good, Grade::rssi);
         rssi.max(Grade::heard(self.heard))
     }
@@ -128,16 +128,23 @@ impl Site {
         }
     }
 
-    /// The check reports invalid diagnostics. The table skips them.
     fn on_diagnostics(&mut self, name: &str, payload: &[u8]) {
-        if let Some(minute) = payload::parse_diagnostics(Duration::ZERO, payload) {
-            if let Ok(minute) = minute {
-                let p = self.publishers.entry(name.to_string()).or_default();
-                p.add(minute.tags.iter().map(|(id, (rssi, _))| (id, *rssi)));
-            }
-        } else if let Ok(cycle) = diagnostics::parse(Duration::ZERO, name, payload) {
+        if let Some(period) = Period::parse(name, payload) {
             let p = self.publishers.entry(name.to_string()).or_default();
-            p.board_cycle(&cycle);
+            p.add_period(&period);
+        }
+    }
+
+    /// A table of `publishers`, by the name in their diagnostics topic, and of
+    /// the named tags
+    pub fn from_parts(
+        names: BTreeMap<String, String>,
+        publishers: BTreeMap<String, Publisher>,
+    ) -> Self {
+        Self {
+            base_topic: String::new(),
+            names,
+            publishers,
         }
     }
 
@@ -145,11 +152,45 @@ impl Site {
         self.publishers.is_empty()
     }
 
-    pub fn render(&self, over: Duration) -> String {
-        let mut out = String::new();
-        // The instances first
+    /// The publishers, instances first
+    pub fn columns(&self) -> Vec<(&String, &Publisher)> {
         let mut columns: Vec<(&String, &Publisher)> = self.publishers.iter().collect();
         columns.sort_by_key(|(_, p)| p.board);
+        columns
+    }
+
+    /// The tags with a name: (ID, name), by name
+    pub fn rows(&self) -> Vec<(&String, &String)> {
+        let mut rows: Vec<(&String, &String)> = self.names.iter().collect();
+        rows.sort_by_key(|(id, name)| (*name, *id));
+        rows
+    }
+
+    /// The table with only the tags that `keep` takes
+    pub fn with_tags(&self, keep: impl Fn(&str) -> bool) -> Self {
+        Self {
+            base_topic: self.base_topic.clone(),
+            names: self
+                .names
+                .iter()
+                .filter(|(id, _)| keep(id))
+                .map(|(id, name)| (id.clone(), name.clone()))
+                .collect(),
+            publishers: self.publishers.clone(),
+        }
+    }
+
+    pub fn publisher(&self, name: &str) -> Option<&Publisher> {
+        self.publishers.get(name)
+    }
+
+    pub fn problems(&self) -> Vec<Problem> {
+        problems(&self.columns(), &self.rows())
+    }
+
+    pub fn render(&self, over: Duration) -> String {
+        let mut out = String::new();
+        let columns = self.columns();
         let boards = columns.iter().filter(|(_, p)| p.board).count();
         let _ = writeln!(
             out,
@@ -158,14 +199,12 @@ impl Site {
             plural(columns.len() - boards, "instance"),
             plural(boards, "board"),
         );
-        let mut rows: Vec<(&String, &String)> = self.names.iter().collect();
-        rows.sort_by_key(|(id, name)| (*name, *id));
-
+        let rows = self.rows();
         let problems = problems(&columns, &rows);
         if !problems.is_empty() {
             let _ = writeln!(out, "\nProblems:");
-            for (grade, text) in problems {
-                let _ = writeln!(out, "  {} {text}", grade.mark());
+            for p in problems {
+                let _ = writeln!(out, "  {} {}", p.grade.mark(), p.text);
             }
         }
 
@@ -229,7 +268,7 @@ impl Site {
     }
 
     /// The tags heard that have no discovery config, such as a neighbor's
-    fn other_tags(&self) -> usize {
+    pub fn other_tags(&self) -> usize {
         let heard: BTreeSet<&String> = self
             .publishers
             .values()
@@ -242,11 +281,52 @@ impl Site {
     }
 }
 
+/// A problem of the site table or the status page
+#[derive(Clone, Debug)]
+pub struct Problem {
+    pub grade: Grade,
+    /// Stays the same while the problem lasts, unlike the values in the text
+    pub key: String,
+    pub text: String,
+    /// The test bed's own, to notify of. A tag's own, such as a low battery,
+    /// is left to the tags' alerts.
+    pub notify: bool,
+    /// By the name in its diagnostics topic
+    pub publisher: Option<String>,
+    /// By the tag's ID
+    pub tag: Option<String>,
+}
+
+impl Problem {
+    pub fn new(grade: Grade, key: String, text: String) -> Self {
+        Self {
+            grade,
+            key,
+            text,
+            notify: false,
+            publisher: None,
+            tag: None,
+        }
+    }
+
+    pub fn notify(mut self, notify: bool) -> Self {
+        self.notify = notify;
+        self
+    }
+
+    pub fn publisher(mut self, name: &str) -> Self {
+        self.publisher = Some(name.to_string());
+        self
+    }
+
+    pub fn tag(mut self, id: &str) -> Self {
+        self.tag = Some(id.to_string());
+        self
+    }
+}
+
 /// The coverage problems, worst first
-fn problems(
-    columns: &[(&String, &Publisher)],
-    rows: &[(&String, &String)],
-) -> Vec<(Grade, String)> {
+fn problems(columns: &[(&String, &Publisher)], rows: &[(&String, &String)]) -> Vec<Problem> {
     let mut problems = Vec::new();
     let mut unheard = Vec::new();
     let boards = columns.iter().any(|(_, p)| p.board);
@@ -261,54 +341,125 @@ fn problems(
         }
         let well: Vec<&(&str, &Publisher, Grade)> =
             heard.iter().filter(|(_, _, g)| *g < Grade::Poor).collect();
-        let problem = match well[..] {
-            [] => (Grade::Poor, format!("{name}: no publisher hears it well")),
+        let (grade, kind, text) = match well[..] {
+            [] => (
+                Grade::Poor,
+                "heard-poorly",
+                "no publisher hears it well".to_string(),
+            ),
             _ if boards && !well.iter().any(|(_, p, _)| p.board) => (
                 Grade::Fair,
-                format!("{name}: only instances hear it well, a spot for a board"),
+                "only-instances",
+                "only instances hear it well, a spot for a board".to_string(),
             ),
-            [(only, _, _)] => (Grade::Fair, format!("{name}: only {only} hears it well")),
+            [(only, _, _)] => (
+                Grade::Fair,
+                "only-one",
+                format!("only {only} hears it well"),
+            ),
             _ => continue,
         };
-        problems.push(problem);
+        let problem = Problem::new(grade, format!("{kind} {id}"), format!("{name}: {text}"));
+        problems.push(problem.tag(id));
     }
     if !unheard.is_empty() {
-        problems.push((Grade::Poor, format!("not heard: {}", unheard.join(", "))));
+        let text = format!("not heard: {}", unheard.join(", "));
+        problems.push(Problem::new(Grade::Poor, "not-heard".to_string(), text));
     }
 
     let firmwares = count(columns.iter().filter_map(|(_, p)| p.firmware.as_deref()));
     let n: usize = firmwares.values().sum();
     // Without a majority, no board stands out
     let common = firmwares.iter().find(|(_, k)| **k * 2 > n).map(|(f, _)| *f);
-    for (name, p) in columns.iter().filter(|(_, p)| p.board) {
-        let name = label(name);
+    for (topic_name, p) in columns.iter().filter(|(_, p)| p.board) {
+        let name = label(topic_name);
+        let problem = |grade, kind: &str, text: String| {
+            Problem::new(
+                grade,
+                format!("{kind} {topic_name}"),
+                format!("{name}: {text}"),
+            )
+            .publisher(topic_name)
+        };
         if p.restarts > 0 {
             let times = match p.restarts {
                 1 => "once".to_string(),
                 n => format!("{n} times"),
             };
-            problems.push((Grade::Poor, format!("{name}: restarted {times}")));
+            problems
+                .push(problem(Grade::Poor, "restarted", format!("restarted {times}")).notify(true));
         }
         if let Some(rssi) = p.wifi_rssi.get() {
             let grade = Grade::wifi(rssi);
             if grade > Grade::Good {
-                problems.push((grade, format!("{name}: Wi-Fi {rssi} dBm")));
+                // A fair signal only retries now and then
+                let wifi = problem(grade, "wifi", format!("Wi-Fi {rssi} dBm"));
+                problems.push(wifi.notify(grade == Grade::Poor));
             }
         }
         if let (Some(firmware), Some(common)) = (&p.firmware, common)
             && firmware != common
         {
-            problems.push((
-                Grade::Fair,
-                format!("{name}: {firmware}, most boards {common}"),
-            ));
+            let text = format!("{firmware}, most boards {common}");
+            problems.push(problem(Grade::Fair, "firmware", text));
         }
     }
-    problems.sort_by_key(|(grade, _)| Reverse(*grade));
+    problems.sort_by_key(|p| Reverse(p.grade));
     problems
 }
 
+/// A publisher's diagnostics: an instance's minute or a board's cycle. The
+/// check reports invalid ones, the table skips them.
+pub enum Period {
+    Instance(payload::Diagnostics),
+    Board(diagnostics::Diagnostics),
+}
+
+impl Period {
+    pub fn parse(name: &str, payload: &[u8]) -> Option<Self> {
+        match payload::parse_diagnostics(Duration::ZERO, payload) {
+            Some(minute) => minute.ok().map(Self::Instance),
+            None => diagnostics::parse(Duration::ZERO, name, payload)
+                .ok()
+                .map(Self::Board),
+        }
+    }
+
+    pub fn client_id(&self) -> &str {
+        match self {
+            Self::Instance(d) => &d.client_id,
+            Self::Board(d) => &d.client_id,
+        }
+    }
+}
+
 impl Publisher {
+    pub fn add_period(&mut self, period: &Period) {
+        match period {
+            Period::Instance(minute) => {
+                self.add(minute.tags.iter().map(|(id, (rssi, _))| (id, *rssi)));
+            }
+            Period::Board(cycle) => self.board_cycle(cycle),
+        }
+    }
+
+    /// Adds a later one's periods. The firmware and cycle are the later's.
+    pub fn merge(&mut self, later: &Self) {
+        self.board |= later.board;
+        self.periods += later.periods;
+        for (id, heard) in &later.tags {
+            let mine = self.tags.entry(id.clone()).or_default();
+            mine.periods += heard.periods;
+            mine.rssi.merge(heard.rssi);
+        }
+        if later.firmware.is_some() {
+            self.firmware.clone_from(&later.firmware);
+        }
+        self.cycle = later.cycle.or(self.cycle);
+        self.restarts += later.restarts;
+        self.wifi_rssi.merge(later.wifi_rssi);
+    }
+
     fn add<'a>(&mut self, tags: impl Iterator<Item = (&'a String, Option<i8>)>) {
         self.periods += 1;
         for (id, rssi) in tags {
@@ -334,7 +485,7 @@ impl Publisher {
         self.add(cycle.tags.iter().map(|(id, (rssi, _))| (id, Some(*rssi))));
     }
 
-    fn cell(&self, id: &str) -> Option<Cell> {
+    pub fn cell(&self, id: &str) -> Option<Cell> {
         let heard = self.tags.get(id)?;
         Some(Cell {
             rssi: heard.rssi.get(),
@@ -351,7 +502,7 @@ fn cell_text(cell: Cell) -> String {
 
 /// A publisher's name without the `ruuvi2mqtt_` or `ruuvi2mqtt-` that most
 /// have
-fn label(name: &str) -> &str {
+pub fn label(name: &str) -> &str {
     name.strip_prefix("ruuvi2mqtt")
         .and_then(|rest| rest.strip_prefix(['_', '-']))
         .filter(|rest| !rest.is_empty())
@@ -359,7 +510,7 @@ fn label(name: &str) -> &str {
 }
 
 /// `1 board`, `2 boards`
-fn plural(n: usize, word: &str) -> String {
+pub fn plural(n: usize, word: &str) -> String {
     if n == 1 {
         format!("{n} {word}")
     } else {
@@ -405,7 +556,7 @@ mod tests {
         let rows: Vec<_> = site.names.iter().collect();
         problems(&site.publishers.iter().collect::<Vec<_>>(), &rows)
             .into_iter()
-            .map(|(grade, text)| format!("{}{text}", grade.mark()))
+            .map(|p| format!("{}{}", p.grade.mark(), p.text))
             .collect()
     }
 

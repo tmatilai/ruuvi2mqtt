@@ -87,6 +87,18 @@ pub struct RecordOptions {
     /// The state file, JSON. The recorder continues from it after a restart
     #[arg(long, value_name = "FILE")]
     pub state: PathBuf,
+    /// Write the status page into this directory every minute
+    #[arg(long, value_name = "DIR")]
+    pub page: Option<PathBuf>,
+    /// A tag or Air that a publisher should hear, for the status page (repeat
+    /// for each). NAME is the publisher's name in its diagnostics topic
+    #[arg(
+        long = "expect",
+        value_name = "NAME=MAC",
+        requires = "page",
+        value_parser = parse_expect
+    )]
+    pub expect: Vec<(String, String)>,
 }
 
 #[derive(Debug, Args)]
@@ -194,6 +206,17 @@ fn parse_device(s: &str) -> Result<(String, Option<Duration>), String> {
     }
 }
 
+/// `<NAME>=<MAC>`
+fn parse_expect(s: &str) -> Result<(String, String), String> {
+    let (name, mac) = s
+        .split_once('=')
+        .ok_or_else(|| format!("not NAME=MAC: '{s}'"))?;
+    if name.is_empty() || name.contains(['/', '+', '#']) {
+        return Err(format!("not a publisher's name: '{name}'"));
+    }
+    Ok((name.to_string(), parse_mac(mac)?))
+}
+
 /// `AA:BB:CC:DD:EE:01` to `aabbccddee01`, as in the topics
 fn parse_mac(s: &str) -> Result<String, String> {
     let hex: String = s.chars().filter(|c| *c != ':').collect();
@@ -266,6 +289,40 @@ mod tests {
         assert_eq!(options.broker.server, "broker");
         assert_eq!(options.client_id, "ruuvi2mqtt-recorder");
         assert_eq!(options.state, PathBuf::from("state.json"));
+        assert_eq!(options.page, None);
+        let Mode::Record(options) = try_parse_from([
+            "checker",
+            "record",
+            "--server",
+            "broker",
+            "--state",
+            "state.json",
+            "--page",
+            "/srv/page",
+            "--expect",
+            "ruuvi2mqtt_host1=AA:BB:CC:DD:EE:01",
+        ])
+        .unwrap() else {
+            panic!("not a record");
+        };
+        assert_eq!(options.page, Some(PathBuf::from("/srv/page")));
+        assert_eq!(
+            options.expect,
+            [("ruuvi2mqtt_host1".to_string(), "aabbccddee01".to_string())]
+        );
+        assert!(
+            try_parse_from([
+                "checker",
+                "record",
+                "--server",
+                "b",
+                "--state",
+                "s",
+                "--expect",
+                "h=AA:BB:CC:DD:EE:01"
+            ])
+            .is_err()
+        );
         assert!(try_parse_from(["checker", "record", "--state", "s"]).is_err());
         assert!(
             try_parse_from([
@@ -315,6 +372,17 @@ mod tests {
         );
         assert!(parse_device("AA:BB:CC:DD:EE:01/").is_err());
         assert!(parse_device("AA:BB:CC:DD:EE/1m").is_err());
+    }
+
+    #[test]
+    fn parses_expectations() {
+        assert_eq!(
+            parse_expect("c6=AA:BB:CC:DD:EE:01"),
+            Ok(("c6".into(), "aabbccddee01".into()))
+        );
+        assert!(parse_expect("AA:BB:CC:DD:EE:01").is_err());
+        assert!(parse_expect("=AA:BB:CC:DD:EE:01").is_err());
+        assert!(parse_expect("a/b=AA:BB:CC:DD:EE:01").is_err());
     }
 
     #[test]
