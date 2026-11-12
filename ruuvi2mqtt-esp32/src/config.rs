@@ -245,6 +245,13 @@ pub const LED_GPIO: Option<u32> = match option_env_non_empty!("LED_GPIO") {
     None => None,
 };
 
+/// GPIO pin that powers the LED when high, for boards that switch the LED's
+/// power.
+pub const LED_POWER_GPIO: Option<u32> = match option_env_non_empty!("LED_POWER_GPIO") {
+    Some(v) => Some(konst::result::unwrap!(u32::from_str_radix(v, 10))),
+    None => None,
+};
+
 /// WS2812 color while on, as hex `RRGGBB`. Low values keep it dim.
 /// Default: `000020`, a dim blue.
 const LED_COLOR_HEX: &str = match option_env_non_empty!("LED_COLOR") {
@@ -376,6 +383,19 @@ const _: () = assert!(
         None => true,
     },
     "LED_GPIO is not a valid GPIO number for this chip"
+);
+const _: () = assert!(
+    LED_POWER_GPIO.is_none() || LED_GPIO.is_some(),
+    "LED_POWER_GPIO is only for an LED with LED_GPIO"
+);
+const _: () = assert!(
+    match (LED_POWER_GPIO, LED_GPIO) {
+        (Some(power), Some(gpio)) => {
+            power < esp_idf_svc::sys::gpio_num_t_GPIO_NUM_MAX as u32 && power != gpio
+        }
+        _ => true,
+    },
+    "LED_POWER_GPIO is not a valid GPIO number for this chip, or is LED_GPIO"
 );
 const _: () = assert!(
     LED_ACTIVE_LOW || konst::eq_str(LED_ACTIVE_LOW_VALUE, "false"),

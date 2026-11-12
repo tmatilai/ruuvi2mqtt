@@ -114,6 +114,7 @@ Environment variables set the configuration at compile time.
 | `LED_TYPE`           | —                   | `ws2812`             | `ws2812` or `gpio`                                                                                                                                                                                                              |
 | `LED_ACTIVE_LOW`     | —                   | `false`              | `true` for a `gpio` LED that lights when its pin is low                                                                                                                                                                         |
 | `LED_GPIO`           | —                   | —                    | LED pin number. Required with `LED_MODE`                                                                                                                                                                                        |
+| `LED_POWER_GPIO`     | —                   | —                    | Pin that powers the LED when high                                                                                                                                                                                               |
 | `LED_COLOR`          | —                   | `000020`             | WS2812 color as hex `RRGGBB`. Low values keep it dim                                                                                                                                                                            |
 | `LOG_LEVEL`          | —                   | `info`               | Log level for the firmware's own code. Library code logs at `info` at most                                                                                                                                                      |
 
@@ -138,14 +139,18 @@ keeps the LED dark except for the blinks, for rooms where a glow would disturb.
 
 #### Known board LED configurations
 
-| Board                                  | `LED_TYPE`                    | `LED_GPIO` |
-| -------------------------------------- | ----------------------------- | ---------- |
-| Beetle ESP32 C6 Mini (DFRobot DFR1117) | `gpio`                        | `15`       |
-| ESP32-C5-DevKitC-1                     | `ws2812`                      | `27`       |
-| ESP32-C6-DevKitC-1                     | `ws2812`                      | `8`        |
-| ESP32-CAM (AI-Thinker)                 | `gpio`, `LED_ACTIVE_LOW=true` | `33`       |
-| ESP32-S3 AI Camera (DFRobot DFR1154)   | `gpio`                        | `3`        |
-| Seeed XIAO ESP32-C6                    | `gpio`, `LED_ACTIVE_LOW=true` | `15`       |
+| Board                                  | `LED_TYPE`                    | `LED_GPIO`        |
+| -------------------------------------- | ----------------------------- | ----------------- |
+| Adafruit ESP32-C6 Feather              | `ws2812`, `LED_POWER_GPIO=20` | `9`               |
+| Beetle ESP32 C6 Mini (DFRobot DFR1117) | `gpio`                        | `15`              |
+| ESP32-C5-DevKitC-1                     | `ws2812`                      | `27`              |
+| ESP32-C6-DevKitC-1                     | `ws2812`                      | `8`               |
+| ESP32-CAM (AI-Thinker)                 | `gpio`, `LED_ACTIVE_LOW=true` | `33`              |
+| ESP32-S3 AI Camera (DFRobot DFR1154)   | `gpio`                        | `3`               |
+| ESP32-S3-DevKitC-1                     | `ws2812`                      | `38` (v1.0: `48`) |
+| M5Stack NanoC6                         | `ws2812`, `LED_POWER_GPIO=19` | `20`              |
+| M5Stack StickS3                        | _(no LED)_                    | —                 |
+| Seeed XIAO ESP32-C6                    | `gpio`, `LED_ACTIVE_LOW=true` | `15`              |
 
 #### Antenna
 

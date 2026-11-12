@@ -24,4 +24,5 @@
 # export LED_TYPE = gpio
 # export LED_ACTIVE_LOW = true
 # export LED_GPIO = 15
+# export LED_POWER_GPIO = 19
 # export LED_COLOR = 000020

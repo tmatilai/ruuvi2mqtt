@@ -1,5 +1,11 @@
 ## _Not released yet_
 
+### ruuvi2mqtt-esp32
+
+#### Features
+
+- Add `LED_POWER_GPIO` for boards that switch the LED's power.
+
 ## 1.8.0 / 2026-11-07
 
 ### ruuvi2mqtt
