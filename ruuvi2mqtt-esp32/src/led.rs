@@ -3,7 +3,7 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 use esp_idf_svc::hal::{
-    gpio::AnyOutputPin,
+    gpio::{AnyOutputPin, Output, PinDriver},
     ledc::{
         config::{Resolution, TimerConfig},
         LedcDriver, LedcTimerDriver, CHANNEL0, TIMER0,
@@ -78,7 +78,7 @@ pub fn start() -> anyhow::Result<()> {
         return Ok(());
     };
     info!(
-        "LED: type={}{}, gpio={}, color={:06x}, mode={}",
+        "LED: type={}{}, gpio={}{}, color={:06x}, mode={}",
         config::LED_TYPE,
         if config::LED_ACTIVE_LOW {
             " (active low)"
@@ -86,6 +86,9 @@ pub fn start() -> anyhow::Result<()> {
             ""
         },
         gpio,
+        config::LED_POWER_GPIO
+            .map(|power| format!(", power gpio={power}"))
+            .unwrap_or_default(),
         config::LED_COLOR,
         mode,
     );
@@ -98,30 +101,46 @@ pub fn start() -> anyhow::Result<()> {
     Ok(())
 }
 
-/// The LED of [`start`]. A plain LED dims with PWM.
-enum Light {
+/// The LED of [`start`].
+struct Light {
+    driver: Driver,
+    /// Keeps `LED_POWER_GPIO` high while it lives.
+    _power: Option<PinDriver<'static, Output>>,
+}
+
+/// A plain LED dims with PWM.
+enum Driver {
     Ws2812(TxChannelDriver<'static>),
     Gpio(LedcDriver<'static>),
 }
 
 impl Light {
     fn new(gpio: u32) -> Result<Self, EspError> {
-        // SAFETY: nothing else uses the pin or the LEDC.
-        #[allow(clippy::cast_possible_truncation)] // GPIO numbers always fit in u8
-        let pin = unsafe { AnyOutputPin::steal(gpio as u8) };
-        if config::LED_TYPE == "ws2812" {
+        let power = config::LED_POWER_GPIO
+            .map(|power| {
+                let mut power = PinDriver::output(output_pin(power))?;
+                power.set_high()?;
+                Ok::<_, EspError>(power)
+            })
+            .transpose()?;
+        let pin = output_pin(gpio);
+        let driver = if config::LED_TYPE == "ws2812" {
             let config = TxChannelConfig {
                 resolution: 10.MHz().into(),
                 ..Default::default()
             };
-            return Ok(Self::Ws2812(TxChannelDriver::new(pin, &config)?));
-        }
-        let config = TimerConfig::new()
-            .frequency(1.kHz().into())
-            .resolution(Resolution::Bits10);
-        let timer = LedcTimerDriver::new(unsafe { TIMER0::steal() }, &config)?;
-        let channel = LedcDriver::new(unsafe { CHANNEL0::steal() }, timer, pin)?;
-        Ok(Self::Gpio(channel))
+            Driver::Ws2812(TxChannelDriver::new(pin, &config)?)
+        } else {
+            let config = TimerConfig::new()
+                .frequency(1.kHz().into())
+                .resolution(Resolution::Bits10);
+            let timer = LedcTimerDriver::new(unsafe { TIMER0::steal() }, &config)?;
+            Driver::Gpio(LedcDriver::new(unsafe { CHANNEL0::steal() }, timer, pin)?)
+        };
+        Ok(Self {
+            driver,
+            _power: power,
+        })
     }
 
     fn run(mut self) -> Result<(), EspError> {
@@ -164,8 +183,8 @@ impl Light {
 
     fn show(&mut self, pattern: Pattern, level: u8) -> Result<(), EspError> {
         let alarm = pattern == Pattern::Alarm;
-        match self {
-            Self::Ws2812(tx) => {
+        match &mut self.driver {
+            Driver::Ws2812(tx) => {
                 let color = if alarm {
                     WS2812_ALARM_COLOR
                 } else {
@@ -173,7 +192,7 @@ impl Light {
                 };
                 ws2812_send(tx, ws2812_grb(color, level))
             }
-            Self::Gpio(channel) => {
+            Driver::Gpio(channel) => {
                 let max = channel.get_max_duty();
                 let peak = max
                     / if alarm {
@@ -189,6 +208,15 @@ impl Light {
                 })
             }
         }
+    }
+}
+
+/// The LED's pin. config.rs checks that it exists on the chip.
+fn output_pin(gpio: u32) -> AnyOutputPin<'static> {
+    // SAFETY: nothing else uses the LED's pins or the LEDC.
+    #[allow(clippy::cast_possible_truncation)] // GPIO numbers always fit in u8
+    unsafe {
+        AnyOutputPin::steal(gpio as u8)
     }
 }
 
