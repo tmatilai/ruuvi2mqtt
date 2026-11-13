@@ -150,7 +150,7 @@ async fn record(options: &RecordOptions) -> Result<Infallible> {
                 // The page first: it updates the problems in the state. A
                 // failed page doesn't stop the recording.
                 if let Some(dir) = &options.page {
-                    let page = recorder.page(now, &options.expect, &read_runs(dir));
+                    let page = recorder.page(now, &options.title, &options.expect, &read_runs(dir));
                     let written = write_file(dir, "index.html", &page.html)
                         .and_then(|()| write_file(dir, "problems.json", &page.problems.to_string()));
                     if let Err(err) = written {

@@ -119,11 +119,12 @@ doesn't disconnect it. It exits only on an error, with status 1.
 ### Status page
 
 With `--page <dir>`, the recorder also writes a static `index.html` there every
-minute, which reloads itself. It shows the problems, the runs from `runs.json`
-in the same directory, and tables of the tags, the site table over the last hour
-and day, the boards and the instances. The hour and the day are the 10-minute
-buckets that overlap them. The tables leave out the tags that no publisher heard
-in the last day.
+minute, which reloads itself. `--title` names it, `Test bed` by default. It
+shows the problems, the runs from `runs.json` in the same directory if there is
+one, and tables of the tags, the site table over the last hour and day, the
+boards and the instances. The hour and the day are the 10-minute buckets that
+overlap them. The tables leave out the tags that no publisher heard in the last
+day.
 
 Each `--expect <name>=<MAC>` is a tag or Air that a publisher should hear, by
 the name in its diagnostics topic. With them, the site table's problems cover

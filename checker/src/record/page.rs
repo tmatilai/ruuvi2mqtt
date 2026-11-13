@@ -47,6 +47,7 @@ pub struct Page {
 pub fn render(
     r: &mut Recorder,
     now: u64,
+    title: &str,
     expect: &[(String, String)],
     runs: &Result<Option<Value>, String>,
 ) -> Page {
@@ -62,12 +63,13 @@ pub fn render(
     let r = &*r;
 
     let mut out = String::new();
+    let title = esc(title);
     let _ = write!(
         out,
         "<!doctype html>\n<html lang=\"en\">\n<head>\n<meta charset=\"utf-8\">\n\
          <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n\
-         <meta http-equiv=\"refresh\" content=\"60\">\n<title>Test bed</title>\n\
-         <style>\n{STYLE}</style>\n</head>\n<body>\n<h1>Test bed</h1>\n"
+         <meta http-equiv=\"refresh\" content=\"60\">\n<title>{title}</title>\n\
+         <style>\n{STYLE}</style>\n</head>\n<body>\n<h1>{title}</h1>\n"
     );
     let _ = writeln!(
         out,
@@ -253,7 +255,11 @@ fn problems_json(r: &Recorder, now: u64, problems: &[Problem]) -> Value {
     json!({ "written": now, "problems": problems })
 }
 
+/// Without `runs.json`, there's no runner and no section.
 fn runs_section(out: &mut String, runs: &Result<Option<Value>, String>) {
+    if runs == &Ok(None) {
+        return;
+    }
     out.push_str("<h2>Runs</h2>\n");
     let runs = match runs {
         Ok(Some(runs)) => runs["runs"].as_array().map_or(&[][..], Vec::as_slice),
@@ -728,7 +734,7 @@ mod tests {
                  "log": "../etc/passwd"},
             ],
         });
-        let page = r.page(T0 + 600, &[], &Ok(Some(runs))).html;
+        let page = r.page(T0 + 600, "Test bed", &[], &Ok(Some(runs))).html;
         for s in [
             "<title>Test bed</title>",
             "Updated 2027-01-15 08:10 UTC. Recording since 2027-01-15 08:00 UTC.",
@@ -768,7 +774,7 @@ mod tests {
                 false,
             );
         }
-        let page = r.page(T0 + 600, &[], &Ok(None)).html;
+        let page = r.page(T0 + 600, "Test bed", &[], &Ok(None)).html;
         let row = "<tr><td>🔴</td><td>c6-board</td><td>🟢 -61 dBm</td><td>1</td>\
                    <td>ruuvi2mqtt-esp32 1.5.2</td></tr>";
         assert!(page.contains(row), "{row:?} in:\n{page}");
@@ -778,11 +784,17 @@ mod tests {
     #[test]
     fn renders_without_runs_or_with_a_broken_file() {
         let mut r = Recorder::new("ruuvi2mqtt", T0);
-        let page = r.page(T0, &[], &Ok(None)).html;
+        let page = r.page(T0, "Dev & boards", &[], &Ok(None)).html;
+        assert!(page.contains("<title>Dev &amp; boards</title>"));
+        assert!(page.contains("<h1>Dev &amp; boards</h1>"));
         assert!(page.contains("<p>None.</p>"));
-        assert!(page.contains("<p>No runs yet.</p>"));
+        assert!(!page.contains("<h2>Runs</h2>"));
         assert!(page.contains("<p>No tags yet.</p>"));
-        let page = r.page(T0, &[], &Err("not JSON".into())).html;
+        let page = r
+            .page(T0, "Test bed", &[], &Ok(Some(json!({"runs": []}))))
+            .html;
+        assert!(page.contains("<p>No runs yet.</p>"));
+        let page = r.page(T0, "Test bed", &[], &Err("not JSON".into())).html;
         assert!(page.contains("<p>🔴 runs.json: not JSON</p>"));
     }
 
@@ -790,10 +802,10 @@ mod tests {
     fn problems_keep_their_start_across_a_restart() {
         let mut r = recorder();
         let expect = [(HOST2.to_string(), TAG.to_string())];
-        r.page(T0 + 540, &expect, &Ok(None));
+        r.page(T0 + 540, "Test bed", &expect, &Ok(None));
         let state = r.state(T0 + 600).to_string();
         let (mut r, _) = Recorder::load("ruuvi2mqtt", &state).unwrap();
-        let problems = r.page(T0 + 800, &expect, &Ok(None)).problems;
+        let problems = r.page(T0 + 800, "Test bed", &expect, &Ok(None)).problems;
         assert_eq!(problems["written"], T0 + 800);
         assert_eq!(
             problems["problems"][0],
@@ -808,7 +820,7 @@ mod tests {
             })
         );
         // Diagnostics stopped: a new problem, and the old one still lasts
-        let problems = r.page(T0 + 1200, &expect, &Ok(None)).problems;
+        let problems = r.page(T0 + 1200, "Test bed", &expect, &Ok(None)).problems;
         let since: Vec<_> = problems["problems"]
             .as_array()
             .unwrap()
@@ -818,8 +830,8 @@ mod tests {
         assert!(since.contains(&(&format!("silent {HOST1}")[..], T0 + 1200)));
         assert!(since.contains(&(&format!("missing {HOST2} {TAG}")[..], T0 + 540)));
         // Cleared, then back: it starts over
-        r.page(T0 + 1260, &[], &Ok(None));
-        let problems = r.page(T0 + 1320, &expect, &Ok(None)).problems;
+        r.page(T0 + 1260, "Test bed", &[], &Ok(None));
+        let problems = r.page(T0 + 1320, "Test bed", &expect, &Ok(None)).problems;
         let missing = problems["problems"]
             .as_array()
             .unwrap()

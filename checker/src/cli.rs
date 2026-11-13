@@ -90,6 +90,9 @@ pub struct RecordOptions {
     /// Write the status page into this directory every minute
     #[arg(long, value_name = "DIR")]
     pub page: Option<PathBuf>,
+    /// The status page's title
+    #[arg(long, default_value = "Test bed", requires = "page")]
+    pub title: String,
     /// A tag or Air that a publisher should hear, for the status page (repeat
     /// for each). NAME is the publisher's name in its diagnostics topic
     #[arg(
@@ -290,6 +293,7 @@ mod tests {
         assert_eq!(options.client_id, "ruuvi2mqtt-recorder");
         assert_eq!(options.state, PathBuf::from("state.json"));
         assert_eq!(options.page, None);
+        assert_eq!(options.title, "Test bed");
         let Mode::Record(options) = try_parse_from([
             "checker",
             "record",
