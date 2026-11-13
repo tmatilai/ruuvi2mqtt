@@ -217,10 +217,11 @@ impl Recorder {
     pub fn page(
         &mut self,
         now: u64,
+        title: &str,
         expect: &[(String, String)],
         runs: &Result<Option<Value>, String>,
     ) -> page::Page {
-        page::render(self, now, expect, runs)
+        page::render(self, now, title, expect, runs)
     }
 }
 
