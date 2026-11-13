@@ -6,6 +6,11 @@
 
 - Add `LED_POWER_GPIO` for boards that switch the LED's power.
 
+#### Fixes
+
+- Use both bands when `WIFI_BAND` is unset, instead of the band that the previous firmware set.
+- Fall back to a full Wi-Fi scan when the cached access point is silent, and give the scan 40 s on 5 GHz.
+
 ## 1.8.0 / 2026-11-07
 
 ### ruuvi2mqtt

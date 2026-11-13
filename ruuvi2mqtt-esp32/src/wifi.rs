@@ -73,7 +73,7 @@ pub fn connect(
     let result = if cached.is_some() {
         connect_cached(&mut wifi, &events)
     } else {
-        wifi.connect().map_err(Into::into)
+        connect_full(&mut wifi)
     };
     let cache_use = match result {
         Ok(()) if cached.is_some() => CacheUse::Hit,
@@ -81,7 +81,7 @@ pub fn connect(
         Err(e) if cached.is_some() => {
             log::warn!("Fast reconnect failed ({e}), retrying with full scan");
             wifi.set_configuration(&client_configuration(None))?;
-            wifi.connect()?;
+            connect_full(&mut wifi)?;
             CacheUse::Stale
         }
         Err(e) => return Err(e),
@@ -397,20 +397,38 @@ fn scan_for_stronger() -> anyhow::Result<bool> {
     }
 }
 
-/// Restrict Wi-Fi to `WIFI_BAND`. The default band mode uses both.
+/// Set the band to `WIFI_BAND`, or to both on a dual-band chip.
 fn set_band() -> anyhow::Result<()> {
-    let mode = match config::WIFI_BAND {
-        Some("2.4") => sys::wifi_band_mode_t_WIFI_BAND_MODE_2G_ONLY,
-        Some(_) => sys::wifi_band_mode_t_WIFI_BAND_MODE_5G_ONLY,
+    let (mode, band) = match config::WIFI_BAND {
+        Some("2.4") => (sys::wifi_band_mode_t_WIFI_BAND_MODE_2G_ONLY, "2.4"),
+        Some(_) => (sys::wifi_band_mode_t_WIFI_BAND_MODE_5G_ONLY, "5"),
+        // The driver keeps the previous firmware's band in NVS.
+        None if cfg!(esp_idf_soc_wifi_support_5g) => {
+            (sys::wifi_band_mode_t_WIFI_BAND_MODE_AUTO, "2.4 and 5")
+        }
         None => return Ok(()),
     };
     sys::esp!(unsafe { sys::esp_wifi_set_band_mode(mode) })?;
-    info!("Wi-Fi band: {} GHz", config::WIFI_BAND.unwrap_or_default());
+    info!("Wi-Fi band: {band} GHz");
     Ok(())
 }
 
-/// How long to wait for the cached AP. `BlockingWifi` also waits 15 s.
+/// How long to wait for the cached AP.
 const CACHED_CONNECT_TIMEOUT: Duration = Duration::from_secs(15);
+
+/// How long to wait for a connect with a full scan. The DFS channels of
+/// 5 GHz are scanned passively, so a scan of both bands takes about 25 s.
+pub const FULL_SCAN_TIMEOUT_SECS: u32 = if config::WIFI_SCANS_5G { 40 } else { 15 };
+
+/// Connect with a full scan. `BlockingWifi::connect` gives up after 15 s.
+fn connect_full(wifi: &mut BlockingWifi<EspWifi<'static>>) -> anyhow::Result<()> {
+    wifi.wifi_mut().connect()?;
+    wifi.wifi_wait_while(
+        || wifi.wifi().is_connected().map(|c| !c),
+        Some(Duration::from_secs(FULL_SCAN_TIMEOUT_SECS.into())),
+    )?;
+    Ok(())
+}
 
 /// Connect to the cached AP, but fail on the first disconnect.
 ///
@@ -437,7 +455,14 @@ fn connect_cached(
             0 if start.elapsed() < CACHED_CONNECT_TIMEOUT => {
                 thread::sleep(Duration::from_millis(50));
             }
-            0 => anyhow::bail!("timed out after {}s", CACHED_CONNECT_TIMEOUT.as_secs()),
+            0 => {
+                // The driver is still connecting, and the full scan's connect
+                // fails with ESP_ERR_WIFI_STATE until it stops.
+                if let Err(e) = wifi.wifi_mut().disconnect() {
+                    log::warn!("Could not stop the fast reconnect: {e}");
+                }
+                anyhow::bail!("timed out after {}s", CACHED_CONNECT_TIMEOUT.as_secs())
+            }
             r => anyhow::bail!(
                 "disconnected after {}ms, reason {r}",
                 start.elapsed().as_millis()

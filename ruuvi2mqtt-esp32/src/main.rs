@@ -165,11 +165,13 @@ const MQTT_ACK_TIMEOUT: Duration = Duration::from_secs(5);
 /// but a task blocked on an event does not trip the task watchdog. In the
 /// continuous mode, it is the time since the last cycle that scanned and
 /// published, so one cycle may fail, as when Wi-Fi drops for a while.
-const CYCLE_TIMEOUT_SECS: u32 = if config::BLE_SCAN_CONTINUOUS {
-    40 + 2 * config::BLE_SCAN_DURATION.unsigned_abs()
-} else {
-    40 + config::BLE_SCAN_DURATION.unsigned_abs()
-};
+const CYCLE_TIMEOUT_SECS: u32 = 25
+    + wifi::FULL_SCAN_TIMEOUT_SECS
+    + if config::BLE_SCAN_CONTINUOUS {
+        2 * config::BLE_SCAN_DURATION.unsigned_abs()
+    } else {
+        config::BLE_SCAN_DURATION.unsigned_abs()
+    };
 
 /// Deep sleep after a brownout reset.
 const BROWNOUT_SLEEP_SECS: u64 = 4 * SLEEP_SECS;

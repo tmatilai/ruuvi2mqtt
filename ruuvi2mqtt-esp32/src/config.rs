@@ -60,6 +60,12 @@ pub const WIFI_DNS: Option<&str> = option_env_non_empty!("WIFI_DNS");
 /// Unset uses both.
 pub const WIFI_BAND: Option<&str> = option_env_non_empty!("WIFI_BAND");
 
+/// Whether Wi-Fi scans the 5 GHz band.
+pub const WIFI_SCANS_5G: bool = match WIFI_BAND {
+    Some(v) => !konst::eq_str(v, "2.4"),
+    None => cfg!(esp_idf_soc_wifi_support_5g),
+};
+
 /// The board's name for DHCP and mDNS, and the default MQTT client ID.
 pub const DEVICE_HOSTNAME: &str = match option_env_non_empty!("DEVICE_HOSTNAME") {
     Some(v) => v,
