@@ -109,7 +109,7 @@ jobs:
                of the repository, and docs.rs. For a crate, find the source
                repository with WebFetch on `https://crates.io/api/v1/crates/<name>`.
             3. Find every place this repository uses the dependency (Cargo.toml
-               features, imports, calls, configuration). CLAUDE.md maps the
+               features, imports, calls, configuration). AGENTS.md maps the
                modules, so Grep for the crate and read only the files that use
                it. Check each breaking or behavioral change against that usage.
                Pay attention to changes the compiler does not see: changed
