@@ -7,7 +7,7 @@ use std::fmt::Write as _;
 use std::time::Duration;
 
 use super::{Config, MAX_EXAMPLES, Report, Watch};
-use crate::diagnostics::Diagnostics;
+use crate::diagnostics::{Battery, Diagnostics};
 use crate::payload::check_version;
 use crate::stats::{Mean, count};
 use crate::time;
@@ -111,6 +111,7 @@ impl Watch {
             "    Wi-Fi cache {}; cycle counter: {missed} missed, {restarts} restarts",
             caches.join(", ")
         );
+        report_battery(r, cycles);
         let errors: Vec<&Diagnostics> = cycles.iter().filter(|cy| cy.error.is_some()).collect();
         if !errors.is_empty() {
             let _ = writeln!(r.text, "    {} cycles with errors:", errors.len());
@@ -192,6 +193,41 @@ pub(super) fn report_tag(
         );
     }
     let _ = writeln!(r.text);
+}
+
+/// The last reading, with the first one's values to show the trend
+fn report_battery(r: &mut Report, cycles: &[Diagnostics]) {
+    let readings: Vec<&Battery> = cycles
+        .iter()
+        .filter_map(|cy| cy.battery.as_ref()?.as_ref())
+        .collect();
+    let failed = cycles
+        .iter()
+        .filter(|cy| matches!(cy.battery, Some(None)))
+        .count();
+    let mut line = match (readings.first(), readings.last()) {
+        (Some(first), Some(last)) => {
+            let mut line = format!("battery {} mV (from {})", last.mv, first.mv);
+            if let (Some(first), Some(last)) = (first.level, last.level) {
+                let _ = write!(line, ", {last:.1}% (from {first:.1})");
+            }
+            if let Some(rate) = last.rate {
+                let _ = write!(line, ", {rate:.1}%/h");
+            }
+            let usb = readings.iter().filter(|b| b.usb.is_some()).count();
+            if usb > 0 {
+                let on = readings.iter().filter(|b| b.usb == Some(true)).count();
+                let _ = write!(line, ", on USB in {on} of {usb}");
+            }
+            line
+        }
+        _ if failed > 0 => "battery not read".to_string(),
+        _ => return,
+    };
+    if failed > 0 {
+        let _ = write!(line, "; failed reads: {failed}");
+    }
+    let _ = writeln!(r.text, "    {line}");
 }
 
 /// With `--board`: the board runs the commit under test, publishes about

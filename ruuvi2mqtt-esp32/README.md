@@ -5,16 +5,16 @@ readings over Wi-Fi to an MQTT broker. The topics and payloads are the same as
 the `ruuvi2mqtt` app's.
 
 By default, the firmware scans BLE all the time and stays connected to Wi-Fi and
-MQTT, for a board on mains power. A cycle is one scan, which lasts
-`BLE_SCAN_DURATION` (60 s by default). As the next scan runs, the board
-publishes each tag heard in the cycle once, with its latest reading.
+MQTT. A cycle is one scan, which lasts `BLE_SCAN_DURATION` (60 s by default). As
+the next scan runs, the board publishes each tag heard in the cycle once, with
+its latest reading.
 
-For a board on a battery, `BLE_SCAN_MODE=deep-sleep` runs one cycle per wake.
-The board scans BLE while it connects to Wi-Fi, publishes the latest reading of
-each tag it heard, and then deep sleeps with the CPU, the radios and the main
-RAM powered off. On wake, the chip reboots. With the defaults, a 5 s scan and a
-60 s sleep, the board is awake about 7 s of each 67 s cycle. That draws roughly
-a tenth of the current of staying awake.
+`BLE_SCAN_MODE=deep-sleep` saves power by running one cycle per wake. The board
+scans BLE while it connects to Wi-Fi, publishes the latest reading of each tag
+it heard, and then deep sleeps with the CPU, the radios and the main RAM powered
+off. On wake, the chip reboots. With the defaults, a 5 s scan and a 60 s sleep,
+the board is awake about 7 s of each 67 s cycle. That draws roughly a tenth of
+the current of staying awake.
 
 After the first connection, the firmware caches the Wi-Fi channel and BSSID in
 NVS flash. Later boots connect without scanning all channels, which saves a few
@@ -110,6 +110,10 @@ Environment variables set the configuration at compile time.
 | `BLE_SLEEP_DURATION` | —                   | `60`                 | Deep sleep between cycles in seconds. Scanning continuously, how long the board waits awake after a failure before it restarts. After a cycle timeout, it waits a cycle longer and restarts only if no cycle succeeds meanwhile |
 | `USB_STAY_AWAKE`     | —                   | `true`               | Deep-sleep mode only: `false` deep sleeps even with a computer on USB. See [Build & flash](#build--flash)                                                                                                                       |
 | `ANTENNA`            | —                   | _(unset)_            | Seeed XIAO ESP32-C6 only, and needed there: `internal` or `external` antenna. See [Antenna](#antenna)                                                                                                                           |
+| `BATTERY`            | —                   | _(unset)_            | `max17048` or `m5pm1`. See [Battery](#battery)                                                                                                                                                                                  |
+| `BATTERY_SDA`        | —                   | —                    | Battery gauge's I2C data pin. Required with `BATTERY`                                                                                                                                                                           |
+| `BATTERY_SCL`        | —                   | —                    | Battery gauge's I2C clock pin. Required with `BATTERY`                                                                                                                                                                          |
+| `BATTERY_POWER_GPIO` | —                   | —                    | Pin that powers the battery gauge's I2C bus when high                                                                                                                                                                           |
 | `LED_MODE`           | —                   | `on` with `LED_GPIO` | `on`, `errors` or `off`. Without `LED_GPIO`, the LED is left alone. See [LED](#led)                                                                                                                                             |
 | `LED_TYPE`           | —                   | `ws2812`             | `ws2812` or `gpio`                                                                                                                                                                                                              |
 | `LED_ACTIVE_LOW`     | —                   | `false`              | `true` for a `gpio` LED that lights when its pin is low                                                                                                                                                                         |
@@ -119,7 +123,8 @@ Environment variables set the configuration at compile time.
 | `LOG_LEVEL`          | —                   | `info`               | Log level for the firmware's own code. Library code logs at `info` at most                                                                                                                                                      |
 
 These can be set in the environment, in `.envrc` (with direnv), or in per-device
-configuration files (see below).
+configuration files (see below). [boards.md](boards.md) lists the settings of
+known boards.
 
 An empty `WIFI_SSID`, `WIFI_PASS`, `MQTT_SERVER`, `MQTT_USER` or `MQTT_PASSWORD`
 fails the build, as it is more likely a failed secret lookup than a choice. For
@@ -137,21 +142,6 @@ published its readings and scanned without errors. In the deep-sleep mode, a
 failed cycle sleeps right away, so the blinks show in the next wake. `errors`
 keeps the LED dark except for the blinks, for rooms where a glow would disturb.
 
-#### Known board LED configurations
-
-| Board                                  | `LED_TYPE`                    | `LED_GPIO`        |
-| -------------------------------------- | ----------------------------- | ----------------- |
-| Adafruit ESP32-C6 Feather              | `ws2812`, `LED_POWER_GPIO=20` | `9`               |
-| Beetle ESP32 C6 Mini (DFRobot DFR1117) | `gpio`                        | `15`              |
-| ESP32-C5-DevKitC-1                     | `ws2812`                      | `27`              |
-| ESP32-C6-DevKitC-1                     | `ws2812`                      | `8`               |
-| ESP32-CAM (AI-Thinker)                 | `gpio`, `LED_ACTIVE_LOW=true` | `33`              |
-| ESP32-S3 AI Camera (DFRobot DFR1154)   | `gpio`                        | `3`               |
-| ESP32-S3-DevKitC-1                     | `ws2812`                      | `38` (v1.0: `48`) |
-| M5Stack NanoC6                         | `ws2812`, `LED_POWER_GPIO=19` | `20`              |
-| M5Stack StickS3                        | _(no LED)_                    | —                 |
-| Seeed XIAO ESP32-C6                    | `gpio`, `LED_ACTIVE_LOW=true` | `15`              |
-
 #### Antenna
 
 The Seeed XIAO ESP32-C6 has an RF switch between its ceramic antenna and a U.FL
@@ -164,6 +154,21 @@ Other boards use those pins for other things, so the build fails if `ANTENNA` is
 set for any chip but the ESP32-C6.
 
 [xiao-c6]: https://wiki.seeedstudio.com/xiao_esp32c6_getting_started/
+
+#### Battery
+
+`BATTERY` names the battery gauge. The firmware reads it each cycle.
+`BATTERY_SDA` and `BATTERY_SCL` are its I2C pins.
+
+- `max17048`: the MAX17048 fuel gauge. It reports the voltage, the level and the
+  level's rate of change. Without a battery, its readings are wrong.
+- `m5pm1`: M5Stack's M5PM1 power chip. It reports the voltage, and whether USB
+  powers the board. It has no charging status, so on USB the battery counts as
+  full from 4.15 V, also while the charger tops it up.
+
+Some boards power the I2C bus from a pin. Set it with `BATTERY_POWER_GPIO`. The
+firmware turns it on for the read and off afterwards. If `LED_POWER_GPIO` is the
+same pin, it stays on.
 
 ---
 
@@ -281,6 +286,12 @@ the minute's range and its reports per minute. The names come from the Home
 Assistant discovery configs that the app keeps retained on the broker. A tag
 without a config shows its MAC.
 
+With `BATTERY`, the page also shows the [battery](#battery), and whether it is
+charging, full or draining. If the gauge gives no level, the page estimates one
+from the voltage, but only on battery power, since charging raises the voltage.
+The battery is fair below 20 % and poor below 10 %, unless it is charging. It
+doesn't count in the verdict.
+
 `/api/status` returns the same data as JSON, for scripts. `?tags=<mac>,<mac>`
 sets the targets, with the MACs written as in the topics.
 
@@ -296,6 +307,13 @@ sets the targets, with the MACs written as in the topics.
   "problems": [{ "grade": "fair", "text": "Bedroom: -86 dBm" }],
   "wifi": { "rssi": -61, "channel": 6, "drops": 0, "grade": "good" },
   "publishing": { "cycles": 12, "failed": 0, "grade": "good" },
+  "battery": {
+    "mv": 3900,
+    "level": 81.5,
+    "rate": -1.0,
+    "state": "discharging",
+    "grade": "good"
+  },
   "tags": [
     {
       "mac": "aabbccddee01",
@@ -329,7 +347,8 @@ The board is a device in Home Assistant, with sensors from its
 [diagnostics](#diagnostics). Scanning continuously, its [status](#status) is a
 connectivity sensor, and the device links to the status page. In deep sleep, the
 sensors expire after three cycles without diagnostics. The Tags heard sensor
-counts the cycle's tags, with `tags` as its attributes.
+counts the cycle's tags, with `tags` as its attributes. With `BATTERY`, the
+battery has sensors too.
 
 ---
 
@@ -357,6 +376,7 @@ and when, so a missed tag can be traced to range or to the radio.
   "wifi_bssid": "021122334455",
   "wifi_cache": "hit",
   "free_heap": 151000,
+  "battery": { "mv": 3900, "level": 81.5, "rate": -1.0 },
   "scan_start_ms": 180,
   "scan_end_ms": 5190,
   "wifi_ms": 1450,
@@ -384,6 +404,7 @@ and when, so a missed tag can be traced to range or to the radio.
 | `wifi_rssi`, `wifi_channel`, `wifi_bssid`               | The access point's signal (dBm), channel and BSSID, which roaming changes                                                                                                                             |
 | `wifi_cache`                                            | `hit`: connected with the cached channel and BSSID. `miss`: nothing cached. `stale`: the cached values failed, so the board scanned. When scanning continuously, from the first connection after boot |
 | `free_heap`                                             | Free heap in bytes                                                                                                                                                                                    |
+| `battery`                                               | With `BATTERY`: `mv`, and `level` (%), `rate` (%/h, positive while charging) and `usb` if the gauge has them. `null` when the read failed                                                             |
 | `scan_start_ms`, `scan_end_ms`                          | When the BLE scan started and finished                                                                                                                                                                |
 | `wifi_ms`, `mqtt_ms`                                    | When Wi-Fi and the broker connection were up. When scanning continuously, `0` if they were up all along                                                                                               |
 | `cycle_ms`                                              | When the message was built                                                                                                                                                                            |

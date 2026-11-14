@@ -88,6 +88,30 @@ function bar(rssi, min, max) {
   return b;
 }
 
+const STATES = { charging: "Charging", full: "Full", discharging: "Draining" };
+
+function battery(b) {
+  if (!b) {
+    const row = el("div", "row none");
+    row.append(el("div", "name", "Battery"), el("div", "nums", "no reading"));
+    return row;
+  }
+  const row = el("div", "row " + b.grade);
+  let nums = (b.mv / 1000).toFixed(2) + " V";
+  if (b.level != null) nums += " · " + Math.round(b.level) + " %";
+  else if (b.estimated_level != null) nums += " · ~" + b.estimated_level + " %";
+  row.append(el("div", "name", "Battery"), el("div", "nums", nums));
+  const detail = [];
+  if (b.state) detail.push(STATES[b.state] + (b.rate ? " " + Math.abs(b.rate) + " %/h" : ""));
+  if (b.usb != null) detail.push(b.usb ? "on USB" : "on battery");
+  if (b.grade !== "good") detail.push("low");
+  if (detail.length) {
+    const text = detail.join(", ");
+    row.append(el("div", "detail", text[0].toUpperCase() + text.slice(1)));
+  }
+  return row;
+}
+
 function ago(s) { return s < 2 ? "just now" : s + " s ago"; }
 
 function render(r) {
@@ -120,7 +144,9 @@ function render(r) {
   p.append(el("div", "name", "Publishing"), el("div", "nums", !cycles ? "not yet"
     : r.publishing.failed ? r.publishing.failed + " of " + cycles + " failed"
     : cycles + (cycles === 1 ? " cycle" : " cycles")));
-  document.getElementById("board").replaceChildren(w, p);
+  const rows = [w, p];
+  if (r.battery !== undefined) rows.push(battery(r.battery));
+  document.getElementById("board").replaceChildren(...rows);
 
   const list = document.getElementById("tags");
   if (!r.tags.length) list.replaceChildren(el("div", "empty", "No Ruuvi tags heard yet"));

@@ -1,5 +1,6 @@
 use serde::Serialize;
 
+use crate::battery::Battery;
 use crate::mac::Mac;
 use crate::scan::ScanStats;
 
@@ -29,6 +30,10 @@ pub struct Diagnostics<'a> {
     pub wifi_bssid: Option<Mac>,
     pub wifi_cache: CacheUse,
     pub free_heap: u32,
+    /// The reading, null when it failed. Left out without `BATTERY`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[allow(clippy::option_option)]
+    pub battery: Option<Option<Battery>>,
     pub scan_start_ms: u32,
     pub scan_end_ms: u32,
     /// When Wi-Fi was up.
@@ -101,6 +106,7 @@ mod tests {
             wifi_bssid: Some(Mac([0x02, 0x11, 0x22, 0x33, 0x44, 0x55])),
             wifi_cache: CacheUse::Hit,
             free_heap: 151_000,
+            battery: None,
             scan_start_ms: 180,
             scan_end_ms: 5190,
             wifi_ms: 1450,
@@ -134,6 +140,17 @@ mod tests {
     }
 
     #[test]
+    fn json_with_a_battery() {
+        let diagnostics = Diagnostics {
+            battery: Some(Battery::m5pm1(4012u16.to_le_bytes(), 0u16.to_le_bytes())),
+            ..diagnostics(ScanStats::default())
+        };
+        assert!(diagnostics.to_json().contains(
+            r#""free_heap":151000,"battery":{"mv":4012,"usb":false},"scan_start_ms":180,"#
+        ));
+    }
+
+    #[test]
     fn json_with_an_error_and_all_settings() {
         let diagnostics = Diagnostics {
             settings: Settings {
@@ -145,6 +162,7 @@ mod tests {
             wifi_channel: None,
             wifi_bssid: None,
             wifi_cache: CacheUse::Stale,
+            battery: Some(None),
             error: Some("BLE scan thread panicked".into()),
             ..diagnostics(ScanStats::default())
         };
@@ -155,6 +173,7 @@ mod tests {
         assert!(json.contains(
             r#""wifi_rssi":null,"wifi_channel":null,"wifi_bssid":null,"wifi_cache":"stale","#
         ));
+        assert!(json.contains(r#""free_heap":151000,"battery":null,"#));
         assert!(json.contains(r#""tags":{},"#));
         assert!(json.ends_with(r#","error":"BLE scan thread panicked"}"#));
     }

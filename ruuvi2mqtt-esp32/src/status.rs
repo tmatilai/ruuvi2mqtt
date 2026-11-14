@@ -6,6 +6,7 @@ use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
 use serde::{Deserialize, Serialize};
 
+use crate::battery::{Battery, State};
 use crate::mac::Mac;
 
 /// The report covers the last minute.
@@ -90,6 +91,9 @@ pub struct Board<'a> {
     pub cycles: u32,
     pub cycles_failed: u32,
     pub last_cycle_failed: bool,
+    /// The last cycle's reading, as in the diagnostics.
+    #[allow(clippy::option_option)]
+    pub battery: Option<Option<Battery>>,
 }
 
 /// The JSON of `/api/status`.
@@ -109,9 +113,46 @@ pub struct Report<'a> {
     pub problems: Vec<Problem>,
     pub wifi: Wifi,
     pub publishing: Publishing,
+    /// With `BATTERY`. `null` before the first cycle and when its read failed.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[allow(clippy::option_option)]
+    pub battery: Option<Option<BatteryStatus>>,
     /// The target tags first, then the others by name. A tag in the
     /// discovery configs is listed even when not heard.
     pub tags: Vec<Tag>,
+}
+
+/// The reading, and what it means.
+#[derive(Debug, Serialize)]
+pub struct BatteryStatus {
+    #[serde(flatten)]
+    pub reading: Battery,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub state: Option<State>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub estimated_level: Option<f32>,
+    /// Fair below 20 %, poor below 10 %, unless charging. Not in the verdict,
+    /// since it says nothing about the spot.
+    pub grade: Grade,
+}
+
+impl BatteryStatus {
+    fn new(reading: Battery) -> Self {
+        let state = reading.state();
+        let estimated_level = reading.estimated_level();
+        let grade = match (state, reading.level.or(estimated_level)) {
+            (Some(State::Charging | State::Full), _) | (_, None) => Grade::Good,
+            (_, Some(level)) if level < 10.0 => Grade::Poor,
+            (_, Some(level)) if level < 20.0 => Grade::Fair,
+            _ => Grade::Good,
+        };
+        Self {
+            reading,
+            state,
+            estimated_level,
+            grade,
+        }
+    }
 }
 
 #[derive(Debug, PartialEq, Eq, Serialize)]
@@ -301,6 +342,7 @@ impl Live {
             problems,
             wifi,
             publishing,
+            battery: board.battery.map(|b| b.map(BatteryStatus::new)),
             tags,
         }
     }
@@ -441,6 +483,7 @@ mod tests {
             cycles: 12,
             cycles_failed: 0,
             last_cycle_failed: false,
+            battery: None,
         }
     }
 
@@ -613,6 +656,39 @@ mod tests {
                 r#""rssi":null,"rssi_min":null,"rssi_max":null,"last_heard_s":null,"grade":"poor"}]}"#
             )
         );
+    }
+
+    #[test]
+    fn json_with_a_battery() {
+        let battery = Battery::m5pm1(4012u16.to_le_bytes(), 0u16.to_le_bytes());
+        let board = Board {
+            battery: Some(battery),
+            ..board(120_000)
+        };
+        let json = serde_json::to_string(&Live::new().report(&board, &[])).unwrap();
+        assert!(json.contains(concat!(
+            r#""battery":{"mv":4012,"usb":false,"state":"discharging","#,
+            r#""estimated_level":79.0,"grade":"good"},"tags""#
+        )));
+        let board = Board {
+            battery: Some(None),
+            ..board
+        };
+        let json = serde_json::to_string(&Live::new().report(&board, &[])).unwrap();
+        assert!(json.contains(r#""battery":null,"#));
+    }
+
+    #[test]
+    fn battery_grade() {
+        let grade = |mv: u16, usb: bool| {
+            let vin: u16 = if usb { 5100 } else { 0 };
+            BatteryStatus::new(Battery::m5pm1(mv.to_le_bytes(), vin.to_le_bytes()).unwrap()).grade
+        };
+        assert_eq!(grade(3800, false), Grade::Good);
+        assert_eq!(grade(3720, false), Grade::Fair);
+        assert_eq!(grade(3650, false), Grade::Poor);
+        // Charging, it will fill up.
+        assert_eq!(grade(3650, true), Grade::Good);
     }
 
     #[test]

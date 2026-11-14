@@ -517,6 +517,64 @@ fn board_is_reported_and_not_a_duplicate() {
 }
 
 #[test]
+fn board_battery_is_reported() {
+    let mut w = watch();
+    for (n, battery) in [
+        r#"{"mv":4100,"level":90.0,"rate":-1.04}"#,
+        "null",
+        r#"{"mv":4080,"level":89.5,"rate":-1.25}"#,
+    ]
+    .iter()
+    .enumerate()
+    {
+        let payload = diagnostics("1.5.2-dev (abcdef0)", 10 + n as u64, "{}").replace(
+            r#""free_heap""#,
+            &format!(r#""battery":{battery},"free_heap""#),
+        );
+        w.on_message(
+            secs(60 * (n as u64 + 1)),
+            "ruuvi2mqtt/diagnostics/c6-board",
+            payload.as_bytes(),
+            false,
+        );
+    }
+    let report = w.finish(Duration::from_mins(5));
+    assert!(
+        report.text.contains(
+            "\n    battery 4080 mV (from 4100), 89.5% (from 90.0), -1.2%/h; failed reads: 1\n"
+        ),
+        "{}",
+        report.text
+    );
+}
+
+#[test]
+fn board_usb_is_reported() {
+    let mut w = watch();
+    for (n, usb) in [true, false, false].iter().enumerate() {
+        let battery = format!(r#"{{"mv":{},"usb":{usb}}}"#, 4100 - n * 10);
+        let payload = diagnostics("1.5.2-dev (abcdef0)", 10 + n as u64, "{}").replace(
+            r#""free_heap""#,
+            &format!(r#""battery":{battery},"free_heap""#),
+        );
+        w.on_message(
+            secs(60 * (n as u64 + 1)),
+            "ruuvi2mqtt/diagnostics/c6-board",
+            payload.as_bytes(),
+            false,
+        );
+    }
+    let report = w.finish(Duration::from_mins(5));
+    assert!(
+        report
+            .text
+            .contains("\n    battery 4080 mV (from 4100), on USB in 1 of 3\n"),
+        "{}",
+        report.text
+    );
+}
+
+#[test]
 fn checked_board_passes() {
     let mut w = watch_board();
     with_board(&mut w, 15, "1.5.2-dev (6534f11)");

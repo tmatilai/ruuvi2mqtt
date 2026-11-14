@@ -15,14 +15,21 @@
 # Device hostname (DHCP and mDNS name, default MQTT client ID)
 # export DEVICE_HOSTNAME = ruuvi2mqtt-kitchen
 
+# The board's own settings: see boards.md.
+
 # Antenna, Seeed XIAO ESP32-C6 only: "internal" or "external". A XIAO needs it.
 # export ANTENNA = internal
 
 # LED mode: "on" (the default with LED_GPIO), "errors" or "off".
-# See README for known board LED configurations.
 # export LED_MODE = off
 # export LED_TYPE = gpio
 # export LED_ACTIVE_LOW = true
 # export LED_GPIO = 15
 # export LED_POWER_GPIO = 19
 # export LED_COLOR = 000020
+
+# Battery gauge: "max17048" or "m5pm1", its I2C pins and their power pin.
+# export BATTERY = max17048
+# export BATTERY_SDA = 19
+# export BATTERY_SCL = 18
+# export BATTERY_POWER_GPIO = 20

@@ -4,6 +4,7 @@
 
 #### Features
 
+- Add `BATTERY` to report the battery from a MAX17048 fuel gauge or an M5PM1 power chip.
 - Add `LED_POWER_GPIO` for boards that switch the LED's power.
 
 #### Fixes

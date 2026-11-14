@@ -1,6 +1,7 @@
 //! Pure-Rust modules with no ESP-IDF dependencies, so their unit tests run
 //! on the host (`make test`).
 
+pub mod battery;
 pub mod diagnostics;
 pub mod homeassistant;
 pub mod led_pattern;
