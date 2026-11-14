@@ -1,0 +1,4 @@
+# The boards' configs are local. Only the examples are committed.
+*
+!.gitignore
+!*.example

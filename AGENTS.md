@@ -43,8 +43,8 @@ Commands: `make -C ruuvi2mqtt-esp32 lint|test|build`. The firmware build needs
 the ESP toolchain (`make setup`); CI builds it for ESP32-C5, ESP32-C6 and
 ESP32-S3.
 
-Attached boards: `make boards` lists them, `make flash DEVICE=<name>` flashes
-one, and `make log DEVICE=<name> SECS=70` prints its serial output.
+Attached boards: `make boards` lists them, `make flash BOARD=<name>` flashes
+one, and `make log BOARD=<name> SECS=70` prints its serial output.
 `make monitor` is interactive, so don't use it. Identifying an unregistered
 board behind a USB-UART bridge resets it, so ask before touching boards that may
 be running tests.
@@ -73,9 +73,9 @@ it.
 ESP32 firmware, not a workspace member. It shares the firmware's
 `.cargo/config.toml` and `rust-toolchain.toml` through symlinks, pins the same
 crate versions, and finds its board with the firmware's `boards.sh`,
-`devices/devices.conf` and `devices/<name>.mk`. `air-simulator/README.md` lists
-its advertising sets. `src/lib.rs` has the pure-Rust part, with unit tests on
-the host.
+`boards/boards.conf` and `boards/<name>.mk`. `air-simulator/README.md` lists its
+advertising sets. `src/lib.rs` has the pure-Rust part, with unit tests on the
+host.
 
 Commands: `make -C air-simulator lint|test|build|flash|log CHIP=<chip>`.
 
@@ -111,8 +111,8 @@ Use one term per thing, in the docs, the comments and the commit messages.
 - **the continuous mode** and **the deep-sleep mode**: the firmware's two
   `BLE_SCAN_MODE` values.
 - **sensor** and **device**: a Home Assistant sensor and a Home Assistant
-  device. A setting with another meaning keeps its name, such as `devices` and
-  `DEVICE`.
+  device. A setting with another meaning keeps its name, such as the app's
+  `devices`.
 - **test bed**: instances and boards near real tags, on a broker of their own,
   where the checker runs.
 
@@ -159,6 +159,9 @@ made-up values, such as `AA:BB:CC:DD:EE:01` and `broker.example`.
 - Every user-visible change adds a line to `CHANGELOG.md` in the same commit,
   under Breaking changes, Features or Fixes, in that order. A change to a
   feature that is itself unreleased needs none.
+- A changelog entry names the change, with enough context for a reader to tell
+  whether it affects them. One sentence is usually enough. How the change works
+  and how to migrate belong in the README or in the tool's own messages.
 
 Prettier wraps the Markdown files at 80 columns, except `CHANGELOG.md`, whose
 entries stay on one line. `make fmt-docs` runs it, and `make lint` too.
@@ -174,16 +177,17 @@ entries stay on one line. `make fmt-docs` runs it, and `make lint` too.
 
 ### Commit messages
 
-A commit message states what changed and why in a few plain sentences. It has no
-trailers, such as `Co-Authored-By`.
+A commit message states what changed and why in a few plain sentences. It leaves
+out what was not done, unless a reader would expect it. It has no trailers, such
+as `Co-Authored-By`.
 
 ## Docs to keep in sync
 
 A change to one of these also updates the others:
 
 - A setting: the README that documents it, and its example file,
-  `ruuvi2mqtt.yaml.example` or `devices/device.mk.example`. A setting that
-  depends on the board also goes in `boards.md`.
+  `ruuvi2mqtt.yaml.example` or `boards/board.mk.example`. A setting that depends
+  on the board also goes in `boards.md`.
 - A payload: the READMEs' JSON examples and field tables, and the checker's
   mirrors.
 - A source file: its `//!` header.

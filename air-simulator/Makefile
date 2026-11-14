@@ -1,34 +1,42 @@
-# The board, as in ../ruuvi2mqtt-esp32: DEVICE from the firmware's
-# devices/devices.conf, or the only attached board if it's registered
-# there. Its devices/<name>.mk sets CHIP and the LED. DEVICE= skips the
+# The board, as in ../ruuvi2mqtt-esp32: BOARD from the firmware's
+# boards/boards.conf, or the only attached board if it's registered
+# there. Its boards/<name>.mk sets CHIP and the LED. BOARD= skips the
 # registry. The firmware's boards.sh finds the port, so no target prompts.
-DEVICES := ../ruuvi2mqtt-esp32/devices
-BOARDS = BOARDS_CONF=$(DEVICES)/devices.conf ESPFLASH_PORT='$(ESPFLASH_PORT)' ../ruuvi2mqtt-esp32/boards.sh
-DEVICE_TARGETS := lint build flash monitor log
+BOARDS_DIR := ../ruuvi2mqtt-esp32/boards
+BOARDS_SH = BOARDS_CONF=$(BOARDS_DIR)/boards.conf ESPFLASH_PORT='$(ESPFLASH_PORT)' ../ruuvi2mqtt-esp32/boards.sh
+BOARD_TARGETS := lint build flash monitor log
+
+# DEVICE and devices/ are the old names of BOARD and boards/.
+ifneq ($(origin DEVICE),undefined)
+  $(error DEVICE is now BOARD: use BOARD=$(DEVICE))
+endif
+ifneq ($(wildcard ../ruuvi2mqtt-esp32/devices/devices.conf ../ruuvi2mqtt-esp32/devices/*.mk),)
+  $(error ../ruuvi2mqtt-esp32/devices/ is now ../ruuvi2mqtt-esp32/boards/. Move the files: mv ../ruuvi2mqtt-esp32/devices/*.mk ../ruuvi2mqtt-esp32/boards/; mv ../ruuvi2mqtt-esp32/devices/devices.conf ../ruuvi2mqtt-esp32/boards/boards.conf)
+endif
 PORT_TARGETS := flash monitor log
 
-ifneq ($(filter $(DEVICE_TARGETS),$(MAKECMDGOALS)),)
-  ifeq ($(origin DEVICE),undefined)
-    ifneq ($(wildcard $(DEVICES)/devices.conf),)
-      DETECTED := $(shell $(BOARDS) detect)
+ifneq ($(filter $(BOARD_TARGETS),$(MAKECMDGOALS)),)
+  ifeq ($(origin BOARD),undefined)
+    ifneq ($(wildcard $(BOARDS_DIR)/boards.conf),)
+      DETECTED := $(shell $(BOARDS_SH) detect)
       ifeq ($(DETECTED),)
         $(error Auto-detection failed, see above)
       endif
-      DEVICE := $(word 1,$(DETECTED))
+      BOARD := $(word 1,$(DETECTED))
       ESPFLASH_PORT := $(word 2,$(DETECTED))
     endif
   endif
-  ifneq ($(DEVICE),)
-    $(info Using device: $(DEVICE))
-    ifeq ($(wildcard $(DEVICES)/$(DEVICE).mk),)
-      $(error Device config '$(DEVICES)/$(DEVICE).mk' not found)
+  ifneq ($(BOARD),)
+    $(info Using board: $(BOARD))
+    ifeq ($(wildcard $(BOARDS_DIR)/$(BOARD).mk),)
+      $(error Board config '$(BOARDS_DIR)/$(BOARD).mk' not found)
     endif
-    include $(DEVICES)/$(DEVICE).mk
+    include $(BOARDS_DIR)/$(BOARD).mk
   endif
 endif
 ifneq ($(filter $(PORT_TARGETS),$(MAKECMDGOALS)),)
   ifeq ($(ESPFLASH_PORT),)
-    ESPFLASH_PORT := $(shell $(BOARDS) $(if $(and $(DEVICE),$(wildcard $(DEVICES)/devices.conf)),port $(DEVICE),only-port))
+    ESPFLASH_PORT := $(shell $(BOARDS_SH) $(if $(and $(BOARD),$(wildcard $(BOARDS_DIR)/boards.conf)),port $(BOARD),only-port))
     ifeq ($(ESPFLASH_PORT),)
       $(error No port for the board, see above)
     endif
@@ -99,11 +107,11 @@ SECS ?= 10
 
 .PHONY: log
 log: ## Print the serial output for SECS seconds, without prompts
-	$(BOARDS) log $(SECS)
+	$(BOARDS_SH) log $(SECS)
 
 .PHONY: boards
 boards: ## List the attached boards (resets unknown ones behind a USB-UART bridge)
-	@$(BOARDS) list
+	@$(BOARDS_SH) list
 
 .PHONY: clean
 clean: ## Remove build artifacts
