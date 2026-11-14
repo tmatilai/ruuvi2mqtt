@@ -90,7 +90,7 @@ printf '%s\n' "$PASSWORD" | target/release/ruuvi2mqtt-checker record \
 Every minute it writes the state file, through a temporary file. Per device, by
 the topic's ID:
 
-- `name`: from the valid discovery configs.
+- `name`: from the tag's discovery configs, on any base topic.
 - `last`: the last reading's time.
 - `max_gap`: the longest time in seconds without a reading in the last hour,
   until now.

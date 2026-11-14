@@ -7,7 +7,7 @@ use std::fmt::Write as _;
 use std::time::Duration;
 
 use crate::diagnostics;
-use crate::payload::{self, device_name, parse_discovery};
+use crate::payload::{self, tag_name};
 use crate::stats::{Mean, count};
 use crate::time;
 use crate::topic::Topic;
@@ -116,10 +116,7 @@ impl Site {
     pub fn on_message(&mut self, topic: &str, payload: &[u8]) {
         match Topic::parse(&self.base_topic, topic) {
             Topic::Discovery { id, entity } => {
-                let name = parse_discovery(payload, &self.base_topic, id, entity)
-                    .as_ref()
-                    .and_then(device_name);
-                if let Some(name) = name {
+                if let Some(name) = tag_name(payload, id, entity) {
                     self.names.insert(id.to_string(), name);
                 }
             }
