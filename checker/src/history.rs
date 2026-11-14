@@ -5,6 +5,7 @@ use std::collections::{BTreeMap, VecDeque};
 
 use serde_json::{Map, Value, json};
 
+use crate::diagnostics::{Battery, parse_battery};
 use crate::payload::printable;
 use crate::site::{Heard, Period, Publisher};
 use crate::stats::Mean;
@@ -23,6 +24,8 @@ pub struct Entry {
     pub client_id: String,
     /// An instance's Bluetooth adapter, from its last minute
     pub adapter: Option<String>,
+    /// A board's battery, from its last cycle. `None` also when the read failed.
+    pub battery: Option<Battery>,
     /// When its last diagnostics came, in Unix seconds
     pub last: u64,
     /// By the bucket's start, oldest first
@@ -36,8 +39,9 @@ impl History {
         };
         let entry = self.entries.entry(printable(name)).or_default();
         entry.client_id = period.client_id().to_string();
-        if let Period::Instance(minute) = &period {
-            entry.adapter = Some(minute.adapter.clone());
+        match &period {
+            Period::Instance(minute) => entry.adapter = Some(minute.adapter.clone()),
+            Period::Board(cycle) => entry.battery = cycle.battery.flatten(),
         }
         entry.last = now;
         let start = now - now % BUCKET;
@@ -105,6 +109,12 @@ impl History {
                 let entry = json!({
                     "client_id": e.client_id,
                     "adapter": e.adapter,
+                    "battery": e.battery.map(|b| json!({
+                        "mv": b.mv,
+                        "level": b.level,
+                        "rate": b.rate,
+                        "usb": b.usb,
+                    })),
                     "last": e.last,
                     "buckets": buckets,
                 });
@@ -124,6 +134,7 @@ impl History {
                 let entry = Entry {
                     client_id: e["client_id"].as_str().map(printable).unwrap_or_default(),
                     adapter: e["adapter"].as_str().map(printable),
+                    battery: parse_battery(e).ok().flatten().flatten(),
                     last: e["last"].as_u64().unwrap_or(0),
                     buckets: e["buckets"]
                         .as_array()
@@ -258,13 +269,19 @@ mod tests {
     fn loads_its_state() {
         let mut h = History::default();
         minute(&mut h, T0 + 60, -71);
-        h.on_diagnostics(T0 + 90, "c6", diagnostics("1.5.2", 3, "{}").as_bytes());
+        let battery = diagnostics("1.5.2", 3, "{}").replace(
+            r#""free_heap""#,
+            r#""battery":{"mv":3950,"level":87.5,"rate":-1.5,"usb":false},"free_heap""#,
+        );
+        h.on_diagnostics(T0 + 90, "c6", battery.as_bytes());
         let state = h.state();
         let loaded = History::load(&state);
         assert_eq!(loaded.state(), state);
         let now = T0 + 120;
         let cell = loaded.window(now, 3600)[HOST1].cell(TAG).unwrap();
         assert_eq!((cell.rssi, cell.heard), (Some(-71), 100));
+        let (_, c6) = loaded.entries().find(|(name, _)| *name == "c6").unwrap();
+        assert_eq!(c6.battery.map(|b| (b.mv, b.usb)), Some((3950, Some(false))));
         assert_eq!(History::load(&Value::Null).entries().count(), 0);
     }
 }

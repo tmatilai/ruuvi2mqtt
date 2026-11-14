@@ -10,6 +10,7 @@ use std::time::Duration;
 use serde_json::{Value, json};
 
 use super::Recorder;
+use crate::diagnostics::Battery;
 use crate::history::DAY;
 use crate::site::{Cell, Grade, Problem, Site, label, plural};
 use crate::time;
@@ -417,7 +418,7 @@ fn boards_section(out: &mut String, r: &Recorder, now: u64, hour: &Site, day: &S
     }
     out.push_str(
         "<h2>Boards</h2>\n<table>\n<tr><th></th><th>Board</th><th>Wi-Fi</th>\
-         <th>Restarts today</th><th>Firmware</th></tr>\n",
+         <th>Restarts today</th><th>Battery</th><th>Firmware</th></tr>\n",
     );
     let entries: BTreeMap<&String, _> = r.history.entries().collect();
     for (name, p) in boards {
@@ -437,13 +438,30 @@ fn boards_section(out: &mut String, r: &Recorder, now: u64, hour: &Site, day: &S
         };
         let _ = writeln!(
             out,
-            "<tr><td>{}</td><td>{board}</td><td>{wifi}</td><td>{}</td><td>{}</td></tr>",
+            "<tr><td>{}</td><td>{board}</td><td>{wifi}</td><td>{}</td><td>{}</td>\
+             <td>{}</td></tr>",
             state(r, now, &entry.client_id, entry.last),
             p.restarts,
+            entry.battery.as_ref().map_or("-".to_string(), battery),
             p.firmware.as_deref().map_or("-".to_string(), esc),
         );
     }
     out.push_str("</table>\n");
+}
+
+/// The voltage, the level from gauges that have it, and whether it charges or
+/// runs on USB
+fn battery(b: &Battery) -> String {
+    let mut out = format!("{} mV", b.mv);
+    if let Some(level) = b.level {
+        let _ = write!(out, ", {level:.0} %");
+    }
+    if b.rate.is_some_and(|rate| rate > 0.0) {
+        out.push_str(", charging");
+    } else if b.usb == Some(true) {
+        out.push_str(", USB");
+    }
+    out
 }
 
 fn instances_section(out: &mut String, r: &Recorder, now: u64, day: &Site) {
@@ -771,17 +789,29 @@ mod tests {
     #[test]
     fn renders_the_boards() {
         let mut r = Recorder::new("ruuvi2mqtt", T0);
-        for (at, cycle) in [(T0, 5), (T0 + 60, 1)] {
+        // The last cycle's battery
+        for (at, cycle, battery) in [
+            (T0, 5, r#"{"mv":4100,"level":95,"rate":null,"usb":true}"#),
+            (
+                T0 + 60,
+                1,
+                r#"{"mv":3950,"level":87.4,"rate":1.2,"usb":true}"#,
+            ),
+        ] {
+            let payload = diagnostics("1.5.2", cycle, "{}").replace(
+                r#""free_heap""#,
+                &format!(r#""battery":{battery},"free_heap""#),
+            );
             r.on_message(
                 at,
                 "ruuvi2mqtt/diagnostics/c6-board",
-                diagnostics("1.5.2", cycle, "{}").as_bytes(),
+                payload.as_bytes(),
                 false,
             );
         }
         let page = r.page(T0 + 600, "Test bed", &[], &Ok(None)).html;
         let row = "<tr><td>🔴</td><td>c6-board</td><td>🟢 -61 dBm</td><td>1</td>\
-                   <td>ruuvi2mqtt-esp32 1.5.2</td></tr>";
+                   <td>3950 mV, 87 %, charging</td><td>ruuvi2mqtt-esp32 1.5.2</td></tr>";
         assert!(page.contains(row), "{row:?} in:\n{page}");
         assert!(!page.contains("<h2>Instances</h2>"));
         // Linked only while its config has a page
@@ -797,6 +827,17 @@ mod tests {
         r.on_message(T0 + 600, topic, board_discovery().as_bytes(), true);
         let page = r.page(T0 + 600, "Test bed", &[], &Ok(None)).html;
         assert!(page.contains("<td>c6-board</td>"));
+    }
+
+    #[test]
+    fn battery_says_usb_when_not_charging() {
+        let b = Battery {
+            mv: 3700,
+            level: None,
+            rate: Some(0.0),
+            usb: Some(true),
+        };
+        assert_eq!(battery(&b), "3700 mV, USB");
     }
 
     #[test]
