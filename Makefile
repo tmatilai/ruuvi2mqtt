@@ -36,7 +36,7 @@ cross: $(ARCHS) ## Build all non-local architectures
 CROSS_VERSION := 0.2.5
 
 # renovate: datasource=npm depName=prettier
-PRETTIER_VERSION := 3.9.10
+PRETTIER_VERSION := 3.10.0
 # CI sets --check.
 PRETTIER_MODE := --write
 
