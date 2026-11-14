@@ -62,38 +62,38 @@ impl Grade {
 /// What the broker sends while the site command listens.
 pub struct Site {
     base_topic: String,
-    /// Tag ID to name, from the discovery configs
+    /// Tag ID to name, from the discovery configs.
     names: BTreeMap<String, String>,
-    /// By the name in their diagnostics topic
+    /// By the name in their diagnostics topic.
     publishers: BTreeMap<String, Publisher>,
 }
 
 #[derive(Clone, Default)]
 pub struct Publisher {
     pub board: bool,
-    /// The diagnostics it sent: an instance's minutes or a board's cycles
+    /// The diagnostics it sent: an instance's minutes or a board's cycles.
     pub periods: u64,
-    /// By tag ID
+    /// By tag ID.
     pub tags: BTreeMap<String, Heard>,
-    /// A board's, from its last cycle
+    /// A board's, from its last cycle.
     pub firmware: Option<String>,
     pub cycle: Option<u32>,
     pub restarts: u64,
     pub wifi_rssi: Mean,
 }
 
-/// The periods that heard a tag, and the mean of their strongest RSSIs
+/// The periods that heard a tag, and the mean of their strongest RSSIs.
 #[derive(Clone, Copy, Default)]
 pub struct Heard {
     pub periods: u64,
     pub rssi: Mean,
 }
 
-/// How well a publisher hears a tag
+/// How well a publisher hears a tag.
 #[derive(Clone, Copy)]
 pub struct Cell {
     pub rssi: Option<i64>,
-    /// Percent of the periods
+    /// Percent of the periods.
     pub heard: u64,
 }
 
@@ -133,7 +133,7 @@ impl Site {
     }
 
     /// A table of `publishers`, by the name in their diagnostics topic, and of
-    /// the named tags
+    /// the named tags.
     pub fn from_parts(
         names: BTreeMap<String, String>,
         publishers: BTreeMap<String, Publisher>,
@@ -149,21 +149,21 @@ impl Site {
         self.publishers.is_empty()
     }
 
-    /// The publishers, instances first
+    /// The publishers, instances first.
     pub fn columns(&self) -> Vec<(&String, &Publisher)> {
         let mut columns: Vec<(&String, &Publisher)> = self.publishers.iter().collect();
         columns.sort_by_key(|(_, p)| p.board);
         columns
     }
 
-    /// The tags with a name: (ID, name), by name
+    /// The tags with a name: (ID, name), by name.
     pub fn rows(&self) -> Vec<(&String, &String)> {
         let mut rows: Vec<(&String, &String)> = self.names.iter().collect();
         rows.sort_by_key(|(id, name)| (*name, *id));
         rows
     }
 
-    /// The table with only the tags that `keep` takes
+    /// The table with only the tags that `keep` takes.
     pub fn with_tags(&self, keep: impl Fn(&str) -> bool) -> Self {
         Self {
             base_topic: self.base_topic.clone(),
@@ -264,7 +264,7 @@ impl Site {
         out
     }
 
-    /// The tags heard that have no discovery config, such as a neighbor's
+    /// The tags heard that have no discovery config, such as a neighbor's.
     pub fn other_tags(&self) -> usize {
         let heard: BTreeSet<&String> = self
             .publishers
@@ -278,19 +278,19 @@ impl Site {
     }
 }
 
-/// A problem of the site table or the status page
+/// A problem of the site table or the status page.
 #[derive(Clone, Debug)]
 pub struct Problem {
     pub grade: Grade,
-    /// Stays the same while the problem lasts, unlike the values in the text
+    /// Stays the same while the problem lasts, unlike the values in the text.
     pub key: String,
     pub text: String,
     /// The test bed's own, to notify of. A tag's own, such as a low battery,
     /// is left to the tags' alerts.
     pub notify: bool,
-    /// By the name in its diagnostics topic
+    /// By the name in its diagnostics topic.
     pub publisher: Option<String>,
-    /// By the tag's ID
+    /// By the tag's ID.
     pub tag: Option<String>,
 }
 
@@ -322,7 +322,7 @@ impl Problem {
     }
 }
 
-/// The coverage problems, worst first
+/// The coverage problems, worst first.
 fn problems(columns: &[(&String, &Publisher)], rows: &[(&String, &String)]) -> Vec<Problem> {
     let mut problems = Vec::new();
     let mut unheard = Vec::new();
@@ -366,7 +366,7 @@ fn problems(columns: &[(&String, &Publisher)], rows: &[(&String, &String)]) -> V
 
     let firmwares = count(columns.iter().filter_map(|(_, p)| p.firmware.as_deref()));
     let n: usize = firmwares.values().sum();
-    // Without a majority, no board stands out
+    // Without a majority, no board stands out.
     let common = firmwares.iter().find(|(_, k)| **k * 2 > n).map(|(f, _)| *f);
     for (topic_name, p) in columns.iter().filter(|(_, p)| p.board) {
         let name = label(topic_name);
@@ -389,7 +389,7 @@ fn problems(columns: &[(&String, &Publisher)], rows: &[(&String, &String)]) -> V
         if let Some(rssi) = p.wifi_rssi.get() {
             let grade = Grade::wifi(rssi);
             if grade > Grade::Good {
-                // A fair signal only retries now and then
+                // A fair signal only retries now and then.
                 let wifi = problem(grade, "wifi", format!("Wi-Fi {rssi} dBm"));
                 problems.push(wifi.notify(grade == Grade::Poor));
             }
@@ -467,11 +467,11 @@ impl Publisher {
     }
 
     fn board_cycle(&mut self, cycle: &diagnostics::Diagnostics) {
-        // A QoS 1 message can arrive twice
+        // A QoS 1 message can arrive twice.
         if self.cycle == Some(cycle.cycle) {
             return;
         }
-        // The counter restarts on a cold boot or a crash
+        // The counter restarts on a cold boot or a crash.
         if self.cycle.is_some_and(|last| cycle.cycle < last) {
             self.restarts += 1;
         }
@@ -491,14 +491,14 @@ impl Publisher {
     }
 }
 
-/// `!-93 40%`: the grade's mark, the RSSI, and the share heard
+/// `!-93 40%`: the grade's mark, the RSSI, and the share heard.
 fn cell_text(cell: Cell) -> String {
     let rssi = cell.rssi.map_or("?".to_string(), |r| r.to_string());
     format!("{}{rssi} {}%", cell.grade().mark(), cell.heard)
 }
 
 /// A publisher's name without the `ruuvi2mqtt_` or `ruuvi2mqtt-` that most
-/// have
+/// have.
 pub fn label(name: &str) -> &str {
     name.strip_prefix("ruuvi2mqtt")
         .and_then(|rest| rest.strip_prefix(['_', '-']))
@@ -506,7 +506,7 @@ pub fn label(name: &str) -> &str {
         .unwrap_or(name)
 }
 
-/// `1 board`, `2 boards`
+/// `1 board`, `2 boards`.
 pub fn plural(n: usize, word: &str) -> String {
     if n == 1 {
         format!("{n} {word}")
@@ -586,7 +586,7 @@ mod tests {
                 ),
             );
         }
-        // Sent again, then a restart
+        // Sent again, then a restart.
         cycle(&mut site, 4, "{}");
         cycle(&mut site, 1, "{}");
         assert_eq!(

@@ -1,32 +1,29 @@
 # Ruuvi2MQTT
 
 Ruuvi2MQTT listens for the BLE broadcasts of
-[RuuviTag](https://ruuvi.com/ruuvitag/) and [Ruuvi Air](https://ruuvi.com/air/)
-sensors and publishes their readings over MQTT, especially for
-[Home Assistant](https://www.home-assistant.io/) with
+[RuuviTags](https://ruuvi.com/ruuvitag/) and
+[Ruuvi Airs](https://ruuvi.com/air/) and publishes their readings over MQTT,
+especially for [Home Assistant](https://www.home-assistant.io/) with
 [MQTT Discovery](https://www.home-assistant.io/docs/mqtt/discovery/).
 
 It has two parts:
 
-- The app, documented here. It also publishes the Home Assistant discovery
+- The app, documented here. It also publishes the tags' Home Assistant discovery
   configs.
-- The [ESP32 firmware](./ruuvi2mqtt-esp32/), which publishes the readings only.
+- The [ESP32 firmware](./ruuvi2mqtt-esp32/), which publishes the readings but
+  not the tags' discovery configs.
 
-Many other projects bring Ruuvi sensors into Home Assistant. This one runs
-several receivers side by side, to cover sensors that a single receiver can't
-hear.
-
----
+Many other projects bring Ruuvi tags into Home Assistant. This one runs on
+several hosts and ESP32 boards side by side, to cover the tags that a single one
+can't hear.
 
 ## Requirements
 
-Release builds are for Linux on amd64, arm64 and armv7 (e.g. a Raspberry Pi),
-with BlueZ. It also runs on macOS, e.g. for development. macOS hides the
-sender's MAC address, so there the app only matches readings whose payload
-carries the full MAC, such as data format 5. Other platforms that
+Release builds are for Linux on amd64, arm64 and armv7 (such as a Raspberry Pi),
+with BlueZ. It also runs on macOS, for development. macOS hides the sender's MAC
+address, so there the app only matches readings whose payload carries the full
+MAC, such as data format 5. Other platforms that
 [btleplug](https://github.com/deviceplug/btleplug) supports are untested.
-
----
 
 ## Usage
 
@@ -47,7 +44,7 @@ password, but a password needs a username.
 
 Example command to run in a Docker container:
 
-```bash
+```sh
 docker run --name ruuvi2mqtt -d --restart=unless-stopped \
     -v /run/dbus/system_bus_socket:/run/dbus/system_bus_socket \
     -v "$PWD/ruuvi2mqtt.yaml:/ruuvi2mqtt.yaml" \
@@ -56,13 +53,13 @@ docker run --name ruuvi2mqtt -d --restart=unless-stopped \
 ```
 
 The container runs as uid 65534 (`nobody`), so the mounted configuration file
-must be readable by that user, e.g. `chown 65534 ruuvi2mqtt.yaml`. The host
-needs BlueZ 5.51 or newer for non-root D-Bus access; on older hosts add
+must be readable by that user, for example with `chown 65534 ruuvi2mqtt.yaml`.
+The host needs BlueZ 5.51 or newer for non-root D-Bus access; on older hosts add
 `--user 0`.
 
-The app exits with an error when it loses Bluetooth, e.g. when the adapter goes
-away or BlueZ restarts. Run it under something that restarts it, such as systemd
-with `Restart=on-failure` or Docker with `--restart`.
+The app exits with an error when it loses Bluetooth, such as when the adapter
+goes away or BlueZ restarts. Run it under something that restarts it, such as
+systemd with `Restart=on-failure` or Docker with `--restart`.
 
 ### Ruuvi Air
 
@@ -113,7 +110,7 @@ Once a minute, each instance publishes its diagnostics to
 ```
 
 The counts are for the last minute. `mqtt_reconnects` counts from the start.
-`tags` has each Ruuvi heard, with its strongest RSSI and its readings. BlueZ
+`tags` has each tag heard, with its strongest RSSI and its readings. BlueZ
 passes on an advertisement only when its payload changed, so a tag can have
 fewer readings than an ESP32 counts advertisements. BlueZ after 5.86 reports the
 RSSI only when it changes by 8 dB or more. The instance's Home Assistant device
@@ -136,16 +133,14 @@ Use the same `throttle` on every instance. Different values work, but the
 instance with the shortest one publishes every tag it hears.
 
 An ESP32 doesn't throttle, and doesn't subscribe to the readings: it publishes
-every tag it heard once per cycle. The cycle is `BLE_SCAN_DURATION` when
-scanning continuously (60 s by default), and `BLE_SLEEP_DURATION` plus the awake
-time in the deep-sleep mode. With a `throttle` below that, the tags it hears get
-two messages per cycle, one from the ESP32 and one from an app instance. That is
+every tag it heard once per cycle. The cycle is `BLE_SCAN_DURATION` in the
+continuous mode (60 s by default), and `BLE_SLEEP_DURATION` plus the awake time
+in the deep-sleep mode. With a `throttle` below that, the tags it hears get two
+messages per cycle, one from the ESP32 and one from an app instance. That is
 harmless, but Home Assistant records a new state each time `publisher` changes,
 as it is an attribute. To avoid it, set `throttle` above the ESP32's cycle. The
 ESP32 then publishes the tags it hears, and the app instances fill in when it
 misses one.
-
----
 
 ## Development
 

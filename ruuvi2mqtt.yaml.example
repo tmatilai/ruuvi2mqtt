@@ -1,29 +1,30 @@
 mqtt:
   server: "homeassistant.local"
-  #port: 1883  # Default: 1883 (non-TLS) or 8883 (TLS)
-  # Enable TLS/SSL connection (default: false)
-  # When enabled without ca_file, uses OS certificate store
+  # Default: 1883, or 8883 with TLS.
+  #port: 1883
+  # Connects with TLS (default: false). Without ca_file, the OS certificate
+  # store verifies the broker.
   #tls: true
-  # Optional: Path to custom CA certificate bundle (PEM format)
-  # Use this for self-signed certificates or custom CAs
+  # A PEM CA certificate bundle, for a self-signed certificate or a private CA.
   #ca_file: /path/to/ca-bundle.pem
-  # Skip TLS certificate verification (default: false)
-  # WARNING: Only use for testing — disables all certificate checks
+  # Skips the whole certificate verification (default: false). For testing only.
   #tls_insecure: false
-  # MQTT_USER and MQTT_PASSWORD override these values; empty variables are errors.
-  # Omit either setting here to supply it only through the environment.
+  # MQTT_USER and MQTT_PASSWORD override these two, and an empty variable is an
+  # error. Leave a setting out here to supply it only through the environment.
   user: "ruuvi2mqtt"
   password: "changeme"
   #client_id: "ruuvi2mqtt_<hostname>"
   #base_topic: "ruuvi2mqtt"
-  # Minimum seconds between publishes per tag, shared by all instances (default: 60)
-  # Use the same value on every instance. See README.md for ESP32 setups.
+  # The shortest time between a tag's readings, in seconds, over all the
+  # instances (default: 60). Use the same value on every instance. For ESP32
+  # boards, see README.md.
   #throttle: 60
 
 devices:
   AA:12:BB:34:CC:56:
     name: Ruuvi Indoors
-    # The Home Assistant entities: tag (default, RuuviTag) or air (Ruuvi Air)
+    # The Home Assistant entities: tag (the default, a RuuviTag) or air (a Ruuvi
+    # Air).
     #model: tag
   AB:CD:EF:98:76:54:
     name: Ruuvi Outdoors

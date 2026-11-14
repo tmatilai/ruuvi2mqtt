@@ -1,3 +1,6 @@
+//! Wi-Fi: the connection with the cached access point, the reconnects and the
+//! roaming.
+
 use esp_idf_svc::{
     eventloop::{EspSubscription, EspSystemEventLoop, System},
     hal::modem::Modem,
@@ -21,7 +24,7 @@ use std::time::{Duration, Instant};
 
 use crate::{ble, config, led, system};
 
-/// Connect to Wi-Fi and return the `BlockingWifi` guard, and how the NVS
+/// Connects to Wi-Fi and returns the `BlockingWifi` guard, and how the NVS
 /// cache was used.
 ///
 /// The guard keeps the Wi-Fi driver alive. Dropping it disconnects.
@@ -59,7 +62,7 @@ pub fn connect(
             Mac::from(cache.bssid),
         );
     } else {
-        info!("No WiFi cache — full channel scan");
+        info!("No Wi-Fi cache, so a full channel scan");
     }
 
     wifi.set_configuration(&client_configuration(cached.as_ref()))?;
@@ -68,8 +71,9 @@ pub fn connect(
     set_band()?;
     info!("Connecting to Wi-Fi '{}'...", config::WIFI_SSID);
 
-    // A fast reconnect fails as soon as the driver gives up on the cached AP.
-    // A full scan moves on to the next AP itself, so it waits for the result.
+    // A fast reconnect fails as soon as the driver gives up on the cached
+    // access point. A full scan moves on to the next one itself, so it waits
+    // for the result.
     let result = if cached.is_some() {
         connect_cached(&mut wifi, &events)
     } else {
@@ -132,7 +136,7 @@ pub fn connected_since() -> Option<Instant> {
     *CONNECTED_SINCE.lock().unwrap()
 }
 
-/// Reconnect whenever Wi-Fi drops, and roam, for the continuous mode. Call
+/// Reconnects whenever Wi-Fi drops, and roams, for the continuous mode. Call
 /// after [`connect`], and keep the subscription: dropping it stops both.
 ///
 /// After a drop, the first attempt retries the access point the board was
@@ -239,7 +243,7 @@ pub fn keep_connected(
     Ok(subscription)
 }
 
-/// Give the station an IPv6 address, so that mDNS answers an AAAA query. A
+/// Gives the station an IPv6 address, so that mDNS answers an AAAA query. A
 /// resolver asks for both addresses, and macOS waits 5 s for the missing
 /// answer before it opens the status page. The link-local address is lost
 /// on a disconnect. A router's advertisements add a global one.
@@ -260,14 +264,14 @@ enum Roam {
 /// disconnect doesn't count as a drop.
 static ROAMING: AtomicBool = AtomicBool::new(false);
 
-/// Raise `StaBssRssiLow` once the signal falls below `rssi`.
+/// Raises `StaBssRssiLow` once the signal falls below `rssi`.
 fn set_rssi_threshold(rssi: i8) {
     if let Err(e) = sys::esp!(unsafe { sys::esp_wifi_set_rssi_threshold(rssi.into()) }) {
         log::warn!("Could not set the RSSI threshold: {e}");
     }
 }
 
-/// Let the next connect go straight to this access point. The config goes
+/// Lets the next connect go straight to this access point. The config goes
 /// to NVS flash, so it writes only a change.
 fn pin(bssid: [u8; 6], channel: u8) -> Result<(), sys::EspError> {
     unsafe {
@@ -295,7 +299,7 @@ fn pin(bssid: [u8; 6], channel: u8) -> Result<(), sys::EspError> {
     }
 }
 
-/// Let the next connect pick the strongest access point of the network,
+/// Lets the next connect pick the strongest access point of the network,
 /// instead of the pinned one. See [`pin`].
 fn unpin() -> Result<(), sys::EspError> {
     unsafe {
@@ -326,7 +330,7 @@ fn unpin() -> Result<(), sys::EspError> {
 /// How many access points of the network a scan keeps.
 const MAX_SCANNED: u16 = 16;
 
-/// Scan the network's access points, and leave for a clearly stronger one.
+/// Scans the network's access points, and leaves for a clearly stronger one.
 /// Returns whether the link stays weak without one, so that a later scan
 /// looks again.
 fn scan_for_stronger() -> anyhow::Result<bool> {
@@ -397,7 +401,7 @@ fn scan_for_stronger() -> anyhow::Result<bool> {
     }
 }
 
-/// Set the band to `WIFI_BAND`, or to both on a dual-band chip.
+/// Sets the band to `WIFI_BAND`, or to both on a dual-band chip.
 fn set_band() -> anyhow::Result<()> {
     let (mode, band) = match config::WIFI_BAND {
         Some("2.4") => (sys::wifi_band_mode_t_WIFI_BAND_MODE_2G_ONLY, "2.4"),
@@ -413,14 +417,14 @@ fn set_band() -> anyhow::Result<()> {
     Ok(())
 }
 
-/// How long to wait for the cached AP.
+/// How long to wait for the cached access point.
 const CACHED_CONNECT_TIMEOUT: Duration = Duration::from_secs(15);
 
 /// How long to wait for a connect with a full scan. The DFS channels of
 /// 5 GHz are scanned passively, so a scan of both bands takes about 25 s.
 pub const FULL_SCAN_TIMEOUT_SECS: u32 = if config::WIFI_SCANS_5G { 40 } else { 15 };
 
-/// Connect with a full scan. `BlockingWifi::connect` gives up after 15 s.
+/// Connects with a full scan. `BlockingWifi::connect` gives up after 15 s.
 fn connect_full(wifi: &mut BlockingWifi<EspWifi<'static>>) -> anyhow::Result<()> {
     wifi.wifi_mut().connect()?;
     wifi.wifi_wait_while(
@@ -430,11 +434,11 @@ fn connect_full(wifi: &mut BlockingWifi<EspWifi<'static>>) -> anyhow::Result<()>
     Ok(())
 }
 
-/// Connect to the cached AP, but fail on the first disconnect.
+/// Connects to the cached access point, but fails on the first disconnect.
 ///
 /// `BlockingWifi::connect` waits out its whole timeout after the driver has
-/// given up, e.g. when the cached AP isn't heard. That leaves too little of
-/// the cycle for the full scan.
+/// given up, such as when the cached access point isn't heard. That leaves
+/// too little of the cycle for the full scan.
 fn connect_cached(
     wifi: &mut BlockingWifi<EspWifi<'static>>,
     sysloop: &EspSystemEventLoop,
@@ -472,7 +476,7 @@ fn connect_cached(
     Ok(())
 }
 
-/// Configure static IP on the STA netif, bypassing DHCP.
+/// Configures the static IP on the STA netif, without DHCP.
 fn configure_static_ip(netif: *mut sys::esp_netif_t, ip: &str) -> anyhow::Result<()> {
     let gateway = config::WIFI_GATEWAY.expect("WIFI_GATEWAY must be set when WIFI_IP is set");
     let netmask = config::WIFI_NETMASK.unwrap_or("255.255.255.0");
@@ -508,7 +512,7 @@ fn configure_static_ip(netif: *mut sys::esp_netif_t, ip: &str) -> anyhow::Result
     Ok(())
 }
 
-/// Parse a dotted-decimal IPv4 string into an `esp_ip4_addr_t`.
+/// Parses a dotted-decimal IPv4 string into an `esp_ip4_addr_t`.
 fn str_to_ip4(s: &str) -> sys::esp_ip4_addr_t {
     let cstr = CString::new(s).expect("IP address contains null byte");
     sys::esp_ip4_addr_t {
@@ -517,7 +521,7 @@ fn str_to_ip4(s: &str) -> sys::esp_ip4_addr_t {
 }
 
 // ---------------------------------------------------------------------------
-// NVS WiFi cache — stores channel + BSSID for fast reconnect
+// Wi-Fi cache in NVS
 // ---------------------------------------------------------------------------
 
 struct WifiCache {
@@ -525,7 +529,7 @@ struct WifiCache {
     bssid: [u8; 6],
 }
 
-/// Load cached Wi-Fi channel and BSSID from NVS.
+/// Loads the cached Wi-Fi channel and BSSID from NVS.
 fn load_wifi_cache() -> Option<WifiCache> {
     unsafe {
         let mut handle: sys::nvs_handle_t = 0;
@@ -563,10 +567,11 @@ fn load_wifi_cache() -> Option<WifiCache> {
     }
 }
 
-/// Read current AP info and update NVS cache if channel or BSSID changed.
+/// Reads the access point's info, and updates the NVS cache if the channel or
+/// the BSSID changed.
 fn update_wifi_cache(cached: Option<&WifiCache>) {
     let Some(ap_info) = system::ap_record() else {
-        log::warn!("Could not read AP info for WiFi cache");
+        log::warn!("Could not read the access point's info for the Wi-Fi cache");
         return;
     };
     let channel = ap_info.primary;
@@ -586,7 +591,7 @@ fn update_wifi_cache(cached: Option<&WifiCache>) {
             &raw mut handle,
         ) != sys::ESP_OK
         {
-            log::warn!("Could not open NVS for WiFi cache write");
+            log::warn!("Could not open NVS to write the Wi-Fi cache");
             return;
         }
 
@@ -604,10 +609,10 @@ fn update_wifi_cache(cached: Option<&WifiCache>) {
 
         match result {
             Ok(()) => info!(
-                "WiFi cache updated: channel {channel}, BSSID {}",
+                "Wi-Fi cache updated: channel {channel}, BSSID {}",
                 Mac::from(bssid),
             ),
-            Err(e) => log::warn!("Could not write WiFi cache: {e}"),
+            Err(e) => log::warn!("Could not write the Wi-Fi cache: {e}"),
         }
     }
 }

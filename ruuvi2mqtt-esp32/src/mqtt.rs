@@ -1,3 +1,6 @@
+//! The MQTT client: the connection, the publishes and their acknowledgements,
+//! and the discovery configs.
+
 use std::sync::mpsc::{self, RecvTimeoutError};
 use std::thread;
 use std::time::{Duration, Instant};
@@ -40,7 +43,7 @@ pub struct Mqtt {
 }
 
 impl Mqtt {
-    /// Create the client and start connecting in the background.
+    /// Creates the client and starts to connect in the background.
     ///
     /// Call [`Mqtt::wait_connected`] before publishing. With `discovery`, it
     /// publishes the discovery configs on connect.
@@ -114,7 +117,7 @@ impl Mqtt {
         })
     }
 
-    /// Wait until the broker has accepted the connection, and return when
+    /// Waits until the broker has accepted the connection, and returns when
     /// it did. The client reconnects by itself.
     pub fn wait_connected(&mut self, timeout: Duration) -> anyhow::Result<Instant> {
         self.wait(timeout, |mqtt| mqtt.connected_at.is_some())?;
@@ -122,7 +125,7 @@ impl Mqtt {
             .with_context(|| format!("MQTT connect timed out after {}s", timeout.as_secs()))
     }
 
-    /// Publish `payload` at least once. Acknowledgement is checked in
+    /// Publishes `payload` at least once. Acknowledgement is checked in
     /// [`Mqtt::wait_published`].
     pub fn publish(&mut self, topic: &str, payload: &str) -> anyhow::Result<()> {
         let id = self
@@ -132,7 +135,7 @@ impl Mqtt {
         Ok(())
     }
 
-    /// Wait until the broker has acknowledged all publishes. On a timeout,
+    /// Waits until the broker has acknowledged all publishes. On a timeout,
     /// it stops waiting for them, so that the next wait doesn't.
     pub fn wait_published(&mut self, timeout: Duration) -> anyhow::Result<()> {
         let published = self.wait(timeout, |mqtt| mqtt.pending.is_empty())?;
@@ -145,7 +148,7 @@ impl Mqtt {
         Ok(())
     }
 
-    /// Process events until `done` holds. Returns `false` on timeout.
+    /// Processes the events until `done` holds. Returns `false` on a timeout.
     ///
     /// It takes the queued events first, so that `done` sees the current
     /// state.
@@ -241,7 +244,7 @@ fn discovery_configs(status_topic: &str) -> Vec<(String, String)> {
         },
         battery: config::BATTERY_GAUGE,
     });
-    // Deep sleep has no status. Deletes the one that scanning continuously
+    // Deep sleep has no status. Deletes the one that the continuous mode
     // left, which would stay offline.
     if !config::BLE_SCAN_CONTINUOUS {
         configs.push((status_topic.to_string(), String::new()));
@@ -249,7 +252,8 @@ fn discovery_configs(status_topic: &str) -> Vec<(String, String)> {
     configs
 }
 
-/// Return the embedded CA certificate, if `MQTT_CA_FILE` was set at build time.
+/// Returns the embedded CA certificate, if `MQTT_CA_FILE` was set at build
+/// time.
 fn ca_certificate() -> Option<X509<'static>> {
     #[cfg(not(mqtt_ca_file))]
     {
@@ -262,8 +266,8 @@ fn ca_certificate() -> Option<X509<'static>> {
     }
 }
 
-/// Use the ESP-IDF built-in CA certificate bundle when TLS is enabled
-/// without a custom CA certificate.
+/// Uses ESP-IDF's CA certificate bundle when TLS is on without
+/// `MQTT_CA_FILE`.
 fn crt_bundle_attach(
 ) -> Option<unsafe extern "C" fn(conf: *mut core::ffi::c_void) -> esp_idf_svc::sys::esp_err_t> {
     if config::MQTT_TLS && config::MQTT_CA_FILE.is_none() {
@@ -273,7 +277,7 @@ fn crt_bundle_attach(
     }
 }
 
-/// Drive the MQTT event loop to keep the connection alive, and forward the
+/// Drives the MQTT event loop to keep the connection alive, and forwards the
 /// events [`Mqtt`] waits for.
 fn run_event_loop(mut connection: EspMqttConnection, events: &mpsc::Sender<Event>) {
     while let Ok(event) = connection.next() {

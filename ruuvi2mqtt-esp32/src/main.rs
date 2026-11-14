@@ -1,3 +1,5 @@
+//! The continuous loop, the deep-sleep cycle, and the logger.
+
 use std::convert::Infallible;
 use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU8, Ordering};
 use std::sync::mpsc;
@@ -85,8 +87,8 @@ fn main() {
     }
 
     // A panic or watchdog reset restarts main() immediately. Sleep instead, so
-    // that a persistent failure costs one cycle per sleep period rather than a
-    // continuous >100mA boot loop that drains the battery.
+    // that a persistent failure costs one cycle per sleep period, not a boot
+    // loop at over 100 mA that drains the battery.
     match reset_reason {
         sys::esp_reset_reason_t_ESP_RST_PANIC
         | sys::esp_reset_reason_t_ESP_RST_INT_WDT
@@ -178,14 +180,15 @@ const CYCLE_TIMEOUT_SECS: u32 = 25
 /// Deep sleep after a brownout reset.
 const BROWNOUT_SLEEP_SECS: u64 = 4 * SLEEP_SECS;
 
-/// Enter deep sleep. On wake the chip reboots (`main()` runs fresh).
-/// Deep sleep draws ~5-10µA vs >100mA active.
+/// Enters deep sleep. On wake, the chip reboots, and `main()` runs afresh.
+/// Deep sleep draws 5–10 µA, and the board awake over 100 mA.
 ///
 /// Deep sleep turns off the chip's own USB port. While a computer is
-/// connected to it, wait awake instead and restart, so the port stays up
-/// for flashing and monitoring. `esp_restart()` resets the CPU, not the port.
+/// connected to it, the board waits awake instead and restarts, so the port
+/// stays up for flashing and monitoring. `esp_restart()` resets the CPU, not
+/// the port.
 ///
-/// Scanning continuously, only a crash, a brownout or a failure to start
+/// In the continuous mode, only a crash, a brownout or a failure to start
 /// gets here. That mode never deep sleeps, so the board waits awake, and the
 /// LED blinks.
 fn sleep(secs: u64) -> ! {
@@ -231,7 +234,7 @@ fn uptime_secs() -> u32 {
     u32::try_from(unsafe { sys::esp_timer_get_time() } / 1_000_000).unwrap_or(u32::MAX)
 }
 
-/// Move the cycle timeout to `CYCLE_TIMEOUT_SECS` from now.
+/// Moves the cycle timeout to `CYCLE_TIMEOUT_SECS` from now.
 fn extend_deadline() {
     DEADLINE_SECS.store(
         uptime_secs().saturating_add(CYCLE_TIMEOUT_SECS),
@@ -239,8 +242,8 @@ fn extend_deadline() {
     );
 }
 
-/// Start the cycle timeout, which deep sleeps once the deadline has passed.
-/// Scanning continuously, it restarts instead, unless a cycle succeeds first.
+/// Starts the cycle timeout, which deep sleeps once the deadline has passed.
+/// In the continuous mode, it restarts instead, unless a cycle succeeds first.
 fn start_cycle_timeout() -> anyhow::Result<()> {
     extend_deadline();
     thread::Builder::new()
@@ -272,8 +275,8 @@ fn timed_out() -> bool {
 const RECOVERY_SECS: u64 =
     SLEEP_SECS + SCAN_SECS + MQTT_CONNECT_TIMEOUT.as_secs() + MQTT_ACK_TIMEOUT.as_secs();
 
-/// Scanning continuously, Wi-Fi and MQTT reconnect by themselves, so give a
-/// cycle time to succeed before a restart. Only a cycle that succeeds
+/// In the continuous mode, Wi-Fi and MQTT reconnect by themselves, so a cycle
+/// gets time to succeed before a restart. Only a cycle that succeeds
 /// cancels it, so that other failures, such as a broken BLE stack, still
 /// restart.
 fn recovered() -> bool {
@@ -334,7 +337,7 @@ fn run(number: u32) -> anyhow::Result<()> {
     Ok(())
 }
 
-/// Scan all the time, and publish each scan's readings and diagnostics while
+/// Scans all the time, and publishes each scan's readings and diagnostics while
 /// the next scan runs. Wi-Fi and MQTT stay connected. Returns only on a
 /// failure to start.
 fn run_continuous(mut number: u32) -> anyhow::Result<Infallible> {
@@ -427,8 +430,8 @@ struct Cycle {
     wifi_ms: u32,
 }
 
-/// Publish a cycle's readings and its diagnostics, once the broker has
-/// accepted the connection, and wait for the broker to acknowledge them.
+/// Publishes a cycle's readings and its diagnostics, once the broker has
+/// accepted the connection, and waits for the broker to acknowledge them.
 fn publish(
     mqtt: &mut mqtt::Mqtt,
     cycle: &Cycle,
@@ -499,7 +502,7 @@ fn spawn_scan(start: Instant) -> anyhow::Result<JoinHandle<anyhow::Result<ble::S
         .context("Failed to spawn BLE scan thread")
 }
 
-/// Wait for the scan to finish.
+/// Waits for the scan to finish.
 fn finish_scan(
     handle: JoinHandle<anyhow::Result<ble::Scan>>,
     start: Instant,
@@ -531,10 +534,10 @@ fn failed_scan(error: String, start: Instant) -> (ble::Scan, Option<String>) {
 }
 
 /// Applies `LOG_LEVEL` to this crate's modules. Library code logs at `Info`
-/// at most, so that debug logs show only the app's.
+/// at most, so that the debug logs show only this crate's.
 struct AppLogger;
 
-/// Compile-time log level parsed from `LOG_LEVEL`.
+/// `LOG_LEVEL` as a filter.
 static APP_LEVEL: log::LevelFilter = match config::LOG_LEVEL.as_bytes() {
     b"trace" | b"TRACE" => log::LevelFilter::Trace,
     b"debug" | b"DEBUG" => log::LevelFilter::Debug,
@@ -546,7 +549,7 @@ static APP_LEVEL: log::LevelFilter = match config::LOG_LEVEL.as_bytes() {
 
 const APP_MODULE_PREFIX: &str = env!("CARGO_CRATE_NAME");
 
-/// Noop-filtered ESP-IDF logger — we handle filtering in `AppLogger::enabled`.
+/// ESP-IDF's logger without a filter of its own: `AppLogger::enabled` filters.
 static ESP_LOGGER: EspIdfLogger<()> = EspIdfLogger::new(());
 
 impl log::Log for AppLogger {

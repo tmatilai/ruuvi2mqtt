@@ -126,7 +126,7 @@ impl Watch {
         }
     }
 
-    /// The hit rate, and each expected tag's reception
+    /// The hit rate, and each expected tag's reception.
     fn report_board_tags(&self, r: &mut Report, cycles: &[Diagnostics]) {
         let c = &self.config;
         let n = cycles.len();
@@ -195,7 +195,7 @@ pub(super) fn report_tag(
     let _ = writeln!(r.text);
 }
 
-/// The last reading, with the first one's values to show the trend
+/// The last reading, with the first one's values to show the trend.
 fn report_battery(r: &mut Report, cycles: &[Diagnostics]) {
     let readings: Vec<&Battery> = cycles
         .iter()
@@ -260,7 +260,7 @@ fn check_board(r: &mut Report, id: &str, cycles: &[Diagnostics], c: &Config, end
     }
 }
 
-/// Cycles missing from the counter, and how often it restarted
+/// Cycles missing from the counter, and how often it restarted.
 fn missed_cycles(cycles: &[Diagnostics]) -> (u64, usize) {
     let mut missed = 0;
     let mut restarts = 0;
@@ -286,7 +286,7 @@ pub(super) fn ratio(n: u64, d: u64) -> f64 {
     n as f64 / d.max(1) as f64
 }
 
-/// Events per second over `ms`, or `-` without time
+/// Events per second over `ms`, or `-` without time.
 fn per_second(n: u64, ms: u64) -> String {
     if ms == 0 {
         "-".to_string()

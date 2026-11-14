@@ -1,3 +1,5 @@
+//! Durations: parsing and printing them, and the longest gap.
+
 use std::iter;
 use std::ops::Sub;
 use std::time::Duration;

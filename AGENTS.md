@@ -1,9 +1,9 @@
 # ruuvi2mqtt
 
-Two independent Rust crates that read Ruuvi BLE sensor broadcasts and publish
-them to MQTT. They share no code, only the `ruuvi-sensor-protocol` dependency.
-Two test bed crates: `checker/` checks the app and the ESP32 boards, and
-`air-simulator/` advertises like a Ruuvi Air.
+Two independent Rust crates that read the tags' BLE advertisements and publish
+their readings to MQTT. They share no code, only the `ruuvi-sensor-protocol`
+dependency. Two test bed crates: `checker/` checks the app and the ESP32 boards,
+and `air-simulator/` advertises like a Ruuvi Air.
 
 ## App (repository root)
 
@@ -11,69 +11,37 @@ Tokio app, edition 2024. Runs continuously, throttles updates per tag, and
 publishes Home Assistant MQTT discovery. Released for Linux, also runs on macOS;
 the optional `dbus` dependency is Linux-only.
 
-- `src/main.rs`: startup, the `Event` enum, and the event loop that ties BLE and
-  MQTT together.
-- `src/config.rs`: CLI (clap) and YAML config (serde_norway, serde_with), the
-  hostname for the default client ID (sysinfo).
-- `src/ruuvi/listener.rs`: BLE scanning with btleplug, sends
-  `Event::RuuviUpdate` after a per-reading delay.
-- `src/ruuvi/delay.rs`: maps RSSI plus random jitter to that delay, so the
-  closest instance publishes first. Has unit tests.
-- `src/ruuvi/formats.rs`: drops an Air's format 6 readings while its E1 ones
-  arrive. Has unit tests.
-- `src/ruuvi/sensor_data.rs`: wraps ruuvi-sensor-protocol's decoded values, with
-  unit conversions and the low battery check. Has unit tests.
-- `src/mqtt.rs`: rumqttc client and event loop, TLS via rustls-native-certs, the
-  status topic and its last will.
-- `src/homeassistant.rs`: the reading's JSON, and the Home Assistant discovery
-  payloads and topics.
-- `src/devices.rs`: per-device state and update throttling.
-- `src/diagnostics.rs`: the instance's diagnostics, counted per minute. Has unit
-  tests.
-- `build.rs`: sets `BUILD_VERSION`, the package version plus the git commit. The
-  ESP32 `build.rs` has a copy.
-- `tests/cmd/`: trycmd CLI tests: help output, and config checks with
-  `--check-config`. A `<name>.in/` directory is the test's working directory.
+`src/main.rs` has the event loop that ties BLE (`src/ruuvi/`) and MQTT
+(`src/mqtt.rs`) together. `build.rs` sets `BUILD_VERSION`, and the ESP32
+`build.rs` has a copy. `tests/cmd/` has the trycmd CLI tests: the help output,
+and config checks with `--check-config`. A `<name>.in/` directory is the test's
+working directory.
 
 Commands: `make lint`, `make test`, `make local`. Cross builds use `cross`.
 
 ## ESP32 firmware (`ruuvi2mqtt-esp32/`)
 
-Firmware on esp-idf-svc (ESP-IDF pinned in `.cargo/config.toml`). By default it
-scans continuously, stays connected, and publishes each scan's readings over
-MQTT while the next scan runs. The deep-sleep mode runs one cycle per wake
-instead: start a BLE scan thread, connect Wi-Fi, publish, deep sleep.
-Configuration is compile-time via environment variables, see
+Firmware on esp-idf-svc (ESP-IDF pinned in `.cargo/config.toml`). The continuous
+mode, the default, scans all the time, stays connected, and publishes each
+scan's readings over MQTT while the next scan runs. The deep-sleep mode runs one
+cycle per wake instead: start a BLE scan thread, connect Wi-Fi, publish, deep
+sleep. Configuration is compile-time via environment variables, see
 `ruuvi2mqtt-esp32/README.md`. `ruuvi2mqtt-esp32/boards.md` has each known
 board's settings.
 
-- `src/main.rs`: the continuous loop, the deep-sleep wake cycle, and logger
-  setup.
-- `src/config.rs`: compile-time config from env vars (konst).
-- `src/wifi.rs`, `src/mqtt.rs`, `src/ble.rs`, `src/led.rs`: one esp-idf-svc
-  subsystem each; `ble.rs` uses esp32-nimble. `src/system.rs` reads board values
-  from ESP-IDF. `src/antenna.rs` drives the XIAO ESP32-C6's RF switch.
-  `src/gauge.rs` reads the battery gauge over I2C. `src/gpio.rs` sets a pin as
-  an output. `src/web.rs` serves the status page (`src/status.html`) and mDNS,
-  in the continuous mode.
-- `src/lib.rs`: the pure-Rust modules, `mac.rs` (MAC addresses), `payload.rs`
-  (the reading's JSON, and an Air's format 6 versus E1), `roam.rs` (when to
-  switch access points), `scan.rs` (BLE reception statistics), `diagnostics.rs`
-  (the diagnostics JSON), `battery.rs` (the battery gauges' readings and the
-  battery's state), `homeassistant.rs` (the board's discovery configs),
-  `status.rs` (the status page's report and grades) and `led_pattern.rs` (the
-  LED's breath and blinks). esp-idf-svc and esp32-nimble are espidf-only
-  dependencies, so the lib's unit tests run on the host with stable Rust
-  (`--target host-tuple`). The bin has `test = false`.
-- `build.rs`: embuild glue for ESP-IDF, the embedded CA certificate, and
-  `BUILD_VERSION`.
-- `boards.sh`: finds the attached boards and their serial ports for the
-  Makefile, from macOS `ioreg` or Linux udev.
+The bin, `src/main.rs` and the modules it declares, runs on the board. Every
+module of it uses esp-idf-svc, so an update to that touches the whole firmware.
+`src/lib.rs` declares the pure-Rust modules. esp-idf-svc and esp32-nimble are
+espidf-only dependencies, so the lib's unit tests run on the host with stable
+Rust (`--target host-tuple`). The bin has `test = false`. Logic that needs no
+ESP-IDF goes in the lib, where it can be tested.
 
-esp-idf-svc is used by every module outside the lib, so an update to it touches
-the whole firmware. Commands: `make -C ruuvi2mqtt-esp32 lint|test|build`. The
-firmware build needs the ESP toolchain (`make setup`); CI builds it for
-ESP32-C5, ESP32-C6 and ESP32-S3.
+`boards.sh` finds the attached boards and their serial ports for the Makefile,
+from macOS `ioreg` or Linux udev.
+
+Commands: `make -C ruuvi2mqtt-esp32 lint|test|build`. The firmware build needs
+the ESP toolchain (`make setup`); CI builds it for ESP32-C5, ESP32-C6 and
+ESP32-S3.
 
 Attached boards: `make boards` lists them, `make flash DEVICE=<name>` flashes
 one, and `make log DEVICE=<name> SECS=70` prints its serial output.
@@ -91,28 +59,11 @@ the time, tells the runs which tags to expect and how often they come, and
 writes the test bed's status page. Its `site` mode prints how well each
 publisher hears each tag, on any broker. See `checker/README.md`.
 
-- `src/payload.rs`: the app's readings, discovery configs, statuses and
-  diagnostics, and `src/diagnostics.rs` the ESP32 diagnostics. They mirror the
-  payloads, so update them when the payloads change. `printable` escapes the
-  control characters in text from the broker, so that it can't add lines to the
-  report.
-- `src/topic.rs`: the topics, for all modes.
-- `src/check.rs`: the checks, without MQTT. `src/check/boards.rs` has the ESP32
-  section, `src/check/instances.rs` the instances' diagnostics,
-  `src/check/tests.rs` the tests.
-- `src/record.rs`: the record mode's state, without MQTT. Has unit tests.
-  `src/record/page.rs` renders the status page, and `src/history.rs` keeps the
-  diagnostics for it.
-- `src/site.rs`: the site table, how well each publisher hears each tag, and the
-  coverage problems, without MQTT. Has unit tests.
-- `src/cli.rs`: the CLI. clap validates the arguments, and then they become the
-  check's or a subcommand's options: clap's derive can't have the check's
-  options beside the subcommand.
-- `src/mqtt.rs`: the broker connection, which subscribes and reconnects.
-  `src/main.rs` has the check's, the recorder's and the site's loops on it.
-- `src/time.rs`: the durations, and the longest gap.
-- `src/stats.rs`: counts and means, for the check and the site.
-- `src/fixtures.rs`: payloads for the unit tests.
+`src/payload.rs` and `src/diagnostics.rs` mirror the app's and the firmware's
+payloads, so update them when the payloads change. The checks, the recorder's
+state and the site table are kept apart from MQTT, so that unit tests run them.
+Text from the broker goes through `printable` before it is printed, so that it
+can't add lines to the report.
 
 Commands: `cargo test -p ruuvi2mqtt-checker`; `make lint` and `make test` cover
 it.
@@ -123,13 +74,8 @@ ESP32 firmware, not a workspace member. It shares the firmware's
 `.cargo/config.toml` and `rust-toolchain.toml` through symlinks, pins the same
 crate versions, and finds its board with the firmware's `boards.sh`,
 `devices/devices.conf` and `devices/<name>.mk`. `air-simulator/README.md` lists
-its advertising sets.
-
-- `src/lib.rs`: the format 6 and E1 encoders and the advertising data. Has unit
-  tests against the specs' test vectors and ruuvi-sensor-protocol.
-- `src/main.rs`: the advertising sets, through esp32-nimble and NimBLE.
-- `src/led.rs`: the LED's slow breath. Its curve is in `lib.rs`.
-- `src/antenna.rs`: the XIAO ESP32-C6's RF switch, as in the firmware.
+its advertising sets. `src/lib.rs` has the pure-Rust part, with unit tests on
+the host.
 
 Commands: `make -C air-simulator lint|test|build|flash|log CHIP=<chip>`.
 
@@ -222,8 +168,8 @@ entries stay on one line. `make fmt-docs` runs it, and `make lint` too.
 - Every source file starts with a `//!` header that says what the module is for.
 - A function's doc comment starts with a verb in the third person: "Returns",
   not "Return".
-- A comment ends with a period, also a one-line one. clap's help text is the
-  exception: it follows the CLI convention of no final period.
+- A comment on lines of its own ends with a period, also a one-line one. clap's
+  help text is the exception: it follows the CLI convention of no final period.
 
 ### Commit messages
 
@@ -239,7 +185,7 @@ A change to one of these also updates the others:
   depends on the board also goes in `boards.md`.
 - A payload: the READMEs' JSON examples and field tables, and the checker's
   mirrors.
-- A source file: its `//!` header, and the module lists above.
+- A source file: its `//!` header.
 - A heading: the links to its anchor.
 - A claim that a doc changes or drops: the same claim in the other docs and in
   the comments. Search for it.

@@ -1,3 +1,5 @@
+//! A reading's JSON, as the app publishes it, and an Air's format 6 versus E1.
+
 use ruuvi_sensor_protocol::{
     BatteryPotential, Calibration, CarbonDioxide, Humidity, Luminosity, NitrogenOxides,
     ParticulateMatter, Pressure, SensorValues, Temperature, TransmitterPower,
@@ -46,7 +48,7 @@ struct SensorPayload<'a> {
     publisher: &'a str,
 }
 
-/// Build the JSON payload from parsed sensor values. `publisher` is the MQTT
+/// Builds the JSON payload from the decoded values. `publisher` is the MQTT
 /// client ID.
 ///
 /// # Panics
@@ -100,9 +102,9 @@ pub fn encode(v: &SensorValues, publisher: &str) -> String {
     serde_json::to_string(&payload).unwrap()
 }
 
-/// Data format 6, an Air's legacy advertisement
+/// Data format 6, an Air's legacy advertisement.
 const FORMAT_6: u8 = 6;
-/// Data format E1, an Air's extended advertisement
+/// Data format E1, an Air's extended advertisement.
 const FORMAT_E1: u8 = 0xE1;
 
 /// Whether a reading in data format `format` replaces one in `previous`

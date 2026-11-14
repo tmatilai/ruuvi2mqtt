@@ -1,10 +1,12 @@
+//! The diagnostics that each cycle publishes.
+
 use serde::Serialize;
 
 use crate::battery::Battery;
 use crate::mac::Mac;
 use crate::scan::ScanStats;
 
-/// The message on `<base topic>/diagnostics/<hostname>`, published every
+/// The message on `<base_topic>/diagnostics/<hostname>`, published every
 /// cycle. The times are in ms from the start of the cycle.
 ///
 /// The test bed's checker parses it (`checker/src/diagnostics.rs`), so update

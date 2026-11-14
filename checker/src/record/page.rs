@@ -39,7 +39,7 @@ td.wrap{white-space:normal;min-width:16em}
 ul{list-style:none;padding:0;margin:0}
 ";
 
-/// The page, and its problems as JSON for the runner's notifications
+/// The page, and its problems as JSON for the runner's notifications.
 pub struct Page {
     pub html: String,
     pub problems: Value,
@@ -109,7 +109,7 @@ pub fn render(
     }
 }
 
-/// The site's problems over the last hour, and the recorder's, worst first
+/// The site's problems over the last hour, and the recorder's, worst first.
 fn problems(r: &Recorder, now: u64, expect: &[(String, String)], hour: &Site) -> Vec<Problem> {
     let mut problems = Vec::new();
     for (topic_name, entry) in r.history.entries() {
@@ -147,7 +147,7 @@ fn problems(r: &Recorder, now: u64, expect: &[(String, String)], hour: &Site) ->
         let tag = tag_name(r, id);
         let name = label(publisher);
         let problem = match p.cell(id).map(|cell| cell.grade()) {
-            // When no publisher hears it, it is likely the tag's own problem
+            // When no publisher hears it, it is likely the tag's own problem.
             None => {
                 let elsewhere = hour
                     .columns()
@@ -237,7 +237,7 @@ fn problems_section(out: &mut String, r: &Recorder, now: u64, problems: &[Proble
     out.push_str("</ul>\n");
 }
 
-/// `problems.json`: README.md describes it
+/// `problems.json`: README.md describes it.
 fn problems_json(r: &Recorder, now: u64, problems: &[Problem]) -> Value {
     let problems: Vec<Value> = problems
         .iter()
@@ -299,7 +299,7 @@ fn runs_section(out: &mut String, runs: &Result<Option<Value>, String>) {
             .map_or(String::new(), |log| {
                 format!("<a href=\"{}\">log</a>", esc(log))
             });
-        // The test bed's own, which the summary only counts
+        // The test bed's own, which the summary only counts.
         let mut faults = String::new();
         for fault in run["faults"].as_array().into_iter().flatten() {
             let fault = esc(fault.as_str().unwrap_or_default());
@@ -318,7 +318,7 @@ fn runs_section(out: &mut String, runs: &Result<Option<Value>, String>) {
     out.push_str("</table>\n");
 }
 
-/// A log in the page's directory: `runs/<file>`
+/// A log in the page's directory: `runs/<file>`.
 fn is_log_path(path: &str) -> bool {
     path.strip_prefix("runs/").is_some_and(|file| {
         !file.is_empty()
@@ -329,7 +329,7 @@ fn is_log_path(path: &str) -> bool {
     })
 }
 
-/// A tag silent for 30 minutes or with a low battery gets a warning
+/// A tag silent for 30 minutes or with a low battery gets a warning.
 fn tags_section(out: &mut String, r: &Recorder, now: u64, day: &Site) {
     out.push_str("<h2>Tags</h2>\n");
     let rows = day.rows();
@@ -359,7 +359,7 @@ fn tags_section(out: &mut String, r: &Recorder, now: u64, day: &Site) {
 }
 
 /// The site table over `over`: the mean of the strongest RSSI per minute or
-/// cycle, and the share of minutes or cycles that heard the tag
+/// cycle, and the share of minutes or cycles that heard the tag.
 fn coverage_section(out: &mut String, over: &str, site: &Site) {
     let rows = site.rows();
     let columns = site.columns();
@@ -393,7 +393,7 @@ fn coverage_section(out: &mut String, over: &str, site: &Site) {
     }
 }
 
-/// `🟢 -70 100%`
+/// `🟢 -70 100%`.
 fn cell(cell: Option<Cell>) -> String {
     cell.map_or("-".to_string(), |cell| {
         let rssi = cell.rssi.map_or("heard".to_string(), |r| r.to_string());
@@ -401,7 +401,7 @@ fn cell(cell: Option<Cell>) -> String {
     })
 }
 
-/// 🔴 when offline or silent
+/// 🔴 when offline or silent.
 fn state(r: &Recorder, now: u64, client_id: &str, last: u64) -> &'static str {
     let offline = r.statuses.get(client_id).is_some_and(|s| !s.online);
     if offline || now.saturating_sub(last) > SILENT {
@@ -449,8 +449,8 @@ fn boards_section(out: &mut String, r: &Recorder, now: u64, hour: &Site, day: &S
     out.push_str("</table>\n");
 }
 
-/// The voltage, the level from gauges that have it, and whether it charges or
-/// runs on USB
+/// The voltage, the level from gauges that have it, and whether it is
+/// charging or on USB.
 fn battery(b: &Battery) -> String {
     let mut out = format!("{} mV", b.mv);
     if let Some(level) = b.level {
@@ -505,7 +505,7 @@ fn tag_name(r: &Recorder, id: &str) -> String {
         .unwrap_or_else(|| mac(id))
 }
 
-/// `aabbccddee01` to `AA:BB:CC:DD:EE:01`
+/// `aabbccddee01` to `AA:BB:CC:DD:EE:01`.
 fn mac(id: &str) -> String {
     let upper = id.to_ascii_uppercase();
     let pairs: Vec<&str> = (0..upper.len())
@@ -531,7 +531,7 @@ fn class(grade: Grade) -> &'static str {
     }
 }
 
-/// `1:05 ago`
+/// `1:05 ago`.
 fn ago(now: u64, at: u64) -> String {
     format!(
         "{} ago",
@@ -539,14 +539,14 @@ fn ago(now: u64, at: u64) -> String {
     )
 }
 
-/// `2026-11-06 12:34`
+/// `2026-11-06 12:34`.
 fn utc(secs: u64) -> String {
     let (y, m, d) = civil(secs / 86_400);
     let s = secs % 86_400;
     format!("{y}-{m:02}-{d:02} {:02}:{:02}", s / 3600, s / 60 % 60)
 }
 
-/// The date of a day since 1970-01-01, by Howard Hinnant's `civil_from_days`
+/// The date of a day since 1970-01-01, by Howard Hinnant's `civil_from_days`.
 fn civil(days: u64) -> (u64, u64, u64) {
     let z = days + 719_468;
     let era = z / 146_097;
@@ -560,7 +560,7 @@ fn civil(days: u64) -> (u64, u64, u64) {
     (y, m, d)
 }
 
-/// Escapes text for HTML, also in an attribute
+/// Escapes text for HTML, also in an attribute.
 fn esc(s: &str) -> String {
     let mut out = String::with_capacity(s.len());
     for c in s.chars() {
@@ -632,7 +632,7 @@ mod tests {
         r
     }
 
-    /// The marks, the texts, and `*` for those that notify
+    /// The marks, the texts, and `*` for those that notify.
     fn texts(problems: &[Problem]) -> Vec<String> {
         problems
             .iter()
@@ -671,13 +671,13 @@ mod tests {
             [
                 "!host3: no diagnostics*",
                 "!Cellar: host2 doesn't hear it*",
-                // No publisher hears it: the tag's own alerts tell
+                // No publisher hears it: the tag's own alerts tell.
                 "!Attic <b>: host1 doesn't hear it",
                 "~Cellar: only host1 hears it well",
                 "~Cellar: low battery, 2.10 V",
             ]
         );
-        // Ten minutes later, without diagnostics
+        // Ten minutes later, without diagnostics.
         r.on_message(
             now,
             &format!("ruuvi2mqtt/status/{HOST2}"),
@@ -704,15 +704,15 @@ mod tests {
             .into(),
             r.history.window(now, HOUR),
         );
-        // Without them, every tag
+        // Without them, every tag.
         assert_eq!(
             texts(&coverage(&hour, &[])),
             ["!not heard: Attic", "~Cellar: only host1 hears it well"]
         );
-        // Only host1 should hear Cellar, and Attic isn't the test bed's
+        // Only host1 should hear Cellar, and Attic isn't the test bed's.
         let expect = [(HOST1.to_string(), TAG.to_string())];
         assert!(coverage(&hour, &expect).is_empty());
-        // Both should
+        // Both should.
         let expect = [
             (HOST1.to_string(), TAG.to_string()),
             (HOST2.to_string(), TAG.to_string()),
@@ -721,7 +721,7 @@ mod tests {
             texts(&coverage(&hour, &expect)),
             ["~Cellar: only host1 hears it well"]
         );
-        // With a board, the same for a spot for a board
+        // With a board, the same for a spot for a board.
         let mut r = r;
         r.on_message(
             now,
@@ -782,14 +782,14 @@ mod tests {
         }
         assert!(!page.contains("passwd"));
         assert!(!page.contains("<script>"));
-        // Not heard in a day: a problem, but in no table
+        // Not heard in a day: a problem, but in no table.
         assert!(!page.contains("<td>Attic &lt;b&gt;</td>"));
     }
 
     #[test]
     fn renders_the_boards() {
         let mut r = Recorder::new("ruuvi2mqtt", T0);
-        // The last cycle's battery
+        // The last cycle's battery.
         for (at, cycle, battery) in [
             (T0, 5, r#"{"mv":4100,"level":95,"rate":null,"usb":true}"#),
             (
@@ -814,7 +814,7 @@ mod tests {
                    <td>3950 mV, 87 %, charging</td><td>ruuvi2mqtt-esp32 1.5.2</td></tr>";
         assert!(page.contains(row), "{row:?} in:\n{page}");
         assert!(!page.contains("<h2>Instances</h2>"));
-        // Linked only while its config has a page
+        // Linked only while its config has a page.
         let topic = "homeassistant/sensor/ruuvi2mqtt-c6/scan_mode/config";
         let continuous = board_discovery().replace(
             r#""device":{"#,
@@ -878,7 +878,7 @@ mod tests {
                 "tag": "AA:BB:CC:DD:EE:01",
             })
         );
-        // Diagnostics stopped: a new problem, and the old one still lasts
+        // Diagnostics stopped: a new problem, and the old one still lasts.
         let problems = r.page(T0 + 1200, "Test bed", &expect, &Ok(None)).problems;
         let since: Vec<_> = problems["problems"]
             .as_array()
@@ -888,7 +888,7 @@ mod tests {
             .collect();
         assert!(since.contains(&(&format!("silent {HOST1}")[..], T0 + 1200)));
         assert!(since.contains(&(&format!("missing {HOST2} {TAG}")[..], T0 + 540)));
-        // Cleared, then back: it starts over
+        // Cleared, then back: it starts over.
         r.page(T0 + 1260, "Test bed", &[], &Ok(None));
         let problems = r.page(T0 + 1320, "Test bed", &expect, &Ok(None)).problems;
         let missing = problems["problems"]

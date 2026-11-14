@@ -1,3 +1,6 @@
+//! The embuild glue for ESP-IDF, the embedded CA certificate, and
+//! `BUILD_VERSION`.
+
 use std::path::PathBuf;
 use std::process::Command;
 

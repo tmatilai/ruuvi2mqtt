@@ -121,7 +121,7 @@ fn run(kind: &Kind, gpio: u8, breath: bool) -> Result<()> {
         #[allow(clippy::cast_possible_truncation)] // below PULSE_PERIOD_MS
         let ms = (start.elapsed().as_millis() % u128::from(PULSE_PERIOD_MS)) as u32;
         set(pulse_level(ms))?;
-        // Dark until the next breath
+        // Dark until the next breath.
         let pause = if ms < PULSE_MS {
             STEP
         } else {

@@ -366,7 +366,7 @@ impl Live {
         let count = reports.len() as u64;
         let sum: i64 = reports.iter().map(|&(_, rssi)| i64::from(rssi)).sum();
         #[allow(clippy::cast_possible_truncation, clippy::cast_precision_loss)]
-        // a mean of i8 values
+        // A mean of i8 values.
         let mean = (sum as f64 / count as f64).round() as i8;
         let per_min = u32::try_from(count * 60_000 / window_ms).unwrap_or(u32::MAX);
         let mut grade = Grade::rssi(mean);

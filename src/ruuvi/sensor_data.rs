@@ -1,3 +1,6 @@
+//! A reading's decoded values, with the unit conversions and the low battery
+//! check.
+
 use ruuvi_sensor_protocol::{
     BatteryPotential, Calibration, CarbonDioxide, Humidity, Luminosity, NitrogenOxides,
     ParticulateMatter, Pressure, SensorValues, Temperature, TransmitterPower,
@@ -9,9 +12,9 @@ use crate::ruuvi::BDAddr;
 #[derive(Debug)]
 pub struct SensorData {
     pub bdaddr: BDAddr,
-    /// The data format, the payload's first byte
+    /// The data format, the payload's first byte.
     pub format: u8,
-    /// The last RSSI `BlueZ` reported, in dBm
+    /// The last RSSI `BlueZ` reported, in dBm.
     pub rssi: Option<i16>,
     values: SensorValues,
 }
@@ -143,7 +146,7 @@ mod tests {
     /// Builds a `SensorData` from optional temperature (millicelsius) and battery (millivolts)
     /// using the `RuuviTag` data format v5 encoding.
     fn make_sensor(temp_mc: Option<i32>, battery_mv: Option<u16>) -> SensorData {
-        // Temperature: raw_i16 = mc / 5; i16::MIN signals "invalid" in the v5 spec
+        // Temperature: raw_i16 = mc / 5; i16::MIN signals "invalid" in the v5 spec.
         #[allow(clippy::cast_possible_truncation)] // test values are always within i16 range
         let [t1, t2] = match temp_mc {
             Some(mc) => ((mc / 5) as i16).to_be_bytes(),
@@ -156,7 +159,7 @@ mod tests {
             None => (0x7FF_u16 << 5).to_be_bytes(),
         };
         // 24-byte v5 packet: version byte + 23 data bytes.
-        // Layout: temp(2), humidity(2), pressure(2), accel xyz(6), power(2), mov(1), seq(2), mac(6)
+        // Layout: temp(2), humidity(2), pressure(2), accel xyz(6), power(2), mov(1), seq(2), mac(6).
         #[rustfmt::skip]
         let payload = [
             5, t1, t2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, pow1, pow2, 0, 0, 0, 0, 0, 0, 0, 0, 0,

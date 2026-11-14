@@ -10,7 +10,7 @@ pub fn count<'a>(values: impl Iterator<Item = &'a str>) -> BTreeMap<&'a str, usi
     counts
 }
 
-/// A running mean, rounded half away from zero
+/// A running mean, rounded half away from zero.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct Mean {
     sum: i64,
@@ -27,7 +27,7 @@ impl Mean {
         self.n += other.n;
     }
 
-    /// `[sum, n]`, for the recorder's state
+    /// `[sum, n]`, for the recorder's state.
     pub fn parts(self) -> [i64; 2] {
         [self.sum, self.n]
     }

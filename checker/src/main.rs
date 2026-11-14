@@ -60,7 +60,7 @@ async fn main() -> ExitCode {
             }
         },
         Mode::Record(options) => {
-            // It returns only on an error: systemd restarts it
+            // It returns only on an error: systemd restarts it.
             let Err(err) = record(&options).await;
             eprintln!("{err:#}");
             ExitCode::FAILURE
@@ -94,7 +94,7 @@ async fn check(options: &CheckOptions) -> Result<Report> {
                     eprintln!("{note}");
                 }
             }
-            // Without a first connection, the instances can't be checked either
+            // Without a first connection, the instances can't be checked either.
             Received::Lost(err) if !connected => {
                 bail!("Failed to connect to {}: {err}", options.broker.server);
             }
@@ -206,7 +206,7 @@ fn write_state(path: &Path, state: &serde_json::Value) -> Result<()> {
         .with_context(|| format!("Failed to write {}", path.display()))
 }
 
-/// The runner's `runs.json` in the page's directory, if it has written one
+/// The runner's `runs.json` in the page's directory, if it has written one.
 fn read_runs(dir: &Path) -> Result<Option<serde_json::Value>, String> {
     match std::fs::read_to_string(dir.join("runs.json")) {
         Ok(runs) => serde_json::from_str(&runs)
@@ -217,7 +217,7 @@ fn read_runs(dir: &Path) -> Result<Option<serde_json::Value>, String> {
     }
 }
 
-/// Writes a page's file through a temporary file, like the state
+/// Writes a page's file through a temporary file, like the state.
 fn write_file(dir: &Path, name: &str, contents: &str) -> Result<()> {
     let path = dir.join(name);
     let tmp = dir.join(format!(".{name}.tmp"));

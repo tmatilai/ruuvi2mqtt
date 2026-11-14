@@ -11,9 +11,9 @@ pub enum Topic<'a> {
         id: &'a str,
         entity: &'static str,
     },
-    /// `binary_sensor/<id>/status/config`, maybe an instance's
+    /// `binary_sensor/<id>/status/config`, maybe an instance's.
     StatusDiscovery,
-    /// `sensor/<id>/scan_mode/config`, maybe a board's
+    /// `sensor/<id>/scan_mode/config`, maybe a board's.
     ScanModeDiscovery,
     Other,
 }
@@ -68,7 +68,7 @@ fn parse_discovery(rest: &str) -> Option<(&str, &'static str)> {
     Some((id, entity))
 }
 
-/// A tag's ID in its topics: the MAC as 12 lowercase hex digits
+/// A tag's ID in its topics: the MAC as 12 lowercase hex digits.
 pub fn is_tag_id(s: &str) -> bool {
     s.len() == 12 && s.bytes().all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f'))
 }

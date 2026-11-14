@@ -1,3 +1,5 @@
+//! Each tag's state, and the throttle on its updates.
+
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
 use std::{clone::Clone, cmp::Eq, hash::Hash};
@@ -37,7 +39,8 @@ where
     }
 
     /// Returns `Update` and starts the throttle timer, so a second reading
-    /// that arrives before our own message comes back over MQTT is throttled.
+    /// that arrives before the instance's own message comes back over MQTT is
+    /// throttled.
     pub fn try_publish(&mut self, device_id: &K) -> ThrottleResult {
         let Some(device) = self.devices.get_mut(device_id) else {
             return ThrottleResult::UnknownDevice;
@@ -123,8 +126,8 @@ mod tests {
 
     #[test]
     fn second_reading_before_mqtt_echo_is_throttled() {
-        // Two readings of one tag reach the main loop before our own message
-        // comes back over MQTT.
+        // Two readings of one tag reach the main loop before the instance's
+        // own message comes back over MQTT.
         let mut devs = make_devices(&[1], Duration::from_mins(1));
         assert_eq!(devs.try_publish(&1), ThrottleResult::Update);
         assert_eq!(devs.try_publish(&1), ThrottleResult::Throttle);
@@ -161,10 +164,11 @@ mod tests {
         assert_eq!(devs.try_publish(&1), ThrottleResult::Update);
 
         std::thread::sleep(Duration::from_millis(120));
-        // Another instance published before our message came back.
+        // Another instance published before this one's message came back.
         devs.mark_published(&1);
 
-        // 240 ms after our publish, but only 120 ms after the MQTT message.
+        // 240 ms after this instance's publish, but only 120 ms after the MQTT
+        // message.
         std::thread::sleep(Duration::from_millis(120));
         assert_eq!(devs.try_publish(&1), ThrottleResult::Throttle);
     }

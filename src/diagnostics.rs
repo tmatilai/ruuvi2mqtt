@@ -1,3 +1,5 @@
+//! The instance's diagnostics, counted per minute.
+
 use std::collections::BTreeMap;
 use std::time::Duration;
 
@@ -30,7 +32,7 @@ struct Minute {
 /// One tag's readings in a minute.
 #[derive(Debug, Serialize)]
 struct TagStats {
-    /// The strongest, in dBm
+    /// The strongest, in dBm.
     rssi: Option<i16>,
     readings: u32,
 }
@@ -87,7 +89,7 @@ impl Diagnostics {
         self.mqtt_connects += 1;
     }
 
-    /// The message, as JSON
+    /// The message, as JSON.
     pub fn take(&mut self, client_id: &str) -> Vec<u8> {
         let minute = std::mem::take(&mut self.minute);
         let message = Message {

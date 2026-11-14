@@ -17,14 +17,14 @@ pub fn reading(publisher: &str) -> String {
     )
 }
 
-/// A format 6 reading: no PM1, PM4 or PM10
+/// A format 6 reading: no PM1, PM4 or PM10.
 pub fn air_reading(publisher: &str) -> String {
     format!(
         r#"{{"humidity":55.3,"pressure":1011.02,"temperature":29.5,"battery":null,"battery_low":null,"tx_power":null,"co2":201,"pm2_5":11.2,"voc":5,"nox":1,"luminosity":13026.67,"iaqs":81,"calibrating":false,"publisher":"{publisher}"}}"#
     )
 }
 
-/// A data format E1 reading
+/// A data format E1 reading.
 pub fn air_reading_e1(publisher: &str) -> String {
     air_reading(publisher).replace(
         r#""pm2_5":11.2,"#,
@@ -32,35 +32,35 @@ pub fn air_reading_e1(publisher: &str) -> String {
     )
 }
 
-/// A discovery config for an entity of a tag
+/// A discovery config for an entity of a tag.
 pub fn discovery(id: &str, entity: &str, name: &str) -> String {
     format!(
         r#"{{"state_topic":"ruuvi2mqtt/{id}","unique_id":"ruuvi_{id}_{entity}","device":{{"name":"{name}"}}}}"#
     )
 }
 
-/// An instance's discovery config
+/// An instance's discovery config.
 pub fn instance_discovery(client_id: &str) -> String {
     format!(
         r#"{{"state_topic":"ruuvi2mqtt/status/{client_id}","device":{{"identifiers":["{client_id}"]}}}}"#
     )
 }
 
-/// A board's scan mode discovery config
+/// A board's scan mode discovery config.
 pub fn board_discovery() -> String {
     format!(
         r#"{{"state_topic":"ruuvi2mqtt/diagnostics/c6-board","device":{{"identifiers":["{BOARD}"]}}}}"#
     )
 }
 
-/// An instance's diagnostics for a minute
+/// An instance's diagnostics for a minute.
 pub fn instance_diagnostics(client_id: &str, tags: &str) -> String {
     format!(
         r#"{{"version":"1.5.2-dev (6534f11)","client_id":"{client_id}","adapter":"hci0: Example BT Adapter (1234:5678)","uptime_s":600,"mqtt_reconnects":0,"readings_published":1,"readings_throttled":2,"tags":{tags}}}"#
     )
 }
 
-/// A board's diagnostics: Wi-Fi connects 1 s into the 5 s scan
+/// A board's diagnostics: Wi-Fi connects 1 s into the 5 s scan.
 pub fn diagnostics(firmware: &str, cycle: u64, tags: &str) -> String {
     format!(
         r#"{{"firmware":"ruuvi2mqtt-esp32 {firmware}","client_id":"{BOARD}","chip":"esp32c6","cycle":{cycle},"settings":{{"scan_mode":"deep-sleep","scan_duration":5}},"wifi_rssi":-61,"wifi_channel":6,"wifi_cache":"hit","free_heap":151000,"scan_start_ms":200,"scan_end_ms":5200,"wifi_ms":1200,"mqtt_ms":2000,"cycle_ms":5300,"tags":{tags},"adverts_before_wifi":1,"adverts_after_wifi":8,"other_adverts_before_wifi":10,"other_adverts_after_wifi":80}}"#

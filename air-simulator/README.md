@@ -16,7 +16,7 @@ values, with a temperature and sequence number that change in each reading. A
 new reading goes out every second. It transmits at +20 dBm, the chips' maximum,
 so that scanners hear it through walls.
 
-## Use
+## Usage
 
 Needs the toolchain of `../ruuvi2mqtt-esp32`
 (`make -C ../ruuvi2mqtt-esp32 setup`) and a Bluetooth 5 chip: ESP32-C3, C5, C6

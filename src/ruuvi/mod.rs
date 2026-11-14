@@ -1,3 +1,5 @@
+//! The BLE side: the scan, the data formats and the decoded readings.
+
 mod delay;
 mod formats;
 mod listener;
