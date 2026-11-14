@@ -2,6 +2,10 @@
 
 ### ruuvi2mqtt-esp32
 
+#### Breaking changes
+
+- Rename the Makefile's `DEVICE` variable to `BOARD`, and the board files' `devices/` directory to `boards/`.
+
 #### Features
 
 - Add `BATTERY` to report the battery from a MAX17048 fuel gauge or an M5PM1 power chip.

@@ -1,0 +1,11 @@
+# MAC-to-board-name mapping for auto-detection.
+#
+# `make register BOARD=<name>` adds the attached board. `make boards` lists
+# the attached boards and their names.
+#
+# Format: MAC_ADDRESS  board-name  [USB-UART bridge serial number]
+# The board-name must match a file in this directory: <board-name>.mk
+# The serial number finds a board behind a USB-UART bridge without a reset.
+
+# aa:bb:cc:dd:ee:f0  kitchen
+# aa:bb:cc:dd:ee:f1  garage  0123456789abcdef0123456789abcdef

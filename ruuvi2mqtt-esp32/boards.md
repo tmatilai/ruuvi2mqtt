@@ -1,7 +1,7 @@
 # Boards
 
 The settings of the boards the firmware has run on. Copy a board's lines into
-its [device file](README.md#device-configuration). The
+its [board file](README.md#board-configuration). The
 [README](README.md#configuration) explains each setting.
 
 ## Adafruit ESP32-C6 Feather

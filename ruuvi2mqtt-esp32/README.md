@@ -116,7 +116,7 @@ Environment variables set the configuration at compile time.
 | `LED_COLOR`          | —                   | `000020`             | WS2812 color as hex `RRGGBB`. Low values keep it dim                                                                                                                                                                             |
 | `LOG_LEVEL`          | —                   | `info`               | Log level for the firmware's own code. Library code logs at `info` at most                                                                                                                                                       |
 
-These can be set in the environment, in `.envrc` (with direnv), or in per-device
+These can be set in the environment, in `.envrc` (with direnv), or in per-board
 configuration files (see below). [boards.md](boards.md) lists the settings of
 known boards.
 
@@ -164,17 +164,17 @@ Some boards power the I2C bus from a pin. Set it with `BATTERY_POWER_GPIO`. The
 firmware turns it on for the read and off afterwards. If `LED_POWER_GPIO` is the
 same pin, it stays on.
 
-## Device configuration
+## Board configuration
 
 For a single board, set the required variables in the environment and run
 `make flash`. No registration is needed, as auto-detection runs only when
-`devices/devices.conf` exists. For a chip other than the default:
+`boards/boards.conf` exists. For a chip other than the default:
 
 ```sh
 make flash CHIP=esp32
 ```
 
-### Managing multiple devices
+### Managing multiple boards
 
 With several boards, each one gets its own configuration file, and the Makefile
 finds the attached board by its MAC address.
@@ -182,18 +182,18 @@ finds the attached board by its MAC address.
 **Register a board** by attaching it and running:
 
 ```sh
-make register DEVICE=kitchen
+make register BOARD=kitchen
 ```
 
-This records the board's MAC address in `devices/devices.conf` and creates a
-`devices/kitchen.mk` file from the template. Edit the `.mk` file to set the
+This records the board's MAC address in `boards/boards.conf` and creates a
+`boards/kitchen.mk` file from the template. Edit the `.mk` file to set the
 board's own settings, such as the static IP, the hostname and the chip. With
 several boards attached, choose one with `ESPFLASH_PORT=<port>`.
 
 **List the attached boards** with `make boards`:
 
 ```text
-PORT                     USB    MAC               DEVICE
+PORT                     USB    MAC               BOARD
 /dev/cu.usbmodem1101     native aa:bb:cc:dd:ee:f0 kitchen
 /dev/cu.usbserial-210    uart   aa:bb:cc:dd:ee:f1 garage
 ```
@@ -207,20 +207,20 @@ auto-detection, and when looking for a board registered without the serial
 number. Run `make register` again to record the serial number.
 
 **Auto-detection:** `make flash` (or `all`, `build`, `lint`, `monitor`, `log`)
-without `DEVICE` identifies the attached board and loads its `.mk` file. With
-several boards attached, it lists them and asks for `DEVICE`. A target that
-talks to the board finds its port from `DEVICE`, and never uses another board.
+without `BOARD` identifies the attached board and loads its `.mk` file. With
+several boards attached, it lists them and asks for `BOARD`. A target that talks
+to the board finds its port from `BOARD`, and never uses another board.
 
 ```sh
-make flash DEVICE=kitchen                 # flash the board named kitchen
-make flash DEVICE=                        # skip auto-detection, use env vars only
+make flash BOARD=kitchen                  # flash the board named kitchen
+make flash BOARD=                         # skip auto-detection, use env vars only
 make flash ESPFLASH_PORT=/dev/cu.usbserial-210   # the board on this port
 ```
 
 The Makefile waits up to `WAIT` seconds (default 75) for a sleeping board to
 wake.
 
-> Device config files are git-ignored. Only the examples are committed.
+> The boards' config files are git-ignored. Only the examples are committed.
 
 ## Build & flash
 

@@ -27,8 +27,8 @@ make flash log CHIP=esp32c5
 ```
 
 The board is found as in the firmware: the only attached board is looked up in
-the firmware's `devices/devices.conf`, or `DEVICE=<name>` chooses one, and its
-`devices/<name>.mk` sets `CHIP` and the LED. `DEVICE=` skips the registry, and
+the firmware's `boards/boards.conf`, or `BOARD=<name>` chooses one, and its
+`boards/<name>.mk` sets `CHIP` and the LED. `BOARD=` skips the registry, and
 `ESPFLASH_PORT=<port>` chooses the port. `make boards` lists the boards. The
 boot log shows the address in a line like
 `Advertising as C0:FF:EE:00:A1:12 (Ruuvi A112): ...`. Add it to the ruuvi2mqtt

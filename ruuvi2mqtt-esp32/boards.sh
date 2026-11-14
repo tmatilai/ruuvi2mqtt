@@ -9,21 +9,22 @@
 #
 # Usage:
 #   boards.sh list             a table of the attached boards
-#   boards.sh detect           "<device> <port>" of the only attached board
-#   boards.sh port DEVICE      the port of a registered board
+#   boards.sh detect           "<name> <port>" of the only attached board
+#   boards.sh port NAME        the port of a registered board
 #   boards.sh only-port        the port of the only attached board
-#   boards.sh register DEVICE  add the only attached board to devices.conf
+#   boards.sh register NAME    add the only attached board to boards.conf
 #   boards.sh log SECS         the serial output of ESPFLASH_PORT for SECS
 #
 # ESPFLASH_PORT limits detect, only-port and register to that port. WAIT
 # is how long to wait for a port, in seconds (default 75). BOARDS_CONF is
-# the registry (default devices/devices.conf), for callers in other
-# directories.
+# the registry (default boards/boards.conf), for callers in other
+# directories. The boards' .mk files are beside it.
 set -euo pipefail
 # Also exit on errors inside $(...). Bash 4.4 and later.
 shopt -s inherit_errexit 2>/dev/null || true
 
-CONF=${BOARDS_CONF:-devices/devices.conf}
+CONF=${BOARDS_CONF:-boards/boards.conf}
+DIR=$(dirname "$CONF")
 WAIT=${WAIT:-75}
 
 die() {
@@ -61,13 +62,13 @@ ports() {
     $2 == "10c4" || $2 == "1a86" || $2 == "0403" { print $1, "uart", $3 }'
 }
 
-# devices.conf without comments: "<mac> <device> [<usb-serial>]".
+# boards.conf without comments: "<mac> <name> [<usb-serial>]".
 conf() {
   [[ -f $CONF ]] || return 0
   awk '!/^[[:space:]]*#/ && NF >= 2 { print tolower($1), $2, $3 }' "$CONF"
 }
 
-# "<mac> <device>" of a port line "<port> <kind> <usb-serial>", "-" when
+# "<mac> <name>" of a port line "<port> <kind> <usb-serial>", "-" when
 # unknown. With "probe", asks a bridge's board, which resets it.
 identify() {
   local port=$1 kind=$2 serial=$3 probe=${4:-} mac
@@ -85,11 +86,11 @@ identify() {
 
 # A table of port lines. With "probe", resets the unknown bridge boards.
 table() {
-  local port kind serial mac device
-  printf '%-24s %-6s %-17s %s\n' PORT USB MAC DEVICE
+  local port kind serial mac name
+  printf '%-24s %-6s %-17s %s\n' PORT USB MAC BOARD
   while read -r port kind serial; do
-    read -r mac device < <(identify "$port" "$kind" "$serial" "${1:-}")
-    printf '%-24s %-6s %-17s %s\n' "$port" "$kind" "$mac" "$device"
+    read -r mac name < <(identify "$port" "$kind" "$serial" "${1:-}")
+    printf '%-24s %-6s %-17s %s\n' "$port" "$kind" "$mac" "$name"
   done
 }
 
@@ -128,19 +129,19 @@ cmd_list() {
 }
 
 cmd_detect() {
-  local port kind serial mac device
-  read -r port kind serial < <(only "Choose one with DEVICE=<name> or ESPFLASH_PORT=<port>.")
-  read -r mac device < <(identify "$port" "$kind" "$serial" probe)
+  local port kind serial mac name
+  read -r port kind serial < <(only "Choose one with BOARD=<name> or ESPFLASH_PORT=<port>.")
+  read -r mac name < <(identify "$port" "$kind" "$serial" probe)
   [[ $mac != - ]] || die "Couldn't read the MAC of the board on $port."
-  [[ $device != - ]] || die "The board on $port ($mac) isn't registered. Register it with 'make register DEVICE=<name>', or set DEVICE= to skip."
-  echo "$device $port"
+  [[ $name != - ]] || die "The board on $port ($mac) isn't registered. Register it with 'make register BOARD=<name>', or set BOARD= to skip."
+  echo "$name $port"
 }
 
 cmd_port() {
-  local device=${1:?DEVICE missing} mac usb found port kind serial
+  local name=${1:?NAME missing} mac usb found port kind serial
   local deadline=$((SECONDS + WAIT)) probed='' waiting=''
-  read -r mac usb < <(conf | awk -v d="$device" '$2 == d { print $1, $3; exit }')
-  [[ -n ${mac:-} ]] || die "DEVICE '$device' isn't in $CONF."
+  read -r mac usb < <(conf | awk -v d="$name" '$2 == d { print $1, $3; exit }')
+  [[ -n ${mac:-} ]] || die "BOARD '$name' isn't in $CONF."
   while :; do
     found=$(ports)
     port=$(awk -v m="$mac" -v s="${usb:--}" '
@@ -162,9 +163,9 @@ cmd_port() {
       done <<<"$found"
       probed=1
     fi
-    ((SECONDS < deadline)) || die "$device ($mac) isn't attached."
+    ((SECONDS < deadline)) || die "$name ($mac) isn't attached."
     if [[ -z $waiting ]]; then
-      echo "Waiting up to ${WAIT}s for $device. A board in deep sleep shows up when it wakes." >&2
+      echo "Waiting up to ${WAIT}s for $name. A board in deep sleep shows up when it wakes." >&2
       waiting=1
     fi
     sleep 1
@@ -178,7 +179,7 @@ cmd_only_port() {
 }
 
 cmd_register() {
-  local device=${1:?DEVICE missing} port kind serial info mac chip
+  local name=${1:?NAME missing} port kind serial info mac chip
   read -r port kind serial < <(only "Choose one with ESPFLASH_PORT=<port>.")
   echo "Reading board info from $port..."
   info=$(espflash board-info --port "$port" --non-interactive 2>&1) || true
@@ -188,11 +189,11 @@ cmd_register() {
   [[ $kind == uart ]] || serial=-
 
   if [[ ! -f $CONF ]]; then
-    printf '# MAC-to-device-name mapping for auto-detection.\n# Format: MAC_ADDRESS  device-name  [USB-UART bridge serial]\n\n' >"$CONF"
+    printf '# MAC-to-board-name mapping for auto-detection.\n# Format: MAC_ADDRESS  board-name  [USB-UART bridge serial]\n\n' >"$CONF"
   fi
   if conf | awk -v m="$mac" '$1 == m { found = 1 } END { exit !found }'; then
     if [[ $serial != - ]] && ! conf | awk -v m="$mac" '$1 == m && $3 != "" { found = 1 } END { exit !found }'; then
-      # Write through a symlinked devices.conf.
+      # Write through a symlinked boards.conf.
       awk -v m="$mac" -v s="$serial" '!/^[[:space:]]*#/ && tolower($1) == m && NF == 2 { $0 = $0 "  " s } 1' "$CONF" >"$CONF.tmp"
       cat "$CONF.tmp" >"$CONF" && rm "$CONF.tmp"
       echo "Added the bridge serial number $serial to $mac in $CONF"
@@ -201,22 +202,22 @@ cmd_register() {
     fi
   else
     if [[ $serial == - ]]; then
-      printf '%s  %s\n' "$mac" "$device" >>"$CONF"
+      printf '%s  %s\n' "$mac" "$name" >>"$CONF"
     else
-      printf '%s  %s  %s\n' "$mac" "$device" "$serial" >>"$CONF"
+      printf '%s  %s  %s\n' "$mac" "$name" "$serial" >>"$CONF"
     fi
-    echo "Registered $mac as $device in $CONF"
+    echo "Registered $mac as $name in $CONF"
   fi
 
-  if [[ ! -f devices/$device.mk ]]; then
+  if [[ ! -f $DIR/$name.mk ]]; then
     if [[ -n $chip && $chip != esp32c6 ]]; then
-      sed "s/^# CHIP = .*/CHIP = $chip/" devices/device.mk.example >"devices/$device.mk"
+      sed "s/^# CHIP = .*/CHIP = $chip/" "$DIR/board.mk.example" >"$DIR/$name.mk"
     else
-      cp devices/device.mk.example "devices/$device.mk"
+      cp "$DIR/board.mk.example" "$DIR/$name.mk"
     fi
-    echo "Created devices/$device.mk from template (chip: ${chip:-unknown}). Edit it to set the IP address, the hostname and so on."
+    echo "Created $DIR/$name.mk from template (chip: ${chip:-unknown}). Edit it to set the IP address, the hostname and so on."
   else
-    echo "devices/$device.mk already exists"
+    echo "$DIR/$name.mk already exists"
   fi
 }
 
@@ -239,5 +240,5 @@ port) cmd_port "$@" ;;
 only-port) cmd_only_port ;;
 register) cmd_register "$@" ;;
 log) cmd_log "$@" ;;
-*) die "Usage: boards.sh list|detect|port DEVICE|only-port|register DEVICE|log SECS" ;;
+*) die "Usage: boards.sh list|detect|port NAME|only-port|register NAME|log SECS" ;;
 esac
