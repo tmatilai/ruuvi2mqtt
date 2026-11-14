@@ -171,8 +171,9 @@ fn parse_settings(s: &Value) -> Result<String, String> {
     Ok(settings)
 }
 
+/// The `battery` of `d`
 #[allow(clippy::option_option)]
-fn parse_battery(d: &Value) -> Result<Option<Option<Battery>>, String> {
+pub fn parse_battery(d: &Value) -> Result<Option<Option<Battery>>, String> {
     let b = match d.get("battery") {
         None => return Ok(None),
         Some(Value::Null) => return Ok(Some(None)),
