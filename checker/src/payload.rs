@@ -217,6 +217,17 @@ pub fn device_name(config: &Value) -> Option<String> {
     config.pointer("/device/name")?.as_str().map(printable)
 }
 
+/// The tag's name from its discovery config. Unlike `parse_discovery`, it
+/// accepts a config on any base topic, because the boards don't publish the
+/// tags' configs.
+pub fn tag_name(payload: &[u8], id: &str, entity: &str) -> Option<String> {
+    let config: Value = serde_json::from_slice(payload).ok()?;
+    let state_topic = config["state_topic"].as_str()?;
+    (state_topic.ends_with(&format!("/{id}"))
+        && config["unique_id"] == format!("ruuvi_{id}_{entity}"))
+    .then(|| device_name(&config))?
+}
+
 pub fn check_status(payload: &str, commit: &str) -> Result<(), String> {
     let status: Value = serde_json::from_str(payload).map_err(|_| "status isn't JSON")?;
     if status["state"] != "online" {
@@ -259,7 +270,29 @@ pub fn printable(s: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::fixtures::{COMMIT, HOST1, air_reading, air_reading_e1, online, reading};
+    use crate::fixtures::{
+        COMMIT, HOST1, TAG, air_reading, air_reading_e1, discovery, online, reading,
+    };
+
+    #[test]
+    fn tag_names_come_from_any_base_topic() {
+        let config = discovery(TAG, "temperature", "Cellar");
+        assert_eq!(
+            tag_name(config.as_bytes(), TAG, "temperature"),
+            Some("Cellar".into())
+        );
+        let other = config.replace("ruuvi2mqtt/", "ruuvi2mqtt-dev/");
+        assert_eq!(
+            tag_name(other.as_bytes(), TAG, "temperature"),
+            Some("Cellar".into())
+        );
+        // Another tag's, or another entity's
+        assert_eq!(
+            tag_name(config.as_bytes(), "aabbccddee02", "temperature"),
+            None
+        );
+        assert_eq!(tag_name(config.as_bytes(), TAG, "humidity"), None);
+    }
 
     #[test]
     fn readings_validate() {

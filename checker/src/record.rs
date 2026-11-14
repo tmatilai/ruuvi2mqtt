@@ -9,7 +9,7 @@ use serde_json::{Map, Value, json};
 
 use crate::diagnostics;
 use crate::history::History;
-use crate::payload::{client_id, device_name, parse_discovery, printable};
+use crate::payload::{client_id, printable, tag_name};
 use crate::time::max_gap;
 use crate::topic::Topic;
 
@@ -128,10 +128,7 @@ impl Recorder {
                 self.statuses.insert(client_id.to_string(), status);
             }
             Topic::Discovery { id, entity } => {
-                let name = parse_discovery(payload, &self.base_topic, id, entity)
-                    .as_ref()
-                    .and_then(device_name);
-                if let Some(name) = name {
+                if let Some(name) = tag_name(payload, id, entity) {
                     self.devices.entry(id.to_string()).or_default().name = Some(name);
                 }
             }
