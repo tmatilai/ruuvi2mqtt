@@ -18,7 +18,7 @@ use log::info;
 use ruuvi2mqtt_esp32::mac::Mac;
 use ruuvi2mqtt_esp32::status::{self, Board, Live};
 
-use crate::{config, system};
+use crate::{config, gauge, system};
 
 static LIVE: Mutex<Live> = Mutex::new(Live::new());
 
@@ -110,6 +110,7 @@ fn report(targets: &[Mac]) -> anyhow::Result<String> {
         cycles: CYCLES.load(Ordering::Relaxed),
         cycles_failed: CYCLES_FAILED.load(Ordering::Relaxed),
         last_cycle_failed: LAST_CYCLE_FAILED.load(Ordering::Relaxed),
+        battery: gauge::last(),
     };
     let report = LIVE.lock().unwrap().report(&board, targets);
     Ok(serde_json::to_string(&report)?)

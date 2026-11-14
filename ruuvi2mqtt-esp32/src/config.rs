@@ -1,5 +1,7 @@
 // Compile-time configuration from environment variables.
 
+use ruuvi2mqtt_esp32::battery::Gauge;
+
 /// Like `option_env!` but treats empty strings as `None`, so that setting a
 /// variable to empty on the command line (e.g. `make flash WIFI_IP=`) is
 /// equivalent to unsetting it.
@@ -197,6 +199,36 @@ const USB_STAY_AWAKE_VALUE: &str = match option_env_non_empty!("USB_STAY_AWAKE")
 pub const RUUVI_MANUFACTURER_ID: u16 = 0x0499;
 
 // ---------------------------------------------------------------------------
+// Battery
+// ---------------------------------------------------------------------------
+
+/// The board's battery gauge: `max17048` or `m5pm1`. Unset reads none.
+pub const BATTERY: Option<&str> = option_env_non_empty!("BATTERY");
+
+/// `BATTERY` as a gauge.
+pub const BATTERY_GAUGE: Option<Gauge> = match BATTERY {
+    Some(v) if konst::eq_str(v, "max17048") => Some(Gauge::Max17048),
+    Some(v) if konst::eq_str(v, "m5pm1") => Some(Gauge::M5pm1),
+    _ => None,
+};
+
+/// The gauge's I2C pins. Required with `BATTERY`: they depend on the board.
+pub const BATTERY_SDA: Option<u8> = match option_env_non_empty!("BATTERY_SDA") {
+    Some(v) => Some(konst::result::unwrap!(u8::from_str_radix(v, 10))),
+    None => None,
+};
+pub const BATTERY_SCL: Option<u8> = match option_env_non_empty!("BATTERY_SCL") {
+    Some(v) => Some(konst::result::unwrap!(u8::from_str_radix(v, 10))),
+    None => None,
+};
+
+/// A pin that powers the gauge's I2C bus when high, turned on for the read.
+pub const BATTERY_POWER_GPIO: Option<u8> = match option_env_non_empty!("BATTERY_POWER_GPIO") {
+    Some(v) => Some(konst::result::unwrap!(u8::from_str_radix(v, 10))),
+    None => None,
+};
+
+// ---------------------------------------------------------------------------
 // Antenna
 // ---------------------------------------------------------------------------
 
@@ -368,6 +400,58 @@ const _: () = assert!(
     ANTENNA.is_none() || konst::slice::eq_bytes(esp_idf_svc::sys::CONFIG_IDF_TARGET, b"esp32c6\0"),
     "ANTENNA is only for the Seeed XIAO ESP32-C6"
 );
+const _: () = assert!(
+    BATTERY.is_none() || BATTERY_GAUGE.is_some(),
+    "BATTERY must be max17048 or m5pm1"
+);
+const _: () = assert!(
+    BATTERY.is_none() || (BATTERY_SDA.is_some() && BATTERY_SCL.is_some()),
+    "BATTERY_SDA and BATTERY_SCL must be set with BATTERY"
+);
+const _: () = assert!(
+    BATTERY.is_some()
+        || (BATTERY_SDA.is_none() && BATTERY_SCL.is_none() && BATTERY_POWER_GPIO.is_none()),
+    "BATTERY_SDA, BATTERY_SCL and BATTERY_POWER_GPIO are only for BATTERY"
+);
+const _: () = assert!(
+    battery_pins_valid(),
+    "BATTERY_SDA, BATTERY_SCL and BATTERY_POWER_GPIO must be valid GPIO numbers for this chip, differ from each other, and not be LED_GPIO. Only BATTERY_POWER_GPIO may be LED_POWER_GPIO"
+);
+
+const fn battery_pins_valid() -> bool {
+    let pins = [BATTERY_SDA, BATTERY_SCL, BATTERY_POWER_GPIO];
+    let mut i = 0;
+    while i < pins.len() {
+        if let Some(pin) = pins[i] {
+            #[allow(clippy::cast_sign_loss)] // GPIO_NUM_MAX is positive
+            if pin as u32 >= esp_idf_svc::sys::gpio_num_t_GPIO_NUM_MAX as u32 {
+                return false;
+            }
+            if let Some(led) = LED_GPIO {
+                if pin as u32 == led {
+                    return false;
+                }
+            }
+            // The LED and the gauge may share only their power pin.
+            if let Some(power) = LED_POWER_GPIO {
+                if i < 2 && pin as u32 == power {
+                    return false;
+                }
+            }
+            let mut j = i + 1;
+            while j < pins.len() {
+                if let Some(other) = pins[j] {
+                    if pin == other {
+                        return false;
+                    }
+                }
+                j += 1;
+            }
+        }
+        i += 1;
+    }
+    true
+}
 const _: () = assert!(
     match LED_MODE {
         Some(v) => konst::eq_str(v, "on") || konst::eq_str(v, "errors") || konst::eq_str(v, "off"),

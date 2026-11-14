@@ -239,6 +239,7 @@ fn discovery_configs(status_topic: &str) -> Vec<(String, String)> {
                     / 2,
             }
         },
+        battery: config::BATTERY_GAUGE,
     });
     // Deep sleep has no status. Deletes the one that scanning continuously
     // left, which would stay offline.

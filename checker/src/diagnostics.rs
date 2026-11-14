@@ -39,7 +39,22 @@ pub struct Diagnostics {
     pub ruuvi_adverts: [u32; 2],
     /// Other advertisements, the same way
     pub other_adverts: [u32; 2],
+    /// `None` without `BATTERY`, `Some(None)` when the read failed
+    #[allow(clippy::option_option)]
+    pub battery: Option<Option<Battery>>,
     pub error: Option<String>,
+}
+
+/// A battery gauge's reading
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Battery {
+    pub mv: u32,
+    /// Percent, from gauges that have it
+    pub level: Option<f64>,
+    /// Percent per hour, positive while charging
+    pub rate: Option<f64>,
+    /// Whether USB powers the board, from gauges that know it
+    pub usb: Option<bool>,
 }
 
 impl Diagnostics {
@@ -94,6 +109,7 @@ pub fn parse(at: Duration, hostname: &str, payload: &[u8]) -> Result<Diagnostics
         tags: parse_tags(&d["tags"])?,
         ruuvi_adverts: pair("adverts")?,
         other_adverts: pair("other_adverts")?,
+        battery: parse_battery(&d)?,
         error: d["error"].as_str().map(printable),
     };
     if diagnostics.scan_start_ms > diagnostics.scan_end_ms {
@@ -155,6 +171,29 @@ fn parse_settings(s: &Value) -> Result<String, String> {
     Ok(settings)
 }
 
+#[allow(clippy::option_option)]
+fn parse_battery(d: &Value) -> Result<Option<Option<Battery>>, String> {
+    let b = match d.get("battery") {
+        None => return Ok(None),
+        Some(Value::Null) => return Ok(Some(None)),
+        Some(b) => b,
+    };
+    let optional = |key: &str| match &b[key] {
+        Value::Null => Ok(None),
+        v => v.as_f64().map(Some).ok_or_else(|| format!("battery: {b}")),
+    };
+    Ok(Some(Some(Battery {
+        mv: number(b, "mv").map_err(|_| format!("battery: {b}"))?,
+        level: optional("level")?,
+        rate: optional("rate")?,
+        usb: match &b["usb"] {
+            Value::Null => None,
+            Value::Bool(usb) => Some(*usb),
+            _ => return Err(format!("battery: {b}")),
+        },
+    })))
+}
+
 fn parse_tags(tags: &Value) -> Result<BTreeMap<String, (i8, u32)>, String> {
     let Value::Object(tags) = tags else {
         return Err(format!("tags: {tags}"));
@@ -190,6 +229,41 @@ mod tests {
     }
 
     #[test]
+    fn battery() {
+        let parse = |battery: &str| {
+            let payload = diagnostics("1.5.2-dev", 1, "{}").replace(
+                r#""free_heap""#,
+                &format!(r#""battery":{battery},"free_heap""#),
+            );
+            parse(Duration::ZERO, "c6", payload.as_bytes())
+                .unwrap()
+                .battery
+        };
+        assert_eq!(
+            parse(r#"{"mv":3900,"level":81.5,"rate":-1.0}"#),
+            Some(Some(Battery {
+                mv: 3900,
+                level: Some(81.5),
+                rate: Some(-1.0),
+                usb: None,
+            }))
+        );
+        assert_eq!(
+            parse(r#"{"mv":4012,"usb":true}"#),
+            Some(Some(Battery {
+                mv: 4012,
+                level: None,
+                rate: None,
+                usb: Some(true),
+            }))
+        );
+        assert_eq!(parse("null"), Some(None));
+        let payload = diagnostics("1.5.2-dev", 1, "{}");
+        let d = super::parse(Duration::ZERO, "c6", payload.as_bytes()).unwrap();
+        assert_eq!(d.battery, None);
+    }
+
+    #[test]
     fn rejects_values_the_firmware_cant_send() {
         let parse = |payload: String| parse(Duration::ZERO, "c6", payload.as_bytes()).err();
         assert_eq!(
@@ -211,6 +285,13 @@ mod tests {
                 r#"{"x\n":{"rssi":-70,"adverts":2}}"#
             )),
             Some(r#"tag x\n: {"adverts":2,"rssi":-70}"#.into())
+        );
+        assert_eq!(
+            parse(
+                diagnostics("1.5.2-dev", 1, "{}")
+                    .replace(r#""free_heap""#, r#""battery":{"mv":"3900"},"free_heap""#)
+            ),
+            Some(r#"battery: {"mv":"3900"}"#.into())
         );
         assert_eq!(
             parse(diagnostics("1.5.2-dev", 1, "{}").replace("ruuvi2mqtt-c6", r"c6\u001b")),

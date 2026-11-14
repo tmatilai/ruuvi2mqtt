@@ -2,6 +2,8 @@
 
 use serde_json::{json, Value};
 
+use crate::battery::Gauge;
+
 pub struct Board<'a> {
     pub client_id: &'a str,
     pub hostname: &'a str,
@@ -9,6 +11,7 @@ pub struct Board<'a> {
     pub version: &'a str,
     pub chip: &'a str,
     pub mode: Mode,
+    pub battery: Option<Gauge>,
 }
 
 #[derive(Clone, Copy)]
@@ -20,8 +23,8 @@ pub enum Mode {
     },
 }
 
-/// The discovery configs: topic and payload. The other mode's are empty,
-/// which deletes them after a mode change.
+/// The discovery configs: topic and payload. The ones the board doesn't use,
+/// such as the other mode's, are empty, which deletes them after a change.
 #[must_use]
 pub fn configs(board: &Board) -> Vec<(String, String)> {
     let id = topic_id(board.client_id);
@@ -63,6 +66,9 @@ pub fn configs(board: &Board) -> Vec<(String, String)> {
             "json_attributes_template": "{{ value_json.tags | tojson }}",
         }),
     ));
+    if let Some(gauge) = board.battery {
+        configs.extend(battery_sensors(gauge));
+    }
     for (_, _, config) in &mut configs {
         config["state_topic"] = diagnostics_topic.clone().into();
         match board.mode {
@@ -90,10 +96,19 @@ pub fn configs(board: &Board) -> Vec<(String, String)> {
     }
 
     let topic = |component, key| format!("homeassistant/{component}/{id}/{key}/config");
-    let other_mode: &[(&str, &str)] = match board.mode {
-        Mode::Continuous => &[("sensor", "cycle")],
-        Mode::DeepSleep { .. } => &[("sensor", "uptime_s"), ("binary_sensor", "status")],
+    let mut unused: Vec<(&str, &str)> = match board.mode {
+        Mode::Continuous => vec![("sensor", "cycle")],
+        Mode::DeepSleep { .. } => vec![("sensor", "uptime_s"), ("binary_sensor", "status")],
     };
+    if board.battery.is_none() {
+        unused.push(("sensor", "battery_voltage"));
+    }
+    if !board.battery.is_some_and(Gauge::has_level) {
+        unused.push(("sensor", "battery"));
+    }
+    if !board.battery.is_some_and(Gauge::has_usb) {
+        unused.push(("binary_sensor", "usb"));
+    }
     configs
         .into_iter()
         .map(|(component, key, mut config)| {
@@ -102,9 +117,9 @@ pub fn configs(board: &Board) -> Vec<(String, String)> {
             (topic(component, key), config.to_string())
         })
         .chain(
-            other_mode
-                .iter()
-                .map(|&(component, key)| (topic(component, key), String::new())),
+            unused
+                .into_iter()
+                .map(|(component, key)| (topic(component, key), String::new())),
         )
         .collect()
 }
@@ -151,6 +166,50 @@ fn sensors(mode: Mode) -> Vec<(&'static str, Value)> {
     sensors
 }
 
+/// The battery's sensors. A failed read is null, which Home Assistant shows as
+/// unknown.
+fn battery_sensors(gauge: Gauge) -> Vec<(&'static str, &'static str, Value)> {
+    let mut sensors = vec![(
+        "sensor",
+        "battery_voltage",
+        json!({
+            "name": "Battery voltage",
+            "device_class": "voltage",
+            "unit_of_measurement": "mV",
+            "state_class": "measurement",
+            "value_template": "{{ value_json.battery.mv if value_json.battery else none }}",
+        }),
+    )];
+    if gauge.has_level() {
+        sensors.push((
+            "sensor",
+            "battery",
+            json!({
+                "name": "Battery",
+                "device_class": "battery",
+                "unit_of_measurement": "%",
+                "state_class": "measurement",
+                "value_template": "{{ value_json.battery.level if value_json.battery else none }}",
+            }),
+        ));
+    }
+    if gauge.has_usb() {
+        sensors.push((
+            "binary_sensor",
+            "usb",
+            json!({
+                "name": "USB power",
+                "device_class": "plug",
+                "value_template": concat!(
+                    "{{ ('ON' if value_json.battery.usb else 'OFF') ",
+                    "if value_json.battery else none }}",
+                ),
+            }),
+        ));
+    }
+    sensors
+}
+
 /// A discovery topic's IDs allow only ASCII letters, digits, `_` and `-`.
 fn topic_id(s: &str) -> String {
     s.chars()
@@ -173,6 +232,7 @@ mod tests {
             version: "1.7.1-dev (83e48fb)",
             chip: "esp32c6",
             mode,
+            battery: None,
         }
     }
 
@@ -198,6 +258,9 @@ mod tests {
                 "homeassistant/sensor/kitchen_esp32/tags/config",
                 "homeassistant/binary_sensor/kitchen_esp32/status/config",
                 "homeassistant/sensor/kitchen_esp32/cycle/config",
+                "homeassistant/sensor/kitchen_esp32/battery_voltage/config",
+                "homeassistant/sensor/kitchen_esp32/battery/config",
+                "homeassistant/binary_sensor/kitchen_esp32/usb/config",
             ]
         );
         assert_eq!(config(&configs, topics[8]), "");
@@ -265,6 +328,9 @@ mod tests {
                 "homeassistant/sensor/kitchen_esp32/tags/config",
                 "homeassistant/sensor/kitchen_esp32/uptime_s/config",
                 "homeassistant/binary_sensor/kitchen_esp32/status/config",
+                "homeassistant/sensor/kitchen_esp32/battery_voltage/config",
+                "homeassistant/sensor/kitchen_esp32/battery/config",
+                "homeassistant/binary_sensor/kitchen_esp32/usb/config",
             ]
         );
         assert_eq!(config(&configs, topics[7]), "");
@@ -295,6 +361,55 @@ mod tests {
                 r#""value_template":"{{ value_json.settings.scan_mode }}"}"#,
             ]
             .concat()
+        );
+    }
+
+    #[test]
+    fn battery() {
+        let feather = configs(&Board {
+            battery: Some(Gauge::Max17048),
+            ..board(Mode::DeepSleep { expire_after: 195 })
+        });
+        let level = config(
+            &feather,
+            "homeassistant/sensor/kitchen_esp32/battery/config",
+        );
+        assert!(level.contains(r#""device_class":"battery","expire_after":195,"#));
+        assert!(level.contains(
+            r#""value_template":"{{ value_json.battery.level if value_json.battery else none }}"}"#
+        ));
+        let voltage = config(
+            &feather,
+            "homeassistant/sensor/kitchen_esp32/battery_voltage/config",
+        );
+        assert!(voltage.contains(r#""unit_of_measurement":"mV","#));
+
+        assert_eq!(
+            config(
+                &feather,
+                "homeassistant/binary_sensor/kitchen_esp32/usb/config"
+            ),
+            ""
+        );
+
+        // The M5PM1 has no level, so the level's config is deleted.
+        let stick = configs(&Board {
+            battery: Some(Gauge::M5pm1),
+            ..board(Mode::Continuous)
+        });
+        assert_eq!(
+            config(&stick, "homeassistant/sensor/kitchen_esp32/battery/config"),
+            ""
+        );
+        assert!(config(
+            &stick,
+            "homeassistant/sensor/kitchen_esp32/battery_voltage/config"
+        )
+        .contains(r#""device_class":"voltage","#));
+        assert!(
+            config(&stick, "homeassistant/binary_sensor/kitchen_esp32/usb/config").contains(
+                r#""value_template":"{{ ('ON' if value_json.battery.usb else 'OFF') if value_json.battery else none }}"}"#
+            )
         );
     }
 }

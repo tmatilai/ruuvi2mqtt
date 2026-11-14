@@ -16,6 +16,8 @@ use ruuvi2mqtt_esp32::mac::Mac;
 mod antenna;
 mod ble;
 mod config;
+mod gauge;
+mod gpio;
 mod led;
 mod mqtt;
 mod system;
@@ -184,8 +186,8 @@ const BROWNOUT_SLEEP_SECS: u64 = 4 * SLEEP_SECS;
 /// for flashing and monitoring. `esp_restart()` resets the CPU, not the port.
 ///
 /// Scanning continuously, only a crash, a brownout or a failure to start
-/// gets here. The board is on mains power, so it waits awake, and the LED
-/// blinks.
+/// gets here. That mode never deep sleeps, so the board waits awake, and the
+/// LED blinks.
 fn sleep(secs: u64) -> ! {
     if config::BLE_SCAN_CONTINUOUS || (config::USB_STAY_AWAKE && usb_host_connected()) {
         STAYING_AWAKE.store(true, Ordering::Relaxed);
@@ -433,6 +435,8 @@ fn publish(
     scan: ble::Scan,
     error: Option<String>,
 ) -> anyhow::Result<()> {
+    // Before the wait, so that the status page has it without the broker too.
+    let battery = gauge::read();
     let mqtt_ms = ms_between(cycle.start, mqtt.wait_connected(MQTT_CONNECT_TIMEOUT)?);
 
     for reading in &scan.readings {
@@ -465,6 +469,7 @@ fn publish(
         wifi_bssid: ap.map(|ap| Mac::from(ap.bssid)),
         wifi_cache: cycle.wifi_cache,
         free_heap: system::free_heap(),
+        battery,
         scan_start_ms: scan.started_ms,
         scan_end_ms: scan.finished_ms,
         wifi_ms: cycle.wifi_ms,

@@ -44,7 +44,8 @@ scans continuously, stays connected, and publishes each scan's readings over
 MQTT while the next scan runs. The deep-sleep mode runs one cycle per wake
 instead: start a BLE scan thread, connect Wi-Fi, publish, deep sleep.
 Configuration is compile-time via environment variables, see
-`ruuvi2mqtt-esp32/README.md`.
+`ruuvi2mqtt-esp32/README.md`. `ruuvi2mqtt-esp32/boards.md` has each known
+board's settings.
 
 - `src/main.rs`: the continuous loop, the deep-sleep wake cycle, and logger
   setup.
@@ -52,12 +53,14 @@ Configuration is compile-time via environment variables, see
 - `src/wifi.rs`, `src/mqtt.rs`, `src/ble.rs`, `src/led.rs`: one esp-idf-svc
   subsystem each; `ble.rs` uses esp32-nimble. `src/system.rs` reads board values
   from ESP-IDF. `src/antenna.rs` drives the XIAO ESP32-C6's RF switch.
-  `src/web.rs` serves the status page (`src/status.html`) and mDNS, scanning
-  continuously.
+  `src/gauge.rs` reads the battery gauge over I2C. `src/gpio.rs` sets a pin as
+  an output. `src/web.rs` serves the status page (`src/status.html`) and mDNS,
+  scanning continuously.
 - `src/lib.rs`: the pure-Rust modules, `mac.rs` (MAC addresses), `payload.rs`
   (the reading's JSON, and an Air's format 6 versus E1), `roam.rs` (when to
   switch access points), `scan.rs` (BLE reception statistics), `diagnostics.rs`
-  (the diagnostics JSON), `homeassistant.rs` (the board's discovery configs),
+  (the diagnostics JSON), `battery.rs` (the battery gauges' readings and the
+  battery's state), `homeassistant.rs` (the board's discovery configs),
   `status.rs` (the status page's report and grades) and `led_pattern.rs` (the
   LED's breath and blinks). esp-idf-svc and esp32-nimble are espidf-only
   dependencies, so the lib's unit tests run on the host with stable Rust

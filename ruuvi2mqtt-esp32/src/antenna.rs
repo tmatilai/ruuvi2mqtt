@@ -2,10 +2,11 @@
 //! ceramic antenna or the external U.FL one:
 //! <https://wiki.seeedstudio.com/xiao_esp32c6_getting_started/>
 
-use esp_idf_svc::sys::{self, gpio_num_t, EspError};
+use esp_idf_svc::sys::{self, gpio_num_t};
 use log::{info, warn};
 
 use crate::config;
+use crate::gpio::output;
 
 /// Low powers the RF switch.
 const SWITCH_POWER: gpio_num_t = 3;
@@ -47,17 +48,5 @@ pub fn power_off() {
     })();
     if let Err(e) = result {
         warn!("Failed to power off the antenna switch: {e}");
-    }
-}
-
-fn output(pin: gpio_num_t, high: bool) -> Result<(), EspError> {
-    unsafe {
-        // The level first, so the pin doesn't glitch when it becomes an
-        // output.
-        sys::esp!(sys::gpio_set_level(pin, u32::from(high)))?;
-        sys::esp!(sys::gpio_set_direction(
-            pin,
-            sys::gpio_mode_t_GPIO_MODE_OUTPUT
-        ))
     }
 }
