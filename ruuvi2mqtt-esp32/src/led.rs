@@ -1,3 +1,5 @@
+//! Drives the LED in a thread of its own. `led_pattern.rs` has the patterns.
+
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
 use std::time::{Duration, Instant};
@@ -44,7 +46,7 @@ static DARK: AtomicBool = AtomicBool::new(false);
 /// Set once the LED thread runs.
 static STARTED: AtomicBool = AtomicBool::new(false);
 
-/// Turn the LED off for good, before deep sleep: a WS2812 keeps its color,
+/// Turns the LED off for good, before deep sleep: a WS2812 keeps its color,
 /// and a plain LED's pin floats.
 pub fn off() {
     if !STARTED.load(Ordering::Relaxed) {
@@ -71,7 +73,7 @@ const GPIO_ALARM_DIVISOR: u32 = 2;
 /// The WS2812's alarm, red at half brightness.
 const WS2812_ALARM_COLOR: u32 = 0x80_00_00;
 
-/// Run the LED in a thread of its own, as `LED_MODE` says.
+/// Runs the LED in a thread of its own, as `LED_MODE` says.
 pub fn start() -> anyhow::Result<()> {
     // config.rs fails the build when LED_MODE is set without LED_GPIO.
     let (Some(mode), Some(gpio)) = (config::LED_MODE, config::LED_GPIO) else {
@@ -220,11 +222,11 @@ fn output_pin(gpio: u32) -> AnyOutputPin<'static> {
     }
 }
 
-/// Send 3 bytes (GRB) to a single WS2812 LED via the RMT peripheral.
+/// Sends 3 bytes (GRB) to a single WS2812 LED through the RMT peripheral.
 ///
 /// WS2812 timing at 10 MHz resolution (1 tick = 100 ns):
 ///   bit 0: 300 ns high (3 ticks), 900 ns low (9 ticks)
-///   bit 1: 900 ns high (9 ticks), 300 ns low (3 ticks)
+///   bit 1: 900 ns high (9 ticks), 300 ns low (3 ticks).
 fn ws2812_send(
     tx: &mut TxChannelDriver<'static>,
     grb: [u8; 3],

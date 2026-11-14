@@ -1,3 +1,5 @@
+//! The checks' tests.
+
 use super::*;
 use crate::fixtures::{
     AIR, BOARD, COMMIT, HOST1, HOST2, TAG, air_reading, air_reading_e1, board_discovery,
@@ -27,7 +29,7 @@ fn secs(s: u64) -> Duration {
 }
 
 /// Statuses and discovery for both instances, discovery for TAG, and a
-/// reading every minute for `minutes`, the first `duplicates` of them twice
+/// reading every minute for `minutes`, the first `duplicates` of them twice.
 fn healthy_with(watch: &mut Watch, minutes: u64, duplicates: u64) {
     no_readings(watch, minutes);
     let topic = format!("ruuvi2mqtt/{TAG}");
@@ -40,7 +42,7 @@ fn healthy_with(watch: &mut Watch, minutes: u64, duplicates: u64) {
 }
 
 /// Statuses, discovery and diagnostics every minute for both instances, and
-/// discovery for TAG
+/// discovery for TAG.
 fn no_readings(watch: &mut Watch, minutes: u64) {
     for instance in [HOST1, HOST2] {
         let topic = format!("ruuvi2mqtt/status/{instance}");
@@ -141,7 +143,7 @@ fn instance_diagnostics_are_reported() {
         "{}",
         report.text
     );
-    // Not a board
+    // Not a board.
     assert!(!report.text.contains("ESP32"), "{}", report.text);
 }
 
@@ -200,7 +202,7 @@ fn invalid_instance_diagnostics_fail() {
         let report = w.finish(Duration::from_mins(15));
         assert!(report.text.contains(error), "{error}: {}", report.text);
     }
-    // An unknown RSSI is valid
+    // An unknown RSSI is valid.
     let unknown = instance_diagnostics(HOST1, r#"{"aabbccddee01":{"rssi":null,"readings":1}}"#);
     w.on_message(secs(100), topic, unknown.as_bytes(), false);
     assert_eq!(w.invalid_diagnostics.count, 2);
@@ -227,7 +229,7 @@ fn status_change_fails() {
 fn retained_status_again_is_no_change() {
     let mut w = watch();
     healthy(&mut w, 15);
-    // After the checker's own reconnect
+    // After the checker's own reconnect.
     let topic = "ruuvi2mqtt/status/ruuvi2mqtt_host2";
     assert_eq!(
         w.on_message(
@@ -283,7 +285,7 @@ fn late_first_reading_and_gap_fail() {
 
 #[test]
 fn gap_before_the_watch_extends_the_limits() {
-    // Readings at 11:40 and 25:00: too late and too far apart by default
+    // Readings at 11:40 and 25:00: too late and too far apart by default.
     let with_gap = |gap: Option<u64>, end: u64| {
         let mut w = watch();
         if let Some(gap) = gap {
@@ -304,7 +306,7 @@ fn gap_before_the_watch_extends_the_limits() {
             "Cellar (aabbccddee01): no reading for 13:20",
         ]
     );
-    // A gap of 6:40 before allows twice that
+    // A gap of 6:40 before allows twice that.
     let report = with_gap(Some(400), 1500);
     assert_eq!(report.failures, Vec::<String>::new(), "{}", report.text);
     assert!(
@@ -323,7 +325,7 @@ fn gap_before_the_watch_extends_the_limits() {
 
 #[test]
 fn duplicates_beyond_the_tolerance_fail() {
-    // 10 % of 16 readings tolerates one duplicate
+    // 10 % of 16 readings tolerates one duplicate.
     let mut w = watch();
     healthy_with(&mut w, 15, 1);
     assert_eq!(
@@ -362,7 +364,7 @@ fn healthy_air_passes() {
     healthy(&mut w, 15);
     discovery(&mut w, AIR, "Living room", &AIR_ENTITIES);
     let topic = format!("ruuvi2mqtt/{AIR}");
-    // E1 from one instance, format 6 only from the other
+    // E1 from one instance, format 6 only from the other.
     for m in 0..15 {
         let reading = if m < 10 {
             air_reading_e1(HOST2)
@@ -459,7 +461,7 @@ fn other_tags_and_topics_are_reported() {
 }
 
 /// `minutes` of healthy instances, and a board cycle every 67 s, each
-/// with a reading of TAG
+/// with a reading of TAG.
 fn with_board(watch: &mut Watch, minutes: u64, firmware: &str) {
     with_board_in(watch, minutes, firmware, "deep-sleep");
 }
@@ -632,7 +634,7 @@ fn checked_board_with_a_gap_or_a_wrong_cycle_fails() {
     );
 }
 
-/// A checked board that scans continuously, with its retained status
+/// A checked board that scans continuously, with its retained status.
 fn continuous_board(minutes: u64) -> Watch {
     let mut w = watch_board();
     let status = online("1.5.2-dev (6534f11)");
@@ -738,7 +740,7 @@ fn invalid_diagnostics_fail() {
 fn text_from_the_broker_stays_on_its_line() {
     let mut w = watch();
     healthy(&mut w, 15);
-    // A JSON escape in a name, and a raw newline in a status
+    // A JSON escape in a name, and a raw newline in a status.
     discovery(&mut w, TAG, r"Cellar\nok: 1 tags", &TAG_ENTITIES);
     let topic = "ruuvi2mqtt/status/ruuvi2mqtt_host2";
     let note = w.on_message(secs(300), topic, b"offline\nok: 1 tags", false);

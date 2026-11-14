@@ -1,13 +1,16 @@
+//! MAC addresses, as text and in topics.
+
 use std::fmt;
 
 use serde::{Serialize, Serializer};
 
-/// A 6-byte MAC address with colon-separated `Display` and bare-hex topic format.
+/// A 6-byte MAC address. `Display` separates the bytes with colons, and the
+/// topics have bare hex.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Mac(pub [u8; 6]);
 
 impl Mac {
-    /// Bare lowercase hex string for use in MQTT topics (e.g. `"aabbccddeeff"`).
+    /// Bare lowercase hex for the MQTT topics, such as `aabbccddeeff`.
     #[must_use]
     pub fn to_topic_string(self) -> String {
         format!(
@@ -30,7 +33,7 @@ impl Mac {
     }
 }
 
-/// Colon-separated lowercase hex (e.g. `"aa:bb:cc:dd:ee:ff"`).
+/// Colon-separated lowercase hex, such as `aa:bb:cc:dd:ee:ff`.
 impl fmt::Display for Mac {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(

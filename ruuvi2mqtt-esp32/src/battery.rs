@@ -156,7 +156,7 @@ mod tests {
 
     #[test]
     fn max17048() {
-        // 3.9 V, 81.5 %, discharging 1.04 %/h
+        // 3.9 V, 81.5 %, discharging 1.04 %/h.
         let battery = Battery::max17048([0xC3, 0x00], [0x51, 0x80], (-5i16).to_be_bytes());
         assert_eq!(
             battery,

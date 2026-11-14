@@ -14,18 +14,18 @@ use crate::topic::is_tag_id;
 /// One cycle's diagnostics from an ESP32 board. The times are in ms from the
 /// start of the board's cycle.
 pub struct Diagnostics {
-    /// When the checker got them
+    /// When the checker got them.
     pub at: Duration,
-    /// From the topic
+    /// From the topic.
     pub hostname: String,
-    /// The `publisher` of the board's readings
+    /// The `publisher` of the board's readings.
     pub client_id: String,
     pub firmware: String,
     pub chip: String,
-    /// The board's cycle counter, which restarts on a cold boot or crash
+    /// The board's cycle counter, which restarts on a cold boot or crash.
     pub cycle: u32,
     pub settings: String,
-    /// The access point's signal, in dBm, if connected
+    /// The access point's signal, in dBm, if connected.
     pub wifi_rssi: Option<i8>,
     pub wifi_cache: String,
     pub scan_start_ms: u32,
@@ -33,27 +33,27 @@ pub struct Diagnostics {
     pub wifi_ms: u32,
     pub mqtt_ms: u32,
     pub cycle_ms: u32,
-    /// Tag ID to (the strongest RSSI, advertisements)
+    /// Tag ID to (the strongest RSSI, advertisements).
     pub tags: BTreeMap<String, (i8, u32)>,
-    /// Ruuvi advertisements before and after Wi-Fi connected
+    /// Ruuvi advertisements before and after Wi-Fi connected.
     pub ruuvi_adverts: [u32; 2],
-    /// Other advertisements, the same way
+    /// Other advertisements, the same way.
     pub other_adverts: [u32; 2],
-    /// `None` without `BATTERY`, `Some(None)` when the read failed
+    /// `None` without `BATTERY`, `Some(None)` when the read failed.
     #[allow(clippy::option_option)]
     pub battery: Option<Option<Battery>>,
     pub error: Option<String>,
 }
 
-/// A battery gauge's reading
+/// A battery gauge's reading.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Battery {
     pub mv: u32,
-    /// Percent, from gauges that have it
+    /// Percent, from gauges that have it.
     pub level: Option<f64>,
-    /// Percent per hour, positive while charging
+    /// Percent per hour, positive while charging.
     pub rate: Option<f64>,
-    /// Whether USB powers the board, from gauges that know it
+    /// Whether USB powers the board, from gauges that know it.
     pub usb: Option<bool>,
 }
 
@@ -62,7 +62,7 @@ impl Diagnostics {
         self.settings.starts_with("continuous ")
     }
 
-    /// The scan time in ms before and after Wi-Fi connected
+    /// The scan time in ms before and after Wi-Fi connected.
     pub fn scan_windows(&self) -> [u32; 2] {
         let split = self.wifi_ms.clamp(self.scan_start_ms, self.scan_end_ms);
         [split - self.scan_start_ms, self.scan_end_ms - split]
@@ -121,7 +121,7 @@ pub fn parse(at: Duration, hostname: &str, payload: &[u8]) -> Result<Diagnostics
     Ok(diagnostics)
 }
 
-/// The client ID of a board's discovery config, if it is one
+/// The client ID of a board's discovery config, if it is one.
 pub fn discovery(payload: &[u8], base_topic: &str) -> Option<String> {
     let config: Value = serde_json::from_slice(payload).ok()?;
     config["state_topic"]
@@ -151,7 +151,7 @@ pub fn status_page(payload: &[u8], base_topic: &str) -> Option<(String, Option<S
     Some((name.to_string(), url))
 }
 
-/// A `u32`, as the firmware and the app send
+/// A `u32`, as the firmware and the app send.
 pub fn number(v: &Value, key: &str) -> Result<u32, String> {
     v[key]
         .as_u64()
@@ -159,7 +159,7 @@ pub fn number(v: &Value, key: &str) -> Result<u32, String> {
         .ok_or_else(|| format!("{key}: {}", v[key]))
 }
 
-/// `deep-sleep 5s`, with `, external antenna` if set
+/// `deep-sleep 5s`, with `, external antenna` if set.
 fn parse_settings(s: &Value) -> Result<String, String> {
     let mode = s["scan_mode"]
         .as_str()
@@ -171,7 +171,7 @@ fn parse_settings(s: &Value) -> Result<String, String> {
     Ok(settings)
 }
 
-/// The `battery` of `d`
+/// The `battery` of `d`.
 #[allow(clippy::option_option)]
 pub fn parse_battery(d: &Value) -> Result<Option<Option<Battery>>, String> {
     let b = match d.get("battery") {
@@ -320,7 +320,7 @@ mod tests {
         ] {
             assert_eq!(page(url), Some(("c6-board".into(), None)), "{url}");
         }
-        // Deep sleep: none
+        // Deep sleep: none.
         let config = board_discovery();
         assert_eq!(
             status_page(config.as_bytes(), "ruuvi2mqtt"),

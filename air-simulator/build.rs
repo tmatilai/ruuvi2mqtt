@@ -1,3 +1,5 @@
+//! Exports the ESP-IDF build environment, and reruns when the settings change.
+
 fn main() {
     // Exports the ESP-IDF build environment that embuild sets up.
     embuild::espidf::sysenv::output();

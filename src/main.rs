@@ -1,3 +1,6 @@
+//! Starts the BLE listener and the MQTT client, and runs the event loop that
+//! ties them together.
+
 mod config;
 mod devices;
 mod diagnostics;

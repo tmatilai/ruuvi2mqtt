@@ -1,3 +1,5 @@
+//! The reading's JSON, and the Home Assistant discovery payloads and topics.
+
 use serde::Serialize;
 use std::str;
 
@@ -30,7 +32,7 @@ pub struct DeviceInfo<'a> {
     manufacturer: &'a str,
 }
 
-/// The instance as a device, with its status as a connectivity sensor
+/// The instance as a device, with its status as a connectivity sensor.
 #[derive(Debug, Serialize)]
 pub struct Instance<'a> {
     name: &'a str,
@@ -45,7 +47,7 @@ pub struct Instance<'a> {
     pub topic: String,
 }
 
-/// A sensor of the instance, from its diagnostics
+/// A sensor of the instance, from its diagnostics.
 #[derive(Debug, Serialize)]
 pub struct InstanceSensor<'a> {
     name: &'a str,
@@ -81,7 +83,7 @@ pub struct DeviceType<'a> {
     pub component: &'a str,
     #[serde(skip)]
     pub name: &'a str,
-    /// The reading's key, also used in the topic and `unique_id`
+    /// The reading's key, also used in the topic and `unique_id`.
     #[serde(skip)]
     pub key: &'a str,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -364,7 +366,7 @@ impl DeviceType<'static> {
     }
 }
 
-/// The instance's sensors, each a diagnostics field, with its state class
+/// The instance's sensors, each a diagnostics field, with its state class.
 const INSTANCE_SENSORS: [(DeviceType, Option<&str>); 5] = [
     (DeviceType::sensor("Adapter", "adapter").diagnostic(), None),
     (
@@ -387,7 +389,7 @@ const INSTANCE_SENSORS: [(DeviceType, Option<&str>); 5] = [
     ),
 ];
 
-/// The tags heard in the last minute
+/// The tags heard in the last minute.
 const TAGS_HEARD: DeviceType = DeviceType::sensor("Tags heard", "tags").icon("mdi:bluetooth");
 
 const TEMPERATURE: DeviceType = DeviceType::sensor("Temperature", "temperature")
@@ -515,7 +517,7 @@ mod tests {
         );
     }
 
-    /// A config with one device
+    /// A config with one device.
     fn config(model: config::Model) -> config::Config {
         let device = config::Device {
             name: String::from("Office"),
@@ -527,7 +529,7 @@ mod tests {
         }
     }
 
-    /// The discovery topics and payloads for one device
+    /// The discovery topics and payloads for one device.
     fn discovery(model: config::Model) -> Vec<(String, String)> {
         Device::all(&config(model))
             .into_iter()

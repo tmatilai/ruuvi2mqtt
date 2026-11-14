@@ -52,7 +52,7 @@ impl Pattern {
             Self::Breath if t < BREATH_MS => {
                 let x = f64::from(t) / f64::from(BREATH_MS);
                 // A raised cosine, squared, as the eye sees dim light as
-                // brighter
+                // brighter.
                 let s = (1.0 - (std::f64::consts::TAU * x).cos()) / 2.0;
                 #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)] // 0–255
                 let level = (s * s * 255.0).round() as u8;
@@ -106,7 +106,7 @@ mod tests {
         assert_eq!(breath.level(BREATH_MS), 0);
         assert_eq!(breath.level(breath.period_ms() - 1), 0);
         assert_eq!(breath.level(breath.period_ms() + BREATH_MS / 2), 255);
-        // Rises steadily to the peak
+        // Rises steadily to the peak.
         let rise: Vec<u8> = (0..=BREATH_MS / 2)
             .step_by(100)
             .map(|ms| breath.level(ms))

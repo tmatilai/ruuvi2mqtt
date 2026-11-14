@@ -1,3 +1,5 @@
+//! What a BLE scan received, for the diagnostics.
+
 use std::collections::BTreeMap;
 
 use serde::Serialize;

@@ -62,7 +62,7 @@ pub struct Web {
     _mdns: EspMdns,
 }
 
-/// Serve the page, once Wi-Fi is up.
+/// Serves the page, once Wi-Fi is up.
 pub fn start() -> anyhow::Result<Web> {
     let mut mdns = EspMdns::take()?;
     mdns.set_hostname(config::DEVICE_HOSTNAME)?;

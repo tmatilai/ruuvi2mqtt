@@ -15,20 +15,20 @@ pub const DAY: u64 = 24 * 3600;
 
 #[derive(Default)]
 pub struct History {
-    /// By the name in their diagnostics topic
+    /// By the name in their diagnostics topic.
     entries: BTreeMap<String, Entry>,
 }
 
 #[derive(Default)]
 pub struct Entry {
     pub client_id: String,
-    /// An instance's Bluetooth adapter, from its last minute
+    /// An instance's Bluetooth adapter, from its last minute.
     pub adapter: Option<String>,
     /// A board's battery, from its last cycle. `None` also when the read failed.
     pub battery: Option<Battery>,
-    /// When its last diagnostics came, in Unix seconds
+    /// When its last diagnostics came, in Unix seconds.
     pub last: u64,
-    /// By the bucket's start, oldest first
+    /// By the bucket's start, oldest first.
     buckets: VecDeque<(u64, Publisher)>,
 }
 
@@ -47,7 +47,7 @@ impl History {
         let start = now - now % BUCKET;
         if entry.buckets.back().is_none_or(|(s, _)| *s != start) {
             // The cycle and firmware carry over, so that a restart across
-            // buckets counts
+            // buckets counts.
             let previous = entry.buckets.back().map(|(_, p)| p);
             let bucket = Publisher {
                 board: previous.is_some_and(|p| p.board),
@@ -66,7 +66,7 @@ impl History {
         self.entries.iter()
     }
 
-    /// Each publisher's buckets that overlap the last `secs`, merged
+    /// Each publisher's buckets that overlap the last `secs`, merged.
     pub fn window(&self, now: u64, secs: u64) -> BTreeMap<String, Publisher> {
         let from = now.saturating_sub(secs);
         self.entries
@@ -85,7 +85,7 @@ impl History {
             .collect()
     }
 
-    /// Drops the buckets older than a day, and the publishers without any
+    /// Drops the buckets older than a day, and the publishers without any.
     pub fn prune(&mut self, now: u64) {
         let from = now.saturating_sub(DAY);
         self.entries.retain(|_, entry| {
@@ -151,7 +151,7 @@ impl History {
 }
 
 /// `{"start", "board", "periods", ..., "tags": {"<id>": [periods, rssi sum,
-/// rssi count]}}`
+/// rssi count]}}`.
 fn bucket_state((start, p): &(u64, Publisher)) -> Value {
     let tags: Map<String, Value> = p
         .tags
@@ -203,7 +203,7 @@ mod tests {
     use super::*;
     use crate::fixtures::{HOST1, TAG, diagnostics, instance_diagnostics};
 
-    /// A bucket's start
+    /// A bucket's start.
     const T0: u64 = 1_800_000_000 - 1_800_000_000 % BUCKET;
 
     fn minute(h: &mut History, at: u64, rssi: i64) {
@@ -214,7 +214,7 @@ mod tests {
     #[test]
     fn windows_merge_the_buckets() {
         let mut h = History::default();
-        // One minute heard in each bucket, one not in the last
+        // One minute heard in each bucket, one not in the last.
         for (at, rssi) in [(T0 + 60, -70), (T0 + BUCKET, -80), (T0 + 2 * BUCKET, -90)] {
             minute(&mut h, at, rssi);
         }
@@ -228,7 +228,7 @@ mod tests {
         assert_eq!(all.periods, 4);
         let cell = all.cell(TAG).unwrap();
         assert_eq!((cell.rssi, cell.heard), (Some(-80), 75));
-        // Only the last bucket overlaps the last minute
+        // Only the last bucket overlaps the last minute.
         let last = &h.window(now, 60)[HOST1];
         assert_eq!(last.periods, 2);
         assert_eq!(last.cell(TAG).unwrap().heard, 50);

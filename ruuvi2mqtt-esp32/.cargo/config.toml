@@ -13,13 +13,13 @@ linker = "ldproxy"
 runner = "espflash flash --monitor"
 rustflags = ["--cfg", "espidf_time64"]
 
-# ESP32 (Xtensa — requires `cargo +esp`, see Makefile)
+# ESP32 (Xtensa: requires `cargo +esp`, see the Makefile)
 [target.xtensa-esp32-espidf]
 linker = "ldproxy"
 runner = "espflash flash --monitor"
 rustflags = ["--cfg", "espidf_time64"]
 
-# ESP32-S3 (Xtensa — requires `cargo +esp`, see Makefile)
+# ESP32-S3 (Xtensa: requires `cargo +esp`, see the Makefile)
 [target.xtensa-esp32s3-espidf]
 linker = "ldproxy"
 runner = "espflash flash --monitor"

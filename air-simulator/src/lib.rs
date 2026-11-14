@@ -20,23 +20,23 @@ const FLAG_NOX_BIT8: u8 = 0x80;
 /// One sample.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Reading {
-    /// °C
+    /// In °C.
     pub temperature: f64,
-    /// %
+    /// In %.
     pub humidity: f64,
-    /// Pa
+    /// In Pa.
     pub pressure: u32,
-    /// µg/m³
+    /// In µg/m³.
     pub pm1: f64,
     pub pm2_5: f64,
     pub pm4: f64,
     pub pm10: f64,
-    /// ppm
+    /// In ppm.
     pub co2: u16,
-    /// Sensirion index, 1–500
+    /// Sensirion index, 1–500.
     pub voc: u16,
     pub nox: u16,
-    /// lx
+    /// In lx.
     pub luminosity: f64,
     /// 24 bits in E1; format 6 sends the low byte.
     pub sequence: u32,
@@ -305,7 +305,7 @@ pub fn pulse_level(ms: u32) -> u8 {
         return 0;
     }
     let x = f64::from(t) / f64::from(PULSE_MS);
-    // A raised cosine, squared, as the eye sees dim light as brighter
+    // A raised cosine, squared, as the eye sees dim light as brighter.
     let s = (1.0 - (std::f64::consts::TAU * x).cos()) / 2.0;
     #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)] // 0–255
     let level = (s * s * 255.0).round() as u8;
@@ -504,7 +504,7 @@ mod tests {
         assert_eq!(pulse_level(PULSE_MS), 0);
         assert_eq!(pulse_level(PULSE_PERIOD_MS - 1), 0);
         assert_eq!(pulse_level(PULSE_PERIOD_MS + PULSE_MS / 2), 255);
-        // Rises steadily to the peak
+        // Rises steadily to the peak.
         let rise: Vec<u8> = (0..=PULSE_MS / 2).step_by(100).map(pulse_level).collect();
         assert!(rise.windows(2).all(|w| w[0] <= w[1]), "{rise:?}");
     }

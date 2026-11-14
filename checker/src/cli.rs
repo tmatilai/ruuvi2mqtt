@@ -112,7 +112,7 @@ pub struct SiteOptions {
     /// one of them
     #[arg(long, default_value = "ruuvi2mqtt-site")]
     pub client_id: String,
-    /// How long to listen, e.g. 10m or 1h
+    /// How long to listen, such as 10m or 1h
     #[arg(long, default_value = "10m", value_parser = time::parse)]
     pub duration: Duration,
 }
@@ -138,7 +138,7 @@ pub struct CheckOptions {
     #[arg(long, default_value = "60s", value_parser = time::parse)]
     board_cycle: Duration,
     /// The MAC address of a tag that must be published (repeat for each).
-    /// GAP, e.g. 6m or 382s, is its longest gap before the watch. It gets
+    /// GAP, such as 6m or 382s, is its longest gap before the watch. It gets
     /// twice that for its first reading and its gaps, if longer than
     /// --first-reading and --max-gap
     #[arg(
@@ -152,7 +152,7 @@ pub struct CheckOptions {
     /// each), with its GAP as for a tag
     #[arg(long = "air", value_name = "MAC[/GAP]", value_parser = parse_device)]
     airs: Vec<(String, Option<Duration>)>,
-    /// How long to watch, e.g. 1h, 15m or 90s
+    /// How long to watch, such as 1h, 15m or 90s
     #[arg(long, default_value = "1h", value_parser = time::parse)]
     pub duration: Duration,
     /// Every tag's first reading must come within this time
@@ -201,7 +201,7 @@ fn parse_commit(s: &str) -> Result<String, String> {
     }
 }
 
-/// `<MAC>[/<GAP>]`
+/// `<MAC>[/<GAP>]`.
 fn parse_device(s: &str) -> Result<(String, Option<Duration>), String> {
     match s.split_once('/') {
         Some((mac, gap)) => Ok((parse_mac(mac)?, Some(time::parse(gap)?))),
@@ -209,7 +209,7 @@ fn parse_device(s: &str) -> Result<(String, Option<Duration>), String> {
     }
 }
 
-/// `<NAME>=<MAC>`
+/// `<NAME>=<MAC>`.
 fn parse_expect(s: &str) -> Result<(String, String), String> {
     let (name, mac) = s
         .split_once('=')
@@ -220,7 +220,7 @@ fn parse_expect(s: &str) -> Result<(String, String), String> {
     Ok((name.to_string(), parse_mac(mac)?))
 }
 
-/// `AA:BB:CC:DD:EE:01` to `aabbccddee01`, as in the topics
+/// `AA:BB:CC:DD:EE:01` to `aabbccddee01`, as in the topics.
 fn parse_mac(s: &str) -> Result<String, String> {
     let hex: String = s.chars().filter(|c| *c != ':').collect();
     if hex.len() == 12 && hex.bytes().all(|b| b.is_ascii_hexdigit()) {

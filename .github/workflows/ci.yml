@@ -43,6 +43,12 @@ jobs:
       - name: Check the Markdown format
         run: make fmt-docs PRETTIER_MODE=--check
 
+      - name: Setup | typos
+        run: cargo install --locked typos-cli@1.51.1
+
+      - name: Check the spelling and the Markdown links
+        run: make check-docs
+
   clippy:
     name: Clippy
     runs-on: ubuntu-latest

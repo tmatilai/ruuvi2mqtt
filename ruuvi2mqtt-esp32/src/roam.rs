@@ -1,4 +1,4 @@
-//! When to switch to a stronger access point, scanning continuously.
+//! When to switch to a stronger access point, in the continuous mode.
 
 use crate::mac::Mac;
 use std::time::Duration;

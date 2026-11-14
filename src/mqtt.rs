@@ -1,3 +1,5 @@
+//! The MQTT client and its event loop, the status topic and its last will.
+
 use std::time::Duration;
 
 use std::fmt::Debug;
@@ -80,7 +82,7 @@ impl Mqtt {
         })
     }
 
-    /// Validate the options without connecting, for `--check-config`.
+    /// Validates the options without connecting, for `--check-config`.
     pub fn check(config: &config::Mqtt) -> Result<()> {
         Self::options(config).map(|_| ())
     }
@@ -103,7 +105,7 @@ impl Mqtt {
             }
             (Some(user), None) => {
                 log::info!("MQTT login: user '{user}' without a password");
-                // rumqttc leaves an empty password out of CONNECT
+                // rumqttc leaves an empty password out of CONNECT.
                 options.set_credentials(user, "");
             }
             (None, Some(_)) => bail!("MQTT username not specified"),
@@ -223,7 +225,7 @@ impl Mqtt {
     }
 
     /// Readings and diagnostics are periodic, so they are dropped instead of
-    /// queued when the request channel is full (e.g. during a broker outage).
+    /// queued when the request channel is full, such as during a broker outage.
     /// Awaiting `publish()` would pile up blocked tasks and flush stale
     /// messages on reconnect.
     fn try_publish(&self, topic: String, payload: Vec<u8>) -> bool {

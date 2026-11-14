@@ -214,7 +214,7 @@ cmd_register() {
     else
       cp devices/device.mk.example "devices/$device.mk"
     fi
-    echo "Created devices/$device.mk from template (chip: ${chip:-unknown}) — edit it to set IP, hostname, etc."
+    echo "Created devices/$device.mk from template (chip: ${chip:-unknown}). Edit it to set the IP address, the hostname and so on."
   else
     echo "devices/$device.mk already exists"
   fi

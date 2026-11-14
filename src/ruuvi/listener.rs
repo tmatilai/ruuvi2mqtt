@@ -1,3 +1,6 @@
+//! Scans BLE for the tags' advertisements, and sends each reading to the main
+//! loop after its delay.
+
 use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
@@ -46,9 +49,9 @@ impl RuuviListener {
 
         tokio::spawn(async move {
             while let Some(event) = events.next().await {
-                // BlueZ powers the adapter off before it removes it, e.g. when
-                // the controller disconnects or BlueZ restarts. It doesn't
-                // restart our discovery when the adapter comes back.
+                // BlueZ powers the adapter off before it removes it, such as
+                // when the controller disconnects or BlueZ restarts. It
+                // doesn't restart the discovery when the adapter comes back.
                 if let CentralEvent::StateUpdate(CentralState::PoweredOff) = event {
                     log::warn!("Bluetooth adapter powered off");
                     break;
@@ -163,7 +166,7 @@ fn adapter_description(info: String) -> String {
 }
 
 /// `hci0: <manufacturer> <product> (<vendor ID>:<product ID>)`, without the
-/// names that are missing
+/// names that are missing.
 fn usb_description(hci: &str, [vendor, product]: [&str; 2], names: [&str; 2]) -> Option<String> {
     if vendor.is_empty() || product.is_empty() {
         return None;

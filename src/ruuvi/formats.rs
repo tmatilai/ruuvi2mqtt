@@ -1,11 +1,13 @@
+//! Drops an Air's format 6 readings while its E1 ones arrive.
+
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
 
 use crate::ruuvi::{BDAddr, SensorData};
 
-/// Data format 6, an Air's legacy advertisement
+/// Data format 6, an Air's legacy advertisement.
 const FORMAT_6: u8 = 6;
-/// Data format E1, an Air's extended advertisement
+/// Data format E1, an Air's extended advertisement.
 const FORMAT_E1: u8 = 0xE1;
 
 /// How long an E1 reading holds off format 6. E1 arrives about every
@@ -15,8 +17,8 @@ const E1_WINDOW: Duration = Duration::from_mins(1);
 /// An Air sends data formats 6 and E1 from one address. Only E1 has PM1, PM4
 /// and PM10, so Ruuvi says to drop format 6 when both arrive. Otherwise the
 /// published reading comes from whichever wins the throttle, and those
-/// values come and go. Format 6 still serves when E1 isn't received, e.g.
-/// with a Bluetooth 4 adapter.
+/// values come and go. Format 6 still serves when E1 isn't received, such
+/// as with a Bluetooth 4 adapter.
 #[derive(Default)]
 pub struct FormatFilter {
     last_e1: HashMap<BDAddr, Instant>,

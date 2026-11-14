@@ -21,7 +21,7 @@ pub fn free_heap() -> u32 {
     unsafe { sys::esp_get_free_heap_size() }
 }
 
-/// The ESP-IDF target, e.g. `esp32c6`.
+/// The ESP-IDF target, such as `esp32c6`.
 pub fn chip() -> &'static str {
     CStr::from_bytes_with_nul(sys::CONFIG_IDF_TARGET)
         .ok()

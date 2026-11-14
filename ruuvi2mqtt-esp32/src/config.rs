@@ -1,10 +1,10 @@
-// Compile-time configuration from environment variables.
+//! The compile-time configuration, from environment variables. The README
+//! describes each one.
 
 use ruuvi2mqtt_esp32::battery::Gauge;
 
-/// Like `option_env!` but treats empty strings as `None`, so that setting a
-/// variable to empty on the command line (e.g. `make flash WIFI_IP=`) is
-/// equivalent to unsetting it.
+/// Like `option_env!`, but an empty string is `None`. That way an empty
+/// variable on the command line, such as `make flash WIFI_IP=`, unsets it.
 macro_rules! option_env_non_empty {
     ($name:expr) => {
         match option_env!($name) {
@@ -29,10 +29,10 @@ macro_rules! option_env_reject_empty {
 // Wi-Fi
 // ---------------------------------------------------------------------------
 
-/// SSID of the Wi-Fi network to connect to.
+/// The SSID of the Wi-Fi network.
 pub const WIFI_SSID: &str = env!("WIFI_SSID");
 
-/// Password of the Wi-Fi network. Required unless `WIFI_OPEN`.
+/// The password of the Wi-Fi network. Required unless `WIFI_OPEN`.
 pub const WIFI_PASS: Option<&str> = option_env_reject_empty!("WIFI_PASS");
 
 /// `WIFI_OPEN=true` joins an open network. A missing `WIFI_PASS` alone fails
@@ -44,18 +44,17 @@ const WIFI_OPEN_VALUE: &str = match option_env_non_empty!("WIFI_OPEN") {
     None => "false",
 };
 
-/// Optional static IP address (e.g. `"192.168.1.50"`). If set, DHCP is
-/// disabled and `WIFI_GATEWAY` must also be provided.
+/// The static IP address, such as `192.168.1.50`. It turns DHCP off and
+/// requires `WIFI_GATEWAY`.
 pub const WIFI_IP: Option<&str> = option_env_non_empty!("WIFI_IP");
 
-/// Gateway address for static IP (e.g. `"192.168.1.1"`).
+/// The gateway of the static IP.
 pub const WIFI_GATEWAY: Option<&str> = option_env_non_empty!("WIFI_GATEWAY");
 
-/// Subnet mask for static IP (e.g. `"255.255.255.0"`). Defaults to
-/// `255.255.255.0` when `WIFI_IP` is set.
+/// The subnet mask of the static IP. Default: `255.255.255.0`.
 pub const WIFI_NETMASK: Option<&str> = option_env_non_empty!("WIFI_NETMASK");
 
-/// DNS server for static IP. Defaults to `WIFI_GATEWAY` when not set.
+/// The DNS server of the static IP. Default: `WIFI_GATEWAY`.
 pub const WIFI_DNS: Option<&str> = option_env_non_empty!("WIFI_DNS");
 
 /// Wi-Fi band on dual-band chips such as the ESP32-C5: `2.4` or `5`.
@@ -78,13 +77,11 @@ pub const DEVICE_HOSTNAME: &str = match option_env_non_empty!("DEVICE_HOSTNAME")
 // MQTT
 // ---------------------------------------------------------------------------
 
-/// Hostname or IP address of the MQTT broker (matches the app's `mqtt.server`).
+/// The MQTT broker's hostname or IP address.
 pub const MQTT_SERVER: &str = env!("MQTT_SERVER");
 
-/// Enable TLS/SSL for the MQTT connection (matches the app's `mqtt.tls`).
-///
-/// Set to "true" to use `mqtts://`. When enabled without `MQTT_CA_FILE`,
-/// the ESP-IDF built-in CA certificate bundle is used for verification.
+/// `MQTT_TLS=true` connects with TLS. Without `MQTT_CA_FILE`, ESP-IDF's CA
+/// certificate bundle verifies the broker.
 pub const MQTT_TLS: bool = konst::eq_str(
     match option_env_non_empty!("MQTT_TLS") {
         Some(v) => v,
@@ -93,14 +90,11 @@ pub const MQTT_TLS: bool = konst::eq_str(
     "true",
 );
 
-/// Path to a custom CA certificate (PEM format) to embed at compile time
-/// (matches the app's `mqtt.ca_file`).
+/// The path of a PEM CA certificate, embedded at compile time.
 pub const MQTT_CA_FILE: Option<&str> = option_env_non_empty!("MQTT_CA_FILE");
 
-/// Skip the TLS hostname check (matches the app's `mqtt.tls_insecure`). The
-/// certificate chain is still verified.
-///
-/// WARNING: Only use for testing.
+/// `MQTT_TLS_INSECURE=true` skips the certificate's hostname check, for
+/// testing. The certificate chain is still verified.
 pub const MQTT_TLS_INSECURE: bool = konst::eq_str(
     match option_env_non_empty!("MQTT_TLS_INSECURE") {
         Some(v) => v,
@@ -109,8 +103,7 @@ pub const MQTT_TLS_INSECURE: bool = konst::eq_str(
     "true",
 );
 
-/// MQTT broker port (matches the app's `mqtt.port`).
-/// Default: 8883 when TLS is enabled, 1883 otherwise.
+/// The MQTT broker's port. Default: 8883 with TLS, 1883 without.
 pub const MQTT_PORT: u16 = match option_env_non_empty!("MQTT_PORT") {
     Some(v) => konst::result::unwrap!(u16::from_str_radix(v, 10)),
     None => {
@@ -122,26 +115,24 @@ pub const MQTT_PORT: u16 = match option_env_non_empty!("MQTT_PORT") {
     }
 };
 
-/// MQTT client identifier (matches the app's `mqtt.client_id`). Also sent as
-/// `publisher` in each reading. Default: `DEVICE_HOSTNAME`.
+/// The MQTT client ID, also the `publisher` in each reading. Default:
+/// `DEVICE_HOSTNAME`.
 pub const MQTT_CLIENT_ID: &str = match option_env_non_empty!("MQTT_CLIENT_ID") {
     Some(v) => v,
     None => DEVICE_HOSTNAME,
 };
 
-/// MQTT username (matches the app's `mqtt.user`). Unset logs in
-/// anonymously.
+/// The MQTT username. Unset logs in anonymously.
 pub const MQTT_USER: Option<&str> = option_env_reject_empty!("MQTT_USER");
 
-/// MQTT password (matches the app's `mqtt.password`). Requires `MQTT_USER`.
+/// The MQTT password. Requires `MQTT_USER`.
 pub const MQTT_PASSWORD: Option<&str> = option_env_reject_empty!("MQTT_PASSWORD");
 
 // ---------------------------------------------------------------------------
 // Topics
 // ---------------------------------------------------------------------------
 
-/// Base topic prefix (matches the app's `mqtt.base_topic`).
-/// Messages will be published to `{MQTT_BASE_TOPIC}/{MAC_ADDRESS}`.
+/// The topic prefix. A reading goes to `<base_topic>/<mac>`.
 pub const MQTT_BASE_TOPIC: &str = match option_env_non_empty!("MQTT_BASE_TOPIC") {
     Some(v) => v,
     None => "ruuvi2mqtt",
@@ -162,21 +153,20 @@ pub const BLE_SCAN_MODE: &str = match option_env_non_empty!("BLE_SCAN_MODE") {
 /// `BLE_SCAN_MODE=continuous`.
 pub const BLE_SCAN_CONTINUOUS: bool = konst::eq_str(BLE_SCAN_MODE, "continuous");
 
-/// Duration (seconds) of each BLE scan pass. In the continuous mode, a cycle
+/// The length of each BLE scan, in seconds. In the continuous mode, a cycle
 /// is one scan, so this is how often the readings are published.
 ///
-/// In the deep-sleep mode, BLE scanning runs during the Wi-Fi connection,
-/// so increasing this does not necessarily add to the total active time. For
-/// best results, set this close to your typical Wi-Fi + MQTT connect time
-/// (check the boot log), but at least 3 seconds, so that each tag gets a few
-/// chances to be heard.
+/// In the deep-sleep mode, the scan runs while Wi-Fi connects, so a longer
+/// one doesn't always add to the time awake. The Wi-Fi and MQTT connect time
+/// in the boot log is a good value, but at least 3 seconds, so that each tag
+/// gets a few chances to be heard.
 pub const BLE_SCAN_DURATION: i32 = match option_env_non_empty!("BLE_SCAN_DURATION") {
     Some(v) => konst::result::unwrap!(i32::from_str_radix(v, 10)),
     None if BLE_SCAN_CONTINUOUS => 60,
     None => 5,
 };
 
-/// Deep sleep duration (seconds) between scan-publish cycles. The CPU, the
+/// The deep sleep between the cycles, in seconds. The CPU, the
 /// radios and the main RAM power off, and the chip reboots on wake. The
 /// continuous mode waits this long awake after a failure, then restarts. A
 /// cycle timeout waits a cycle longer, and a cycle that succeeds cancels the
@@ -247,13 +237,13 @@ pub const ANTENNA_EXTERNAL: bool = match ANTENNA {
 // LED
 // ---------------------------------------------------------------------------
 
-/// LED operating mode.
+/// The LED's mode.
 ///
-/// - `on`, the default when `LED_GPIO` is set: scanning continuously,
-///   breathe slowly and dimly. In the deep-sleep mode, light while awake.
-///   Blink while something fails.
-/// - `errors`: blink only while something fails.
-/// - `off`: explicitly turn the LED off at boot.
+/// - `on`, the default when `LED_GPIO` is set: in the continuous mode, the
+///   LED breathes slowly and dimly. In the deep-sleep mode, it lights while
+///   the board is awake. It blinks while something fails.
+/// - `errors`: the LED blinks only while something fails.
+/// - `off`: the LED is turned off at boot.
 ///
 /// Without `LED_GPIO` and `LED_MODE`, the LED's pin is not touched.
 pub const LED_MODE: Option<&str> = match option_env_non_empty!("LED_MODE") {
@@ -262,7 +252,7 @@ pub const LED_MODE: Option<&str> = match option_env_non_empty!("LED_MODE") {
     None => None,
 };
 
-/// LED hardware type: `ws2812` or `gpio`. Default: `ws2812`.
+/// The LED's type: `ws2812` or `gpio`. Default: `ws2812`.
 pub const LED_TYPE: &str = match option_env_non_empty!("LED_TYPE") {
     Some(v) => v,
     None => "ws2812",
@@ -276,14 +266,14 @@ const LED_ACTIVE_LOW_VALUE: &str = match option_env_non_empty!("LED_ACTIVE_LOW")
     None => "false",
 };
 
-/// GPIO pin number for the LED. Required with `LED_MODE`: the pin depends
+/// The LED's GPIO pin number. Required with `LED_MODE`: the pin depends
 /// on the board, and a wrong one may drive something else.
 pub const LED_GPIO: Option<u32> = match option_env_non_empty!("LED_GPIO") {
     Some(v) => Some(konst::result::unwrap!(u32::from_str_radix(v, 10))),
     None => None,
 };
 
-/// GPIO pin that powers the LED when high, for boards that switch the LED's
+/// The GPIO pin that powers the LED when high, for boards that switch the LED's
 /// power.
 pub const LED_POWER_GPIO: Option<u32> = match option_env_non_empty!("LED_POWER_GPIO") {
     Some(v) => Some(konst::result::unwrap!(u32::from_str_radix(v, 10))),
@@ -304,7 +294,7 @@ pub const LED_COLOR: u32 = konst::result::unwrap!(u32::from_str_radix(LED_COLOR_
 // Logging
 // ---------------------------------------------------------------------------
 
-/// Log level filter.
+/// The log level of the firmware's own code.
 pub const LOG_LEVEL: &str = match option_env_non_empty!("LOG_LEVEL") {
     Some(v) => v,
     None => "info",

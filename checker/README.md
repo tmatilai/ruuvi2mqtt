@@ -14,17 +14,17 @@ checks that:
 - Each instance has its Home Assistant discovery config.
 - Each instance publishes its diagnostics, and never goes `--max-gap` without
   them. The report shows how each instance hears each tag.
-- Each tag (`--tag <MAC>`) and Ruuvi Air (`--air <MAC>`) has its first reading
-  within `--first-reading` (5 minutes), and never goes `--max-gap` (10 minutes)
-  without one.
-- A device given as `<MAC>/<GAP>` gets twice its `GAP` for both, if that is
-  longer. The `GAP` is its longest gap before the watch, from the recorder, so a
-  device that comes rarely doesn't fail.
-- The readings have values in the sensors' ranges. A tag's readings have a
+- Each RuuviTag (`--tag <MAC>`) and Ruuvi Air (`--air <MAC>`) has its first
+  reading within `--first-reading` (5 minutes), and never goes `--max-gap` (10
+  minutes) without one.
+- A tag given as `<MAC>/<GAP>` gets twice its `GAP` for both, if that is longer.
+  The `GAP` is its longest gap before the watch, from the recorder, so a tag
+  that comes rarely doesn't fail.
+- The readings have values in their valid ranges. A RuuviTag's readings have a
   battery and no air quality values. An Air's have a calibration flag and no
-  battery or TX power. Devices not given are checked as tags.
+  battery or TX power. Tags not given are checked as RuuviTags.
 - Each reading's `publisher` is one of the instances or one of the boards.
-- At most `--max-duplicates` (10 %) of a device's readings are duplicates, which
+- At most `--max-duplicates` (10 %) of a tag's readings are duplicates, which
   come less than 90 % of `--throttle` after the previous one. Two instances with
   a similar signal sometimes both publish. The boards don't throttle, so their
   readings don't count.
@@ -33,7 +33,7 @@ checks that:
 - The instances' and the ESP32 boards' diagnostics are valid.
 - Each board (`--board <client_id>`) runs `--commit`, without local changes, in
   every cycle. Flash the boards before the watch starts.
-- Each board that scans continuously was online at the start and stayed online.
+- Each board in the continuous mode was online at the start and stayed online.
 - Each board has its Home Assistant discovery config.
 - Each board publishes its diagnostics about once per `--board-cycle` (60 s, the
   firmware's default; 67 s for the deep-sleep defaults), within 10 %, and never
@@ -87,8 +87,8 @@ printf '%s\n' "$PASSWORD" | target/release/ruuvi2mqtt-checker record \
     --server broker.example --ca-file ca.crt --user checker --state state.json
 ```
 
-Every minute it writes the state file, through a temporary file. Per device, by
-the topic's ID:
+Every minute it writes the state file, through a temporary file. Per tag, by the
+topic's ID:
 
 - `name`: from the tag's discovery configs, on any base topic.
 - `last`: the last reading's time.
@@ -99,11 +99,11 @@ the topic's ID:
 - `readings`: the last hour's readings, `[<time>, <publisher>]`, and at least
   the last one.
 
-A device enters the file with its first reading, named from the discovery
-configs that may have come long before, and stays for a day after its last
-reading. The times are Unix seconds. `written` is when it wrote the file,
-`since` when the recording started, and `window` the hour in seconds. The gaps
-count only from `since`.
+A tag enters the file with its first reading, named from the discovery configs
+that may have come long before, and stays for a day after its last reading. The
+times are Unix seconds. `written` is when it wrote the file, `since` when the
+recording started, and `window` the hour in seconds. The gaps count only from
+`since`.
 
 `history` has each publisher's diagnostics for the [status page](#status-page),
 summed in 10-minute buckets for a day. `problems` has when each of the page's
@@ -126,9 +126,9 @@ boards and the instances. The hour and the day are the 10-minute buckets that
 overlap them. The tables leave out the tags that no publisher heard in the last
 day. A board's name links to its status page, from its discovery configs.
 
-Each `--expect <name>=<MAC>` is a tag or Air that a publisher should hear, by
-the name in its diagnostics topic. With them, the site table's problems cover
-only the expected tags, and a tag that one publisher should hear needs no other.
+Each `--expect <name>=<MAC>` is a tag that a publisher should hear, by the name
+in its diagnostics topic. With them, the site table's problems cover only the
+expected tags, and a tag that one publisher should hear needs no other.
 
 The problems, and which notify through `problems.json`:
 

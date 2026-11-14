@@ -1,3 +1,5 @@
+//! The BLE scan, through esp32-nimble.
+
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
@@ -13,7 +15,7 @@ use ruuvi_sensor_protocol::SensorValues;
 
 use crate::config;
 
-/// Decoded Ruuvi sensor reading ready for publishing.
+/// A decoded reading, ready to publish.
 #[derive(Debug, Clone)]
 pub struct RuuviReading {
     pub mac: Mac,
@@ -46,16 +48,16 @@ struct State {
     stats: ScanStats,
 }
 
-/// Run one BLE scan pass and return decoded Ruuvi readings.
+/// Runs one BLE scan and returns the decoded readings.
 ///
 /// Each MAC is reported at most once per scan. The last advertisement wins,
 /// except that an Air's format 6 doesn't replace its E1.
 pub fn scan(start: Instant) -> anyhow::Result<Scan> {
     let ble_device = BLEDevice::take();
     let mut ble_scan = BLEScan::new();
-    // Passive scan with 100% duty cycle — the BLE radio power savings from
-    // duty cycling are negligible compared to Wi-Fi and CPU, so maximize the
-    // chance of catching every advertisement. Without the duplicate filter,
+    // A passive scan at a 100 % duty cycle. Duty cycling the BLE radio would
+    // save little next to Wi-Fi and the CPU, and this way the scan catches
+    // the most advertisements. Without the duplicate filter,
     // every advertisement reaches the callback, so the statistics count them
     // all.
     ble_scan

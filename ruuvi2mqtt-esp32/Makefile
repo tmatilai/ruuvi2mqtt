@@ -1,8 +1,8 @@
 # --- Device configuration --------------------------------------------------
-# Set DEVICE explicitly (e.g. `make flash DEVICE=kitchen`) or let Make
+# Set DEVICE explicitly, as in `make flash DEVICE=kitchen`, or let Make
 # auto-detect the only attached board from its MAC address via
-# devices/devices.conf. Set DEVICE to empty to skip auto-detection (e.g.
-# `make flash DEVICE=`). boards.sh finds the boards and their ports.
+# devices/devices.conf. Set DEVICE to empty to skip auto-detection, as in
+# `make flash DEVICE=`. boards.sh finds the boards and their ports.
 #
 # Auto-detection runs only for targets that need it and only when
 # devices/devices.conf exists. ESPFLASH_PORT limits it to one port.
@@ -86,7 +86,7 @@ endif
 export MCU := $(CHIP)
 # A target directory per chip: the C6 and C5 share a Rust target, but
 # ESP-IDF's build can't switch chips in place. A directory set in the
-# environment wins, e.g. the test bed's. esp-idf-sys looks for the crate
+# environment wins, such as the test bed's. esp-idf-sys looks for the crate
 # (sdkconfig.defaults) next to the target directory unless
 # CARGO_WORKSPACE_DIR says where it is.
 export CARGO_TARGET_DIR ?= target/$(CHIP)
@@ -183,7 +183,7 @@ boards: ## List the attached boards (resets unknown ones behind a USB-UART bridg
 	@$(BOARDS) list
 
 .PHONY: register
-register: ## Register the attached board as DEVICE (e.g. make register DEVICE=kitchen)
+register: ## Register the attached board as DEVICE (make register DEVICE=kitchen)
 ifndef DEVICE
 	$(error DEVICE is required. Usage: make register DEVICE=kitchen)
 endif

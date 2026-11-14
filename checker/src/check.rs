@@ -14,21 +14,21 @@ use crate::payload::{self, Model, Reading, printable};
 use crate::time;
 use crate::topic::Topic;
 
-/// How many examples of a problem the report lists
+/// How many examples of a problem the report lists.
 const MAX_EXAMPLES: usize = 5;
 
 pub struct Config {
     pub base_topic: String,
-    /// The commit under test, at least 7 hex digits
+    /// The commit under test, at least 7 hex digits.
     pub commit: String,
-    /// The app instances' MQTT client IDs
+    /// The app instances' MQTT client IDs.
     pub instances: Vec<String>,
-    /// The ESP32 boards' MQTT client IDs, to check their firmware and cycle
+    /// The ESP32 boards' MQTT client IDs, to check their firmware and cycle.
     pub boards: Vec<String>,
-    /// How often a board publishes its diagnostics
+    /// How often a board publishes its diagnostics.
     pub board_cycle: Duration,
     /// The tags that must be published, as in their topics (lowercase hex),
-    /// the Airs included
+    /// the Airs included.
     pub tags: Vec<String>,
     /// Which of the tags are Ruuvi Airs. Any other device is validated as a
     /// tag.
@@ -39,12 +39,12 @@ pub struct Config {
     pub first_reading: Duration,
     pub max_gap: Duration,
     pub throttle: Duration,
-    /// Percentage of a tag's readings that may be duplicates
+    /// Percentage of a tag's readings that may be duplicates.
     pub max_duplicates: u8,
 }
 
 impl Config {
-    /// A tag's limits for its first reading and its gaps
+    /// A tag's limits for its first reading and its gaps.
     fn limits(&self, id: &str) -> (Duration, Duration) {
         let slack = self
             .gaps
@@ -65,7 +65,7 @@ impl Config {
 pub struct Report {
     pub text: String,
     pub failures: Vec<String>,
-    /// One line: `ok: ...` or `FAIL: ...`
+    /// One line: `ok: ...` or `FAIL: ...`.
     pub summary: String,
 }
 
@@ -73,14 +73,14 @@ pub struct Report {
 pub struct Watch {
     config: Config,
     statuses: BTreeMap<String, Vec<Status>>,
-    /// The instances' discovery configs: topic to client ID
+    /// The instances' discovery configs: topic to client ID.
     instance_discovery: BTreeMap<String, String>,
-    /// The boards' scan mode discovery configs, the same way
+    /// The boards' scan mode discovery configs, the same way.
     board_discovery: BTreeMap<String, String>,
     tags: BTreeMap<String, Tag>,
-    /// The ESP32 boards' diagnostics, by client ID
+    /// The ESP32 boards' diagnostics, by client ID.
     boards: BTreeMap<String, Vec<Diagnostics>>,
-    /// The instances' diagnostics, the same way
+    /// The instances' diagnostics, the same way.
     instance_minutes: BTreeMap<String, Vec<payload::Diagnostics>>,
     invalid_readings: Problems,
     invalid_discovery: Problems,
@@ -90,22 +90,22 @@ pub struct Watch {
 
 struct Status {
     at: Duration,
-    /// Retained: the status from before the checker connected
+    /// Retained: the status from before the checker connected.
     retained: bool,
     payload: String,
-    /// Whether it is online with the commit under test
+    /// Whether it is online with the commit under test.
     check: Result<(), String>,
 }
 
 #[derive(Default)]
 struct Tag {
-    /// From the discovery configs
+    /// From the discovery configs.
     name: Option<String>,
     entities: BTreeSet<&'static str>,
-    /// When, and from which publisher
+    /// When, and from which publisher.
     readings: Vec<(Duration, String)>,
     publishers: BTreeMap<String, usize>,
-    /// An Air's readings with data format E1's values, by publisher
+    /// An Air's readings with data format E1's values, by publisher.
     e1: BTreeMap<String, usize>,
 }
 
@@ -157,7 +157,7 @@ impl Watch {
             Topic::Reading(id) => self.on_reading(at, id, payload, retained),
             Topic::Discovery { id, entity } => self.on_discovery(topic, id, entity, payload),
             Topic::StatusDiscovery => {
-                // An empty payload deletes the config
+                // An empty payload deletes the config.
                 match payload::instance_discovery(payload, &self.config.base_topic) {
                     Some(id) => self.instance_discovery.insert(topic.to_string(), id),
                     None => self.instance_discovery.remove(topic),
@@ -188,7 +188,7 @@ impl Watch {
         let raw = String::from_utf8_lossy(payload);
         let payload = printable(&raw);
         let history = self.statuses.entry(client_id.to_string()).or_default();
-        // The broker sends the retained status again when the checker reconnects
+        // The broker sends the retained status again when the checker reconnects.
         if retained && history.last().is_some_and(|s| s.payload == payload) {
             return None;
         }
@@ -253,7 +253,7 @@ impl Watch {
         } else {
             diagnostics::parse(at, hostname, payload).map(|cycle| {
                 let cycles = self.boards.entry(cycle.client_id.clone()).or_default();
-                // A QoS 1 message can arrive twice
+                // A QoS 1 message can arrive twice.
                 if cycles.last().is_none_or(|last| last.cycle != cycle.cycle) {
                     cycles.push(cycle);
                 }
@@ -273,7 +273,7 @@ impl Watch {
         payload: &[u8],
     ) -> Option<String> {
         let tag = self.tags.entry(id.to_string()).or_default();
-        // An empty retained message deletes the config
+        // An empty retained message deletes the config.
         if payload.is_empty() {
             tag.entities.remove(entity);
             return None;
@@ -291,7 +291,7 @@ impl Watch {
         None
     }
 
-    /// The progress so far, in one line
+    /// The progress so far, in one line.
     pub fn progress(&self) -> String {
         let readings: usize = self.tags.values().map(|t| t.readings.len()).sum();
         let heard = self
@@ -380,7 +380,7 @@ impl Watch {
             let model = c.model(id);
             if let Some(tag) = tag.filter(|t| !t.publishers.is_empty()) {
                 // Only reported: an ESP32, and an instance without a
-                // Bluetooth 5 adapter, get only an Air's format 6
+                // Bluetooth 5 adapter, get only an Air's format 6.
                 let publishers: Vec<String> = tag
                     .publishers
                     .iter()
@@ -407,7 +407,7 @@ impl Watch {
                 ));
             }
             // The app clears another model's configs, as one left retained
-            // stays in Home Assistant
+            // stays in Home Assistant.
             if !unexpected.is_empty() {
                 r.failures.push(format!(
                     "{label}: unexpected discovery configs: {}",
@@ -433,7 +433,7 @@ impl Watch {
         }
     }
 
-    /// A tag's first reading, gaps and duplicates
+    /// A tag's first reading, gaps and duplicates.
     fn check_timing(&self, r: &mut Report, id: &str, label: &str, end: Duration) {
         let c = &self.config;
         let tag = self.tags.get(id);
@@ -445,7 +445,7 @@ impl Watch {
             return;
         };
         let max_gap = time::max_gap(&readings, first, end);
-        // The boards don't throttle, so only the instances' readings count
+        // The boards don't throttle, so only the instances' readings count.
         let boards = self.board_ids();
         let throttled: Vec<Duration> = tag
             .iter()
@@ -487,7 +487,7 @@ impl Watch {
         }
     }
 
-    /// Invalid and unexpected messages
+    /// Invalid and unexpected messages.
     fn check_messages(&self, r: &mut Report) {
         if self.invalid_readings.count > 0 {
             r.failures
@@ -566,7 +566,7 @@ impl Watch {
         }
     }
 
-    /// The boards given with `--board`, and the ones that sent diagnostics
+    /// The boards given with `--board`, and the ones that sent diagnostics.
     fn board_ids(&self) -> BTreeSet<&str> {
         self.config
             .boards

@@ -1,3 +1,5 @@
+//! The CLI and the YAML config file.
+
 use std::{
     collections::HashMap,
     env, fs,

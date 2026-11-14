@@ -1,3 +1,5 @@
+//! Sets `BUILD_VERSION`, the package version plus the git commit.
+
 use std::process::Command;
 
 /// Sets `BUILD_VERSION` to the package version plus the git commit, so a

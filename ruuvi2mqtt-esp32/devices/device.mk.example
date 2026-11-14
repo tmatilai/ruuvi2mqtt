@@ -1,7 +1,8 @@
 # Per-device configuration.
 #
 # Copy this file to <device-name>.mk and adjust the values.
-# Variables exported here override environment variables (e.g. from .envrc).
+# Variables exported here override environment variables, such as those from
+# .envrc.
 #
 # The device name should match the entry in devices.conf for auto-detection.
 

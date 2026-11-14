@@ -13,28 +13,28 @@ use crate::payload::{client_id, printable, tag_name};
 use crate::time::max_gap;
 use crate::topic::Topic;
 
-/// How far back the state's readings and gaps go, in seconds
+/// How far back the state's readings and gaps go, in seconds.
 pub const WINDOW: u64 = 3600;
 /// A longer break, with the recorder stopped or disconnected, restarts the
 /// recording. Otherwise the break would look like a gap of every tag.
 const MAX_BREAK: u64 = 120;
-/// A device not heard for this long drops out of the state
+/// A device not heard for this long drops out of the state.
 const DEVICE_TTL: u64 = 24 * 3600;
 
 /// All times are Unix seconds.
 pub struct Recorder {
     base_topic: String,
-    /// Since when it has recorded without a break
+    /// Since when it has recorded without a break.
     since: u64,
-    /// By tag ID
+    /// By tag ID.
     devices: BTreeMap<String, Device>,
     history: History,
-    /// By client ID, from the retained statuses, so not in the state
+    /// By client ID, from the retained statuses, so not in the state.
     statuses: BTreeMap<String, Status>,
     /// The boards' status pages, by diagnostics topic name, from the retained
-    /// discovery configs, so not in the state
+    /// discovery configs, so not in the state.
     status_pages: BTreeMap<String, String>,
-    /// Since when each of the page's problems has lasted, by its key
+    /// Since when each of the page's problems has lasted, by its key.
     problems: BTreeMap<String, u64>,
 }
 
@@ -45,7 +45,7 @@ struct Status {
 
 #[derive(Default)]
 struct Device {
-    /// From the discovery configs
+    /// From the discovery configs.
     name: Option<String>,
     /// When, and from which publisher, within the window. The last one stays
     /// even when older.
@@ -132,7 +132,7 @@ impl Recorder {
                     self.devices.entry(id.to_string()).or_default().name = Some(name);
                 }
             }
-            // In deep sleep, a board republishes it without a page
+            // In deep sleep, a board republishes it without a page.
             Topic::ScanModeDiscovery => {
                 match diagnostics::status_page(payload, &self.base_topic) {
                     Some((name, Some(url))) => self.status_pages.insert(name, url),
@@ -264,7 +264,7 @@ mod tests {
         let d = &state["devices"][TAG];
         assert_eq!(d["name"], "Cellar");
         assert_eq!(d["last"], T0 + 460);
-        // From 90 to 400
+        // From 90 to 400.
         assert_eq!(d["max_gap"], 310);
         assert_eq!(d["publishers"][HOST1], 4);
         assert_eq!(d["battery"], 2.9);
@@ -290,7 +290,7 @@ mod tests {
             false,
         );
         assert_eq!(r.state(T0 + 360)["devices"][TAG]["name"], "Cellar");
-        // Not heard for a day, and back
+        // Not heard for a day, and back.
         assert_eq!(r.state(T0 + 301 + DEVICE_TTL)["devices"], json!({}));
         let now = T0 + 400 + DEVICE_TTL;
         r.on_message(
@@ -311,7 +311,7 @@ mod tests {
         assert_eq!(d["readings"].as_array().map(Vec::len), Some(1));
         assert_eq!(d["publishers"], json!({}));
         assert_eq!(d["max_gap"], WINDOW);
-        // Not heard for a day
+        // Not heard for a day.
         let state = r.state(T0 + 120 + DEVICE_TTL + 1);
         assert_eq!(state["devices"], json!({}));
     }
@@ -341,7 +341,7 @@ mod tests {
         let now = T0 + 301 + MAX_BREAK;
         let state = r.state(now);
         assert_eq!(state["since"], now);
-        // The readings before the break don't count for the gap
+        // The readings before the break don't count for the gap.
         assert_eq!(state["devices"][TAG]["max_gap"], 0);
     }
 

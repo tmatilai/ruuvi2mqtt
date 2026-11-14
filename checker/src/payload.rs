@@ -22,7 +22,7 @@ pub const TAG_ENTITIES: [(&str, &str); 6] = [
     ("sensor", "tx_power"),
 ];
 
-/// A Ruuvi Air's entities, the same way
+/// A Ruuvi Air's entities, the same way.
 pub const AIR_ENTITIES: [(&str, &str); 13] = [
     ("sensor", "temperature"),
     ("sensor", "humidity"),
@@ -89,7 +89,7 @@ impl Model {
 #[derive(Debug, PartialEq)]
 pub struct Reading {
     pub publisher: String,
-    /// It has PM1, PM4 and PM10, which only data format E1 sends
+    /// It has PM1, PM4 and PM10, which only data format E1 sends.
     pub e1: bool,
 }
 
@@ -130,17 +130,17 @@ pub fn validate_reading(payload: &[u8], model: Model) -> Result<Reading, String>
     })
 }
 
-/// A minute of an instance's diagnostics
+/// A minute of an instance's diagnostics.
 pub struct Diagnostics {
-    /// When the checker got them
+    /// When the checker got them.
     pub at: Duration,
     pub client_id: String,
     pub adapter: String,
-    /// Since the instance started
+    /// Since the instance started.
     pub mqtt_reconnects: u32,
     pub readings_published: u32,
     pub readings_throttled: u32,
-    /// Tag ID to (the strongest RSSI, if known, and readings)
+    /// Tag ID to (the strongest RSSI, if known, and readings).
     pub tags: BTreeMap<String, (Option<i8>, u32)>,
 }
 
@@ -202,7 +202,7 @@ pub fn parse_discovery(payload: &[u8], base_topic: &str, id: &str, entity: &str)
     .then_some(config)
 }
 
-/// The client ID of an instance's discovery config, if it is one
+/// The client ID of an instance's discovery config, if it is one.
 pub fn instance_discovery(payload: &[u8], base_topic: &str) -> Option<String> {
     let config: Value = serde_json::from_slice(payload).ok()?;
     let id = config["state_topic"]
@@ -286,7 +286,7 @@ mod tests {
             tag_name(other.as_bytes(), TAG, "temperature"),
             Some("Cellar".into())
         );
-        // Another tag's, or another entity's
+        // Another tag's, or another entity's.
         assert_eq!(
             tag_name(config.as_bytes(), "aabbccddee02", "temperature"),
             None
@@ -303,7 +303,7 @@ mod tests {
                 e1: false
             })
         );
-        // A tag without the pressure sensor, in an old data format
+        // A tag without the pressure sensor, in an old data format.
         let no_pressure = reading(HOST1)
             .replace("1003.2", "null")
             .replace(r#""tx_power":4"#, r#""tx_power":null"#);
