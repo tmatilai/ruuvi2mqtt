@@ -46,7 +46,7 @@ fmt-docs: ## Format the Markdown files with Prettier
 
 # The same version as CI.
 # renovate: datasource=crate depName=typos-cli
-TYPOS_VERSION := 1.51.1
+TYPOS_VERSION := 1.52.2
 
 # renovate: datasource=npm depName=remark-cli
 REMARK_CLI_VERSION := 12.0.1
