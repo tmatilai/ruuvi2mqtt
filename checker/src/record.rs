@@ -7,6 +7,7 @@ use std::collections::{BTreeMap, VecDeque};
 
 use serde_json::{Map, Value, json};
 
+use crate::diagnostics;
 use crate::history::History;
 use crate::payload::{client_id, device_name, parse_discovery, printable};
 use crate::time::max_gap;
@@ -30,6 +31,9 @@ pub struct Recorder {
     history: History,
     /// By client ID, from the retained statuses, so not in the state
     statuses: BTreeMap<String, Status>,
+    /// The boards' status pages, by diagnostics topic name, from the retained
+    /// discovery configs, so not in the state
+    status_pages: BTreeMap<String, String>,
     /// Since when each of the page's problems has lasted, by its key
     problems: BTreeMap<String, u64>,
 }
@@ -58,6 +62,7 @@ impl Recorder {
             devices: BTreeMap::new(),
             history: History::default(),
             statuses: BTreeMap::new(),
+            status_pages: BTreeMap::new(),
             problems: BTreeMap::new(),
         }
     }
@@ -129,6 +134,14 @@ impl Recorder {
                 if let Some(name) = name {
                     self.devices.entry(id.to_string()).or_default().name = Some(name);
                 }
+            }
+            // In deep sleep, a board republishes it without a page
+            Topic::ScanModeDiscovery => {
+                match diagnostics::status_page(payload, &self.base_topic) {
+                    Some((name, Some(url))) => self.status_pages.insert(name, url),
+                    Some((name, None)) => self.status_pages.remove(&name),
+                    None => None,
+                };
             }
             _ => {}
         }

@@ -114,6 +114,27 @@ pub fn discovery(payload: &[u8], base_topic: &str) -> Option<String> {
     client_id(&config["device"]["identifiers"][0]).map(str::to_string)
 }
 
+/// A board's diagnostics topic name and status page, from a discovery config.
+/// Only a continuous board has a page. It goes into a link, so only
+/// `http://<hostname>.local/` passes.
+pub fn status_page(payload: &[u8], base_topic: &str) -> Option<(String, Option<String>)> {
+    let config: Value = serde_json::from_slice(payload).ok()?;
+    let name = config["state_topic"]
+        .as_str()?
+        .strip_prefix(&format!("{base_topic}/diagnostics/"))?;
+    let url = config["device"]["configuration_url"]
+        .as_str()
+        .filter(|url| {
+            url.strip_prefix("http://")
+                .and_then(|rest| rest.strip_suffix(".local/"))
+                .is_some_and(|host| {
+                    !host.is_empty() && host.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-')
+                })
+        })
+        .map(str::to_string);
+    Some((name.to_string(), url))
+}
+
 /// A `u32`, as the firmware and the app send
 pub fn number(v: &Value, key: &str) -> Result<u32, String> {
     v[key]
@@ -153,7 +174,7 @@ fn parse_tags(tags: &Value) -> Result<BTreeMap<String, (i8, u32)>, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::fixtures::diagnostics;
+    use crate::fixtures::{board_discovery, diagnostics};
 
     #[test]
     fn scan_ending_before_wifi_has_no_time_after_wifi() {
@@ -195,5 +216,35 @@ mod tests {
             parse(diagnostics("1.5.2-dev", 1, "{}").replace("ruuvi2mqtt-c6", r"c6\u001b")),
             Some(r#"client_id: "c6\u001b""#.into())
         );
+    }
+
+    #[test]
+    fn status_pages() {
+        let page = |url: &str| {
+            let config = board_discovery().replace(
+                r#""device":{"#,
+                &format!(r#""device":{{"configuration_url":"{url}","#),
+            );
+            status_page(config.as_bytes(), "ruuvi2mqtt")
+        };
+        let url = "http://ruuvi2mqtt-c6.local/";
+        assert_eq!(page(url), Some(("c6-board".into(), Some(url.into()))));
+        for url in [
+            "javascript:alert(1)",
+            "http://.local/",
+            "http://a b.local/",
+            "http://evil.example/x.local/",
+            "https://ruuvi2mqtt-c6.local/",
+        ] {
+            assert_eq!(page(url), Some(("c6-board".into(), None)), "{url}");
+        }
+        // Deep sleep: none
+        let config = board_discovery();
+        assert_eq!(
+            status_page(config.as_bytes(), "ruuvi2mqtt"),
+            Some(("c6-board".into(), None))
+        );
+        assert_eq!(status_page(config.as_bytes(), "ruuvi2mqtt-dev"), None);
+        assert_eq!(status_page(b"", "ruuvi2mqtt"), None);
     }
 }

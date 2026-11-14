@@ -124,7 +124,7 @@ shows the problems, the runs from `runs.json` in the same directory if there is
 one, and tables of the tags, the site table over the last hour and day, the
 boards and the instances. The hour and the day are the 10-minute buckets that
 overlap them. The tables leave out the tags that no publisher heard in the last
-day.
+day. A board's name links to its status page, from its discovery configs.
 
 Each `--expect <name>=<MAC>` is a tag or Air that a publisher should hear, by
 the name in its diagnostics topic. With them, the site table's problems cover
