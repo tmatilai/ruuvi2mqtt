@@ -430,11 +430,15 @@ fn boards_section(out: &mut String, r: &Recorder, now: u64, hour: &Site, day: &S
             .map_or("-".to_string(), |rssi| {
                 format!("{} {rssi} dBm", dot(Grade::wifi(rssi)))
             });
+        let board = esc(label(name));
+        let board = match r.status_pages.get(name) {
+            Some(url) => format!("<a href=\"{}\">{board}</a>", esc(url)),
+            None => board,
+        };
         let _ = writeln!(
             out,
-            "<tr><td>{}</td><td>{}</td><td>{wifi}</td><td>{}</td><td>{}</td></tr>",
+            "<tr><td>{}</td><td>{board}</td><td>{wifi}</td><td>{}</td><td>{}</td></tr>",
             state(r, now, &entry.client_id, entry.last),
-            esc(label(name)),
             p.restarts,
             p.firmware.as_deref().map_or("-".to_string(), esc),
         );
@@ -560,7 +564,8 @@ mod tests {
 
     use super::*;
     use crate::fixtures::{
-        HOST1, HOST2, TAG, diagnostics, discovery, instance_diagnostics, online, reading,
+        HOST1, HOST2, TAG, board_discovery, diagnostics, discovery, instance_diagnostics, online,
+        reading,
     };
 
     const T0: u64 = 1_800_000_000;
@@ -779,6 +784,19 @@ mod tests {
                    <td>ruuvi2mqtt-esp32 1.5.2</td></tr>";
         assert!(page.contains(row), "{row:?} in:\n{page}");
         assert!(!page.contains("<h2>Instances</h2>"));
+        // Linked only while its config has a page
+        let topic = "homeassistant/sensor/ruuvi2mqtt-c6/scan_mode/config";
+        let continuous = board_discovery().replace(
+            r#""device":{"#,
+            r#""device":{"configuration_url":"http://ruuvi2mqtt-c6.local/","#,
+        );
+        r.on_message(T0 + 600, topic, continuous.as_bytes(), true);
+        let page = r.page(T0 + 600, "Test bed", &[], &Ok(None)).html;
+        let link = "<td><a href=\"http://ruuvi2mqtt-c6.local/\">c6-board</a></td>";
+        assert!(page.contains(link), "{link:?} in:\n{page}");
+        r.on_message(T0 + 600, topic, board_discovery().as_bytes(), true);
+        let page = r.page(T0 + 600, "Test bed", &[], &Ok(None)).html;
+        assert!(page.contains("<td>c6-board</td>"));
     }
 
     #[test]
