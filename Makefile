@@ -15,7 +15,7 @@ help: ## Display this help
 all: local $(ARCHS) ## Lint and build all architectures
 
 .PHONY: lint
-lint: fmt-docs ## Check the version, format and lint
+lint: fmt-docs check-docs ## Check the version, format and lint
 	script/check-version
 	cargo fmt --all
 	cargo clippy --workspace --tests --all-targets --all-features -- -D clippy::all -W clippy::pedantic
@@ -44,9 +44,27 @@ PRETTIER_MODE := --write
 fmt-docs: ## Format the Markdown files with Prettier
 	npx --yes prettier@$(PRETTIER_VERSION) $(PRETTIER_MODE) --log-level warn $$(git ls-files '*.md')
 
+# The same version as CI.
+# renovate: datasource=crate depName=typos-cli
+TYPOS_VERSION := 1.51.1
+
+# renovate: datasource=npm depName=remark-cli
+REMARK_CLI_VERSION := 12.0.1
+# renovate: datasource=npm depName=remark-validate-links
+REMARK_VALIDATE_LINKS_VERSION := 13.1.0
+
+# remark looks for a plugin from the working directory, not beside itself, so
+# it gets the plugin's path.
+.PHONY: check-docs
+check-docs: ## Check the spelling, and the links between the Markdown files
+	typos
+	npx --yes -p remark-cli@$(REMARK_CLI_VERSION) -p remark-validate-links@$(REMARK_VALIDATE_LINKS_VERSION) \
+		-c 'remark --use "$$(dirname "$$(command -v remark)")/../remark-validate-links/index.js" --frail --quiet --no-stdout $$(git ls-files "*.md")'
+
 .PHONY: setup
 setup: ## Install the tools for the app and the ESP32 firmware
 	cargo install --locked cross@$(CROSS_VERSION)
+	cargo install --locked typos-cli@$(TYPOS_VERSION)
 	$(MAKE) -C ruuvi2mqtt-esp32 setup
 
 .PHONY: $(ARCHS)

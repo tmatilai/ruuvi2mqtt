@@ -146,5 +146,5 @@ misses one.
 
 `make setup` installs the tools for the app and the ESP32 firmware. Renovate
 bumps the pinned versions, so re-run it after pulling. `make lint` also formats
-the Markdown files with Prettier, which needs Node.js. `make help` lists the
-other targets.
+the Markdown files with Prettier and checks their links, which needs Node.js,
+and checks the spelling with typos. `make help` lists the other targets.

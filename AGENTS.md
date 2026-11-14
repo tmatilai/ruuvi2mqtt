@@ -81,12 +81,13 @@ Commands: `make -C air-simulator lint|test|build|flash|log CHIP=<chip>`.
 
 ## What CI covers
 
-The version check (`script/check-version`), Prettier for the Markdown files, fmt
-and clippy (pedantic) for the app, the firmware and the checker, zizmor for the
-workflows, the trycmd CLI tests, ESP32 host-side unit tests for the pure-Rust
-modules, the checker's unit tests, the Linux binary for six targets, and release
-firmware builds for ESP32-C5, ESP32-C6 and ESP32-S3. For the Air simulator, only
-fmt, and clippy and the unit tests on the host.
+The version check (`script/check-version`), Prettier for the Markdown files,
+their links (remark-validate-links), the spelling (typos), fmt and clippy
+(pedantic) for the app, the firmware and the checker, zizmor for the workflows,
+the trycmd CLI tests, ESP32 host-side unit tests for the pure-Rust modules, the
+checker's unit tests, the Linux binary for six targets, and release firmware
+builds for ESP32-C5, ESP32-C6 and ESP32-S3. For the Air simulator, only fmt, and
+clippy and the unit tests on the host.
 
 Not covered: no MQTT broker, no Bluetooth hardware, and no ESP32 runtime.
 Runtime behavior in `mqtt.rs`, `ruuvi/listener.rs`, `wifi.rs`, and `ble.rs`, as
