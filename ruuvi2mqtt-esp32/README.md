@@ -114,6 +114,7 @@ Environment variables set the configuration at compile time.
 | `LED_GPIO`           | —                   | —                    | LED pin number. Required with `LED_MODE`                                                                                                                                                                                         |
 | `LED_POWER_GPIO`     | —                   | —                    | Pin that powers the LED when high                                                                                                                                                                                                |
 | `LED_COLOR`          | —                   | `000020`             | WS2812 color as hex `RRGGBB`. Low values keep it dim                                                                                                                                                                             |
+| `BUTTON_GPIO`        | —                   | —                    | Button pin number. Requires `LED_GPIO`. See [Button](#button)                                                                                                                                                                    |
 | `LOG_LEVEL`          | —                   | `info`               | Log level for the firmware's own code. Library code logs at `info` at most                                                                                                                                                       |
 
 These can be set in the environment, in `.envrc` (with direnv), or in per-board
@@ -135,6 +136,27 @@ red on a WS2812. The blinks go on while Wi-Fi is down, and until a cycle has
 published its readings and scanned without errors. In the deep-sleep mode, a
 failed cycle sleeps right away, so the blinks show in the next wake. `errors`
 keeps the LED dark except for the blinks, for rooms where a glow would disturb.
+
+#### Button
+
+`BUTTON_GPIO` names a button that pulls its pin low when pressed, such as the
+BOOT button. [boards.md](boards.md) lists the known boards' buttons. The LED
+shows what the button does, so `BUTTON_GPIO` needs `LED_GPIO`.
+
+- A click shows the status for 10 s: the worse of the
+  [status page](#status-page)'s Wi-Fi and publishing grades. The LED blinks once
+  for good, twice for fair and three times for poor. A WS2812 blinks in green,
+  yellow or red. A click works in every `LED_MODE`, `off` too.
+- A 2 s hold switches the LED between `on` and dark. Dark is `errors` when
+  `LED_MODE` is `on`, and `LED_MODE` otherwise. The LED flashes when the hold is
+  long enough, then shows the new mode until the release. The board keeps the
+  choice in NVS flash, so the choice survives a restart and a reflash.
+- A 10 s hold, until the LED blinks fast, drops the choice. The LED then follows
+  `LED_MODE` again.
+
+In the deep-sleep mode, the button works only while a cycle runs. The publishing
+grade counts only the previous cycle's failure, and Wi-Fi counts once the cycle
+has connected it.
 
 #### Antenna
 

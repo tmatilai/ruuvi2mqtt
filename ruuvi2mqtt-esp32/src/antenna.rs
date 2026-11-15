@@ -9,10 +9,10 @@ use crate::config;
 use crate::gpio::output;
 
 /// Low powers the RF switch.
-const SWITCH_POWER: gpio_num_t = 3;
+pub const SWITCH_POWER: gpio_num_t = 3;
 
 /// Low selects the internal antenna, high the external one.
-const SELECT: gpio_num_t = 14;
+pub const SELECT: gpio_num_t = 14;
 
 /// Selects the `ANTENNA`. Before Wi-Fi or BLE start, so that both use it.
 ///

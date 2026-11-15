@@ -16,13 +16,14 @@ use esp_idf_svc::{
 };
 use log::info;
 use ruuvi2mqtt_esp32::mac::Mac;
-use ruuvi2mqtt_esp32::status::{self, Board, Live};
+use ruuvi2mqtt_esp32::status::{self, Board, Grade, Live};
 
 use crate::{config, gauge, system};
 
 static LIVE: Mutex<Live> = Mutex::new(Live::new());
 
-/// Since boot, for the page's grades.
+/// Since boot, for the page's grades and [`link_grade`]. In the deep-sleep
+/// mode, [`set_previous_cycle`] sets the cycles' counts.
 static WIFI_DROPS: AtomicU32 = AtomicU32::new(0);
 static CYCLES: AtomicU32 = AtomicU32::new(0);
 static CYCLES_FAILED: AtomicU32 = AtomicU32::new(0);
@@ -40,6 +41,26 @@ pub fn cycle_done(failed: bool) {
         CYCLES_FAILED.fetch_add(1, Ordering::Relaxed);
     }
     LAST_CYCLE_FAILED.store(failed, Ordering::Relaxed);
+}
+
+/// Sets the deep-sleep mode's cycles: `cycles` since the cold boot, and
+/// whether the previous one failed. Only the previous cycle's failure counts,
+/// as an old one would keep [`link_grade`] fair for good.
+pub fn set_previous_cycle(cycles: u32, failed: bool) {
+    CYCLES.store(cycles, Ordering::Relaxed);
+    CYCLES_FAILED.store(u32::from(failed), Ordering::Relaxed);
+    LAST_CYCLE_FAILED.store(failed, Ordering::Relaxed);
+}
+
+/// Returns the worse of the Wi-Fi and publishing grades.
+pub fn link_grade() -> Grade {
+    status::link_grade(
+        system::ap_record().map(|ap| (ap.rssi, WIFI_DROPS.load(Ordering::Relaxed))),
+        config::BLE_SCAN_CONTINUOUS,
+        CYCLES.load(Ordering::Relaxed),
+        CYCLES_FAILED.load(Ordering::Relaxed),
+        LAST_CYCLE_FAILED.load(Ordering::Relaxed),
+    )
 }
 
 static PAGE: &str = include_str!("status.html");
