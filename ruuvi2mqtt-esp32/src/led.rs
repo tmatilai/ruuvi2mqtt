@@ -1,11 +1,13 @@
 //! Drives the LED in a thread of its own. `led_pattern.rs` has the patterns.
 
+use std::num::NonZeroU32;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
 use std::time::{Duration, Instant};
 
 use esp_idf_svc::hal::{
-    gpio::{AnyOutputPin, Output, PinDriver},
+    delay::TickType,
+    gpio::{AnyInputPin, AnyOutputPin, Input, InterruptType, Output, PinDriver, Pull},
     ledc::{
         config::{Resolution, TimerConfig},
         LedcDriver, LedcTimerDriver, CHANNEL0, TIMER0,
@@ -15,13 +17,16 @@ use esp_idf_svc::hal::{
         encoder::{BytesEncoder, BytesEncoderConfig},
         PinState, Pulse, PulseTicks, Symbol, TxChannelDriver,
     },
-    sys::EspError,
+    task::notification::Notification,
     units::FromValueType,
 };
+use esp_idf_svc::sys::EspError;
 use log::{info, warn};
-use ruuvi2mqtt_esp32::led_pattern::{ws2812_grb, Pattern};
+use ruuvi2mqtt_esp32::button::{Button, Gesture};
+use ruuvi2mqtt_esp32::led_pattern::{self, ws2812_grb, Pattern};
+use ruuvi2mqtt_esp32::status::Grade;
 
-use crate::config;
+use crate::{config, settings, web};
 
 /// Set while Wi-Fi is down, for the LED thread of [`start`].
 static WIFI_DOWN: AtomicBool = AtomicBool::new(false);
@@ -62,25 +67,29 @@ pub fn off() {
 /// How often a lit LED changes its brightness.
 const STEP: Duration = Duration::from_millis(20);
 
-/// How often a dark LED checks for a failure.
+/// How often a dark LED checks for a failure. A press wakes it sooner.
 const DARK_STEP: Duration = Duration::from_millis(100);
 
-/// A plain LED at full duty is bright. Its breath and steady light peak at an
-/// eighth of it, and its alarm at half.
-const GPIO_DIM_DIVISOR: u32 = 8;
-const GPIO_ALARM_DIVISOR: u32 = 2;
+/// How long a click shows the status, in ms.
+const STATUS_MS: u64 = 10_000;
 
-/// The WS2812's alarm, red at half brightness.
-const WS2812_ALARM_COLOR: u32 = 0x80_00_00;
+/// The LED thread's stack, in bytes. The button's NVS writes run on it too.
+const STACK_SIZE: usize = if config::BUTTON_GPIO.is_some() {
+    8192
+} else {
+    4096
+};
 
-/// Runs the LED in a thread of its own, as `LED_MODE` says.
+/// Runs the LED in a thread of its own, as `LED_MODE` and the button say.
 pub fn start() -> anyhow::Result<()> {
     // config.rs fails the build when LED_MODE is set without LED_GPIO.
     let (Some(mode), Some(gpio)) = (config::LED_MODE, config::LED_GPIO) else {
         return Ok(());
     };
+    // Without a button, NVS has no choice that counts.
+    let choice = config::BUTTON_GPIO.and_then(|_| settings::led_lit());
     info!(
-        "LED: type={}{}, gpio={}{}, color={:06x}, mode={}",
+        "LED: type={}{}, gpio={}{}, color={:06x}, mode={}{}",
         config::LED_TYPE,
         if config::LED_ACTIVE_LOW {
             " (active low)"
@@ -92,13 +101,18 @@ pub fn start() -> anyhow::Result<()> {
             .map(|power| format!(", power gpio={power}"))
             .unwrap_or_default(),
         config::LED_COLOR,
-        mode,
+        led_pattern::mode(mode, choice),
+        config::BUTTON_GPIO
+            .map(|button| format!(", button gpio={button}"))
+            .unwrap_or_default(),
     );
-    thread::Builder::new().stack_size(4096).spawn(move || {
-        if let Err(e) = Light::new(gpio).and_then(Light::run) {
-            warn!("LED stopped: {e}");
-        }
-    })?;
+    thread::Builder::new()
+        .stack_size(STACK_SIZE)
+        .spawn(move || {
+            if let Err(e) = Light::new(gpio, mode, choice).and_then(Light::run) {
+                warn!("LED stopped: {e}");
+            }
+        })?;
     STARTED.store(true, Ordering::Relaxed);
     Ok(())
 }
@@ -108,6 +122,13 @@ struct Light {
     driver: Driver,
     /// Keeps `LED_POWER_GPIO` high while it lives.
     _power: Option<PinDriver<'static, Output>>,
+    /// `LED_MODE`.
+    mode: &'static str,
+    /// The button's choice in NVS: lit or dark.
+    choice: Option<bool>,
+    button: Option<Controls>,
+    /// The grade of the last click, and when it came, in ms.
+    status: Option<(Grade, u64)>,
 }
 
 /// A plain LED dims with PWM.
@@ -117,7 +138,13 @@ enum Driver {
 }
 
 impl Light {
-    fn new(gpio: u32) -> Result<Self, EspError> {
+    fn new(gpio: u32, mode: &'static str, choice: Option<bool>) -> Result<Self, EspError> {
+        // The LED works without the button.
+        let button = config::BUTTON_GPIO.and_then(|pin| {
+            Controls::new(pin)
+                .inspect_err(|e| warn!("Button failed: {e}"))
+                .ok()
+        });
         let power = config::LED_POWER_GPIO
             .map(|power| {
                 let mut power = PinDriver::output(output_pin(power))?;
@@ -142,27 +169,40 @@ impl Light {
         Ok(Self {
             driver,
             _power: power,
+            mode,
+            choice,
+            button,
+            status: None,
         })
     }
 
     fn run(mut self) -> Result<(), EspError> {
+        let start = Instant::now();
         let mut pattern = Pattern::Dark;
-        let mut since = Instant::now();
+        let mut since = 0;
         let mut shown = None;
         loop {
             let off = OFF.load(Ordering::Relaxed);
-            let failing = WIFI_DOWN.load(Ordering::Relaxed) || FAILED.load(Ordering::Relaxed);
+            let now = u64::try_from(start.elapsed().as_millis()).unwrap_or(u64::MAX);
+            let gesture = self
+                .button
+                .as_mut()
+                .and_then(|controls| controls.button.update(controls.pin.is_low(), now));
+            if let Some(gesture) = gesture {
+                self.act(gesture, now);
+            }
             let next = if off {
                 Pattern::Dark
             } else {
-                Pattern::for_mode(config::LED_MODE, config::BLE_SCAN_CONTINUOUS, failing)
+                self.pattern(now)
             };
-            if next != pattern {
+            // A click restarts the blinks, also when the grade is the same.
+            if next != pattern || gesture == Some(Gesture::Click) {
                 pattern = next;
-                since = Instant::now();
+                since = now;
             }
             #[allow(clippy::cast_possible_truncation)] // below the period
-            let ms = (since.elapsed().as_millis() % u128::from(pattern.period_ms())) as u32;
+            let ms = ((now - since) % u64::from(pattern.period_ms())) as u32;
             let level = pattern.level(ms);
             if shown != Some((pattern, level)) {
                 self.show(pattern, level)?;
@@ -175,33 +215,82 @@ impl Light {
                     thread::park();
                 }
             }
-            thread::sleep(if pattern == Pattern::Dark {
-                DARK_STEP
-            } else {
-                STEP
-            });
+            match &mut self.button {
+                _ if pattern != Pattern::Dark => thread::sleep(STEP),
+                Some(controls) => controls.wait(DARK_STEP),
+                None => thread::sleep(DARK_STEP),
+            }
+        }
+    }
+
+    /// Returns the pattern at `now` ms: a press's feedback, the status for a
+    /// while after a click, or the mode's pattern.
+    fn pattern(&self, now: u64) -> Pattern {
+        let continuous = config::BLE_SCAN_CONTINUOUS;
+        if let Some(controls) = &self.button {
+            // Without the alarm, so that the preview shows the toggle.
+            let preview = Pattern::for_mode(
+                led_pattern::mode(self.mode, Some(!self.lit())),
+                continuous,
+                false,
+            );
+            if let Some(pattern) = Pattern::for_press(controls.button.pending(now), preview) {
+                return pattern;
+            }
+        }
+        if let Some((grade, at)) = self.status {
+            if now - at < STATUS_MS {
+                return Pattern::Status(grade);
+            }
+        }
+        let failing = WIFI_DOWN.load(Ordering::Relaxed) || FAILED.load(Ordering::Relaxed);
+        Pattern::for_mode(
+            led_pattern::mode(self.mode, self.choice),
+            continuous,
+            failing,
+        )
+    }
+
+    fn lit(&self) -> bool {
+        self.choice.unwrap_or(self.mode == "on")
+    }
+
+    fn act(&mut self, gesture: Gesture, now: u64) {
+        // A new mode shows at once.
+        self.status = None;
+        match gesture {
+            Gesture::Click => {
+                let grade = web::link_grade();
+                info!("LED status: {grade:?}");
+                self.status = Some((grade, now));
+            }
+            Gesture::Hold => {
+                let lit = !self.lit();
+                self.choice = Some(lit);
+                info!("LED mode: {}", led_pattern::mode(self.mode, self.choice));
+                if let Err(e) = settings::set_led_lit(lit) {
+                    warn!("Could not save the LED mode: {e}");
+                }
+            }
+            Gesture::Reset => {
+                self.choice = None;
+                info!("LED mode: {} (LED_MODE)", self.mode);
+                if let Err(e) = settings::reset() {
+                    warn!("Could not reset the settings: {e}");
+                }
+            }
         }
     }
 
     fn show(&mut self, pattern: Pattern, level: u8) -> Result<(), EspError> {
-        let alarm = pattern == Pattern::Alarm;
         match &mut self.driver {
-            Driver::Ws2812(tx) => {
-                let color = if alarm {
-                    WS2812_ALARM_COLOR
-                } else {
-                    config::LED_COLOR
-                };
-                ws2812_send(tx, ws2812_grb(color, level))
-            }
+            Driver::Ws2812(tx) => ws2812_send(
+                tx,
+                ws2812_grb(pattern.ws2812_color(config::LED_COLOR), level),
+            ),
             Driver::Gpio(channel) => {
                 let max = channel.get_max_duty();
-                let peak = max
-                    / if alarm {
-                        GPIO_ALARM_DIVISOR
-                    } else {
-                        GPIO_DIM_DIVISOR
-                    };
+                let peak = max / pattern.gpio_divisor();
                 let duty = peak * u32::from(level) / 255;
                 channel.set_duty(if config::LED_ACTIVE_LOW {
                     max - duty
@@ -210,6 +299,51 @@ impl Light {
                 })
             }
         }
+    }
+}
+
+/// The button, and the interrupt that wakes a dark LED on a press.
+struct Controls {
+    pin: PinDriver<'static, Input>,
+    button: Button,
+    notification: Notification,
+}
+
+impl Controls {
+    /// Takes the button's pin, from the LED thread: the interrupt notifies the
+    /// thread that creates the notification.
+    fn new(gpio: u32) -> Result<Self, EspError> {
+        // SAFETY: nothing else uses the button's pin. config.rs checks that
+        // it exists on the chip.
+        #[allow(clippy::cast_possible_truncation)] // GPIO numbers always fit in u8
+        let mut pin = PinDriver::input(unsafe { AnyInputPin::steal(gpio as u8) }, Pull::Up)?;
+        pin.set_interrupt_type(InterruptType::NegEdge)?;
+        let notification = Notification::new();
+        let notifier = notification.notifier();
+        // SAFETY: the callback only notifies, which an ISR may do. The pin's
+        // driver unsubscribes it when the LED thread drops it.
+        unsafe {
+            pin.subscribe(move || {
+                notifier.notify_and_yield(NonZeroU32::MIN);
+            })?;
+        }
+        Ok(Self {
+            pin,
+            button: Button::new(),
+            notification,
+        })
+    }
+
+    /// Waits up to `timeout` for a press. While the button is down, waits for
+    /// `STEP` instead, to time the press.
+    fn wait(&mut self, timeout: Duration) {
+        // The driver disables the interrupt each time it fires. Without it,
+        // the LED polls.
+        if self.pin.is_low() || self.pin.enable_interrupt().is_err() {
+            thread::sleep(STEP);
+            return;
+        }
+        self.notification.wait(TickType::from(timeout).ticks());
     }
 }
 

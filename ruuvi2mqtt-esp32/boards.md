@@ -17,13 +17,15 @@ export BATTERY_POWER_GPIO = 20
 ```
 
 GPIO 20 powers both the LED and the battery gauge's I2C bus. The LED shares GPIO
-9 with the BOOT button.
+9 with the BOOT button. `BUTTON_GPIO = 9` needs the red LED instead:
+`LED_TYPE = gpio` and `LED_GPIO = 15`, without `LED_POWER_GPIO`.
 
 ## Beetle ESP32 C6 Mini (DFRobot DFR1117)
 
 ```make
 export LED_TYPE = gpio
 export LED_GPIO = 15
+export BUTTON_GPIO = 9
 ```
 
 ## ESP32-C5-DevKitC-1
@@ -32,6 +34,7 @@ export LED_GPIO = 15
 CHIP = esp32c5
 export LED_TYPE = ws2812
 export LED_GPIO = 27
+export BUTTON_GPIO = 28
 ```
 
 ## ESP32-C6-DevKitC-1
@@ -39,6 +42,7 @@ export LED_GPIO = 27
 ```make
 export LED_TYPE = ws2812
 export LED_GPIO = 8
+export BUTTON_GPIO = 9
 ```
 
 ## ESP32-CAM (AI-Thinker)
@@ -56,6 +60,7 @@ export LED_GPIO = 33
 CHIP = esp32s3
 export LED_TYPE = gpio
 export LED_GPIO = 3
+export BUTTON_GPIO = 0
 ```
 
 ## ESP32-S3-DevKitC-1
@@ -64,6 +69,7 @@ export LED_GPIO = 3
 CHIP = esp32s3
 export LED_TYPE = ws2812
 export LED_GPIO = 38
+export BUTTON_GPIO = 0
 ```
 
 On v1.0 of the board, the LED is on GPIO 48.
@@ -74,6 +80,7 @@ On v1.0 of the board, the LED is on GPIO 48.
 export LED_TYPE = ws2812
 export LED_GPIO = 20
 export LED_POWER_GPIO = 19
+export BUTTON_GPIO = 9
 ```
 
 ## M5Stack StickS3
@@ -94,6 +101,7 @@ export ANTENNA = internal
 export LED_TYPE = gpio
 export LED_ACTIVE_LOW = true
 export LED_GPIO = 15
+export BUTTON_GPIO = 9
 ```
 
 `ANTENNA = external` uses the U.FL connector. Without

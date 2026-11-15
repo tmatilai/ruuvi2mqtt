@@ -29,6 +29,9 @@
 # export LED_POWER_GPIO = 19
 # export LED_COLOR = 000020
 
+# Button pin, such as the BOOT button's. Needs LED_GPIO.
+# export BUTTON_GPIO = 9
+
 # Battery gauge: "max17048" or "m5pm1", its I2C pins and their power pin.
 # export BATTERY = max17048
 # export BATTERY_SDA = 19

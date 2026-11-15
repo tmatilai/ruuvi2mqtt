@@ -9,7 +9,7 @@ use std::time::{Duration, Instant};
 use anyhow::Context;
 use esp_idf_svc::{
     eventloop::EspSystemEventLoop, hal::peripherals::Peripherals, log::EspIdfLogger,
-    nvs::EspDefaultNvsPartition, sys,
+    nvs::EspDefaultNvsPartition, sys, sys::EspError,
 };
 use log::{error, info, warn};
 use ruuvi2mqtt_esp32::diagnostics::{CacheUse, Diagnostics, Settings};
@@ -22,6 +22,7 @@ mod gauge;
 mod gpio;
 mod led;
 mod mqtt;
+mod settings;
 mod system;
 mod web;
 mod wifi;
@@ -56,6 +57,8 @@ fn main() {
     };
     LAST_CYCLE_FAILED.store(1, Ordering::Relaxed);
     led::set_failed(failed_before);
+    // The LED reads the button's settings from NVS, which this initializes.
+    let nvs = EspDefaultNvsPartition::take();
     if let Err(e) = led::start() {
         warn!("LED failed: {e:#}");
     }
@@ -82,6 +85,9 @@ fn main() {
         0
     };
     CYCLES_FAILED.store(cycles_failed, Ordering::Relaxed);
+    if !config::BLE_SCAN_CONTINUOUS {
+        web::set_previous_cycle(cycle.wrapping_sub(1), failed_before);
+    }
     if !continued {
         DISCOVERY_PUBLISHED.store(0, Ordering::Relaxed);
     }
@@ -106,7 +112,7 @@ fn main() {
 
     if config::BLE_SCAN_CONTINUOUS {
         info!("Cycle: {}s continuous BLE scan", config::BLE_SCAN_DURATION);
-        let Err(e) = run_continuous(cycle);
+        let Err(e) = run_continuous(cycle, nvs);
         error!("Continuous scan failed: {e:#}");
         // A failed start used a cycle number too. The next boot counts only a
         // deep-sleep cycle's failure.
@@ -118,7 +124,7 @@ fn main() {
             config::BLE_SCAN_MODE,
             config::BLE_SLEEP_DURATION
         );
-        match run(cycle) {
+        match run(cycle, nvs) {
             Ok(()) => LAST_CYCLE_FAILED.store(0, Ordering::Relaxed),
             Err(e) => error!("Cycle failed: {e:#}"),
         }
@@ -296,13 +302,13 @@ fn recovered() -> bool {
 }
 
 /// One scan-connect-publish cycle, before deep sleep.
-fn run(number: u32) -> anyhow::Result<()> {
+fn run(number: u32, nvs: Result<EspDefaultNvsPartition, EspError>) -> anyhow::Result<()> {
     let start = Instant::now();
     start_cycle_timeout()?;
 
     let peripherals = Peripherals::take()?;
     let sysloop = EspSystemEventLoop::take()?;
-    let nvs = EspDefaultNvsPartition::take()?;
+    let nvs = nvs?;
 
     antenna::select();
 
@@ -340,12 +346,15 @@ fn run(number: u32) -> anyhow::Result<()> {
 /// Scans all the time, and publishes each scan's readings and diagnostics while
 /// the next scan runs. Wi-Fi and MQTT stay connected. Returns only on a
 /// failure to start.
-fn run_continuous(mut number: u32) -> anyhow::Result<Infallible> {
+fn run_continuous(
+    mut number: u32,
+    nvs: Result<EspDefaultNvsPartition, EspError>,
+) -> anyhow::Result<Infallible> {
     start_cycle_timeout()?;
 
     let peripherals = Peripherals::take()?;
     let sysloop = EspSystemEventLoop::take()?;
-    let nvs = EspDefaultNvsPartition::take()?;
+    let nvs = nvs?;
 
     antenna::select();
 

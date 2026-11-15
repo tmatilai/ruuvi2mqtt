@@ -2,6 +2,7 @@
 //! on the host (`make test`).
 
 pub mod battery;
+pub mod button;
 pub mod diagnostics;
 pub mod homeassistant;
 pub mod led_pattern;

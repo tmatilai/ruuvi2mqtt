@@ -37,11 +37,32 @@ pub enum Grade {
 
 impl Grade {
     /// Wi-Fi below −75 dBm drops and retries.
-    fn wifi(rssi: i8) -> Self {
+    fn wifi_rssi(rssi: i8) -> Self {
         match rssi {
             -67.. => Self::Good,
             -75.. => Self::Fair,
             _ => Self::Poor,
+        }
+    }
+
+    /// Grades [`Wifi`].
+    fn wifi(rssi: i8, drops: u32) -> Self {
+        let grade = Self::wifi_rssi(rssi);
+        if drops > 0 {
+            grade.max(Self::Fair)
+        } else {
+            grade
+        }
+    }
+
+    /// Grades [`Publishing`].
+    fn publishing(cycles: u32, cycles_failed: u32, last_cycle_failed: bool) -> Self {
+        if last_cycle_failed {
+            Self::Poor
+        } else if cycles == 0 || cycles_failed > 0 {
+            Self::Fair
+        } else {
+            Self::Good
         }
     }
 
@@ -62,6 +83,27 @@ impl Grade {
             3.. => Self::Fair,
             _ => Self::Poor,
         }
+    }
+}
+
+/// Returns the worse of the Wi-Fi and publishing grades, which the button's
+/// click shows. `wifi` is the access point's RSSI and the drops since boot, or
+/// `None` while Wi-Fi is down. Wi-Fi that is down is poor only in the
+/// continuous mode: the deep-sleep mode connects it in each cycle, and a cycle
+/// that fails to connect fails.
+#[must_use]
+pub fn link_grade(
+    wifi: Option<(i8, u32)>,
+    continuous: bool,
+    cycles: u32,
+    cycles_failed: u32,
+    last_cycle_failed: bool,
+) -> Grade {
+    let publishing = Grade::publishing(cycles, cycles_failed, last_cycle_failed);
+    match wifi {
+        Some((rssi, drops)) => Grade::wifi(rssi, drops).max(publishing),
+        None if continuous => Grade::Poor,
+        None => publishing,
     }
 }
 
@@ -265,32 +307,22 @@ impl Live {
         });
 
         let (rssi, channel) = board.wifi;
-        let mut wifi_grade = Grade::wifi(rssi);
-        if board.wifi_drops > 0 {
-            wifi_grade = wifi_grade.max(Grade::Fair);
-        }
         let wifi = Wifi {
             rssi,
             channel,
             drops: board.wifi_drops,
-            grade: wifi_grade,
+            grade: Grade::wifi(rssi, board.wifi_drops),
         };
         let publishing = Publishing {
             cycles: board.cycles,
             failed: board.cycles_failed,
-            grade: if board.last_cycle_failed {
-                Grade::Poor
-            } else if board.cycles == 0 || board.cycles_failed > 0 {
-                Grade::Fair
-            } else {
-                Grade::Good
-            },
+            grade: Grade::publishing(board.cycles, board.cycles_failed, board.last_cycle_failed),
         };
 
         let mut problems = Vec::new();
         if wifi.grade != Grade::Good {
             let mut details = Vec::new();
-            if Grade::wifi(rssi) != Grade::Good {
+            if Grade::wifi_rssi(rssi) != Grade::Good {
                 details.push(format!("{rssi} dBm"));
             }
             if wifi.drops > 0 {
@@ -630,6 +662,26 @@ mod tests {
         let report = Live::default().report(&failed, &[]);
         assert_eq!(report.verdict, Grade::Poor);
         assert_eq!(report.problems[0].text, "Publishing: 1 of 1 cycle failed");
+    }
+
+    #[test]
+    fn grades_the_link() {
+        for continuous in [true, false] {
+            let grade = |wifi, cycles, failed, last_failed| {
+                link_grade(wifi, continuous, cycles, failed, last_failed)
+            };
+            assert_eq!(grade(Some((-58, 0)), 12, 0, false), Grade::Good);
+            assert_eq!(grade(Some((-71, 0)), 12, 0, false), Grade::Fair);
+            assert_eq!(grade(Some((-58, 1)), 12, 0, false), Grade::Fair);
+            assert_eq!(grade(Some((-58, 0)), 0, 0, false), Grade::Fair);
+            assert_eq!(grade(Some((-58, 0)), 12, 1, false), Grade::Fair);
+            assert_eq!(grade(Some((-80, 0)), 12, 0, false), Grade::Poor);
+            assert_eq!(grade(Some((-58, 0)), 12, 1, true), Grade::Poor);
+            assert_eq!(grade(None, 12, 1, true), Grade::Poor);
+        }
+        // Wi-Fi is down, or not connected yet in the deep-sleep mode.
+        assert_eq!(link_grade(None, true, 12, 0, false), Grade::Poor);
+        assert_eq!(link_grade(None, false, 12, 0, false), Grade::Good);
     }
 
     #[test]

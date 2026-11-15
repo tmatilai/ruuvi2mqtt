@@ -291,6 +291,16 @@ const LED_COLOR_HEX: &str = match option_env_non_empty!("LED_COLOR") {
 pub const LED_COLOR: u32 = konst::result::unwrap!(u32::from_str_radix(LED_COLOR_HEX, 16));
 
 // ---------------------------------------------------------------------------
+// Button
+// ---------------------------------------------------------------------------
+
+/// The button's GPIO pin number. A press pulls the pin low.
+pub const BUTTON_GPIO: Option<u32> = match option_env_non_empty!("BUTTON_GPIO") {
+    Some(v) => Some(konst::result::unwrap!(u32::from_str_radix(v, 10))),
+    None => None,
+};
+
+// ---------------------------------------------------------------------------
 // Logging
 // ---------------------------------------------------------------------------
 
@@ -489,6 +499,63 @@ const _: () = assert!(
     LED_COLOR_HEX.len() == 6,
     "LED_COLOR must be six hex digits, RRGGBB"
 );
+const _: () = assert!(
+    match BUTTON_GPIO {
+        Some(gpio) => gpio < esp_idf_svc::sys::gpio_num_t_GPIO_NUM_MAX as u32,
+        None => true,
+    },
+    "BUTTON_GPIO is not a valid GPIO number for this chip"
+);
+const _: () = assert!(
+    BUTTON_GPIO.is_none() || LED_GPIO.is_some(),
+    "BUTTON_GPIO needs LED_GPIO: the LED shows what the button does"
+);
+const _: () = assert!(
+    button_pin_free(),
+    "BUTTON_GPIO must differ from LED_GPIO, LED_POWER_GPIO, BATTERY_SDA, BATTERY_SCL and BATTERY_POWER_GPIO, and with ANTENNA from the RF switch's GPIO 3 and 14"
+);
+
+const fn button_pin_free() -> bool {
+    let Some(button) = BUTTON_GPIO else {
+        return true;
+    };
+    // ANTENNA drives the RF switch's pins.
+    #[allow(clippy::cast_sign_loss)] // GPIO numbers are positive
+    let antenna = if ANTENNA.is_some() {
+        [
+            Some(crate::antenna::SWITCH_POWER as u32),
+            Some(crate::antenna::SELECT as u32),
+        ]
+    } else {
+        [None, None]
+    };
+    let pins = [
+        LED_GPIO,
+        LED_POWER_GPIO,
+        widen(BATTERY_SDA),
+        widen(BATTERY_SCL),
+        widen(BATTERY_POWER_GPIO),
+        antenna[0],
+        antenna[1],
+    ];
+    let mut i = 0;
+    while i < pins.len() {
+        if let Some(pin) = pins[i] {
+            if pin == button {
+                return false;
+            }
+        }
+        i += 1;
+    }
+    true
+}
+
+const fn widen(pin: Option<u8>) -> Option<u32> {
+    match pin {
+        Some(pin) => Some(pin as u32),
+        None => None,
+    }
+}
 
 /// True when `v` is unset, a WPA2 passphrase of 8 to 63 characters, or a key
 /// of 64 hex digits.
