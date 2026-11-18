@@ -41,14 +41,28 @@
       // The checker pins the same versions as the app
       matchFileNames: ['Cargo.toml', 'checker/Cargo.toml'],
       matchUpdateTypes: ['minor', 'patch'],
-      groupName: 'App crates (minor and patch)',
+      groupName: 'App crates',
     },
     {
       matchManagers: ['cargo'],
       // The Air simulator pins the same versions as the firmware
       matchFileNames: ['air-simulator/Cargo.toml', 'ruuvi2mqtt-esp32/Cargo.toml'],
       matchUpdateTypes: ['minor', 'patch'],
-      groupName: 'ESP32 crates (minor and patch)',
+      groupName: 'ESP32 crates',
+    },
+    {
+      matchManagers: ['github-actions'],
+      matchUpdateTypes: ['minor', 'patch', 'digest', 'pinDigest'],
+      groupName: 'GitHub Actions',
+    },
+    {
+      // The tools pinned in the Makefiles and in the workflows' `cargo install`
+      // lines. The ESP32 toolchain and ESP-IDF stay out, as their updates can
+      // break the firmware build.
+      matchManagers: ['custom.regex'],
+      matchDepNames: ['!espup', '!esp-rs/rust-build', '!espressif/esp-idf'],
+      matchUpdateTypes: ['minor', 'patch'],
+      groupName: 'Tools',
     },
     {
       // Major updates may break. Label them for the Claude review in CI.
