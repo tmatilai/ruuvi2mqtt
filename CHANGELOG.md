@@ -16,6 +16,7 @@
 
 - Use both bands when `WIFI_BAND` is unset, instead of the band that the previous firmware set.
 - Fall back to a full Wi-Fi scan when the cached access point is silent, and give the scan 40 s on 5 GHz.
+- Rebuild ESP-IDF after a new `ESP_IDF_VERSION`, instead of failing the next `make build` in an existing target directory.
 
 ## 1.8.0 / 2026-11-07
 
