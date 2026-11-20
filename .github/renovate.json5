@@ -95,6 +95,12 @@
       dependencyDashboardApproval: true,
     },
     {
+      // esp-idf-svc 0.53.0 breaks Wi-Fi on ESP-IDF v6.1.1. Remove this rule
+      // with the next esp-idf-svc release, which has esp-rs/esp-idf#610.
+      matchDepNames: ['espressif/esp-idf'],
+      allowedVersions: '<6.1.1',
+    },
+    {
       // The pinned ESP32 nightly. Its own PR, so a broken nightly blocks
       // nothing else.
       matchManagers: ['rust-toolchain'],
