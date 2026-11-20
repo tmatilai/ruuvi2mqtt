@@ -143,15 +143,18 @@ setup: ## Install the pinned tools and Xtensa toolchain
 all: lint test build ## Lint, test, and build
 
 # esp-idf-sys doesn't rebuild ESP-IDF when its config in Cargo.toml changes,
-# so a new component would be missing.
+# so a new component would be missing. After a new ESP_IDF_VERSION, the
+# bootloader's CMake cache still points at the old ESP-IDF, and the build
+# fails.
 ESP_IDF_SYS_STAMP = $(CARGO_TARGET_DIR)/$(TARGET)/esp-idf-sys.toml
 
 .PHONY: esp-idf-sys-config
 esp-idf-sys-config:
 	@mkdir -p $(dir $(ESP_IDF_SYS_STAMP))
-	@awk '/^\[/ { s = /^\[+package\.metadata\.esp-idf-sys/ } s && !/^[ \t]*(#|$$)/' Cargo.toml >$(ESP_IDF_SYS_STAMP).new
+	@{ awk '/^\[/ { s = /^\[+package\.metadata\.esp-idf-sys/ } s && !/^[ \t]*(#|$$)/' Cargo.toml; \
+	  grep -E '^ESP_IDF_VERSION *=' .cargo/config.toml; } >$(ESP_IDF_SYS_STAMP).new
 	@if ! cmp -s $(ESP_IDF_SYS_STAMP).new $(ESP_IDF_SYS_STAMP); then \
-	  echo "New esp-idf-sys config in Cargo.toml: cleaning its build"; \
+	  echo "New esp-idf-sys config or ESP_IDF_VERSION: cleaning its build"; \
 	  $(CARGO) clean -p esp-idf-sys --target $(TARGET) && \
 	  $(CARGO) clean -p esp-idf-sys --target $(TARGET) --release; \
 	fi
