@@ -127,8 +127,9 @@ overlap them. The tables leave out the tags that no publisher heard in the last
 day. A board's name links to its status page, from its discovery configs.
 
 Each `--expect <name>=<MAC>` is a tag that a publisher should hear, by the name
-in its diagnostics topic. With them, the site table's problems cover only the
-expected tags, and a tag that one publisher should hear needs no other.
+in its diagnostics topic. The site table's problems cover only the expected
+tags: the others are just in range. Without `--expect`, the page has no tag
+coverage problems.
 
 The problems, and which notify through `problems.json`:
 
@@ -204,8 +205,8 @@ printf '%s\n' "$PASSWORD" | target/release/ruuvi2mqtt-checker site \
 Over 10:00, the diagnostics of 2 instances and 1 board.
 
 Problems:
-  ! Attic: no publisher hears it well
   ! c6-board: restarted once
+  ~ Attic: no publisher hears it well
 
            host1     host2  c6-board
         instance  instance     board
@@ -223,9 +224,7 @@ poor one.
 
 The problems come first, worst first:
 
-- a tag that no publisher hears, or none better than poor;
-- a tag that only instances hear well, when there are boards: a spot for one;
-- a tag that only one publisher hears well;
+- a tag that no publisher hears (poor), or none better than poor (fair);
 - a board that restarted, on a fair or poor Wi-Fi signal, or with other firmware
   than most boards.
 

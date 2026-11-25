@@ -182,26 +182,11 @@ fn problems(r: &Recorder, now: u64, expect: &[(String, String)], hour: &Site) ->
     problems
 }
 
-/// The site's problems. With expectations, only the expected tags': the
-/// others are just in range. A tag that one publisher should hear needs no
-/// other.
+/// The site's problems, of only the expected tags: the others are just in
+/// range.
 fn coverage(hour: &Site, expect: &[(String, String)]) -> Vec<Problem> {
-    if expect.is_empty() {
-        return hour.problems();
-    }
-    let mut expecters: BTreeMap<&str, usize> = BTreeMap::new();
-    for (_, id) in expect.iter().collect::<BTreeSet<_>>() {
-        *expecters.entry(id).or_default() += 1;
-    }
-    hour.with_tags(|id| expecters.contains_key(id))
+    hour.with_tags(|id| expect.iter().any(|(_, e)| e == id))
         .problems()
-        .into_iter()
-        .filter(|p| {
-            let single = p.tag.as_deref().and_then(|id| expecters.get(id)) == Some(&1);
-            let others = ["only-one ", "only-instances "];
-            !(single && others.iter().any(|kind| p.key.starts_with(kind)))
-        })
-        .collect()
 }
 
 /// Since when each problem has lasted, by its key. One that clears starts
@@ -673,7 +658,6 @@ mod tests {
                 "!Cellar: host2 doesn't hear it*",
                 // No publisher hears it: the tag's own alerts tell.
                 "!Attic <b>: host1 doesn't hear it",
-                "~Cellar: only host1 hears it well",
                 "~Cellar: low battery, 2.10 V",
             ]
         );
@@ -704,41 +688,17 @@ mod tests {
             .into(),
             r.history.window(now, HOUR),
         );
-        // Without them, every tag.
-        assert_eq!(
-            texts(&coverage(&hour, &[])),
-            ["!not heard: Attic", "~Cellar: only host1 hears it well"]
-        );
+        // Without them, none: the tags are just in range.
+        assert!(coverage(&hour, &[]).is_empty());
         // Only host1 should hear Cellar, and Attic isn't the test bed's.
         let expect = [(HOST1.to_string(), TAG.to_string())];
         assert!(coverage(&hour, &expect).is_empty());
-        // Both should.
+        // Attic is.
         let expect = [
             (HOST1.to_string(), TAG.to_string()),
-            (HOST2.to_string(), TAG.to_string()),
+            (HOST1.to_string(), TAG2.to_string()),
         ];
-        assert_eq!(
-            texts(&coverage(&hour, &expect)),
-            ["~Cellar: only host1 hears it well"]
-        );
-        // With a board, the same for a spot for a board.
-        let mut r = r;
-        r.on_message(
-            now,
-            "ruuvi2mqtt/diagnostics/c6",
-            diagnostics("1.5.2", 3, "{}").as_bytes(),
-            false,
-        );
-        let hour = Site::from_parts(
-            [(TAG.to_string(), "Cellar".to_string())].into(),
-            r.history.window(now, HOUR),
-        );
-        assert_eq!(
-            texts(&coverage(&hour, &[])),
-            ["~Cellar: only instances hear it well, a spot for a board"]
-        );
-        let expect = [(HOST1.to_string(), TAG.to_string())];
-        assert!(coverage(&hour, &expect).is_empty());
+        assert_eq!(texts(&coverage(&hour, &expect)), ["!not heard: Attic"]);
     }
 
     #[test]
@@ -757,13 +717,13 @@ mod tests {
                  "log": "../etc/passwd"},
             ],
         });
-        let page = r.page(T0 + 600, "Test bed", &[], &Ok(Some(runs))).html;
+        let expect = [(HOST1.to_string(), TAG2.to_string())];
+        let page = r.page(T0 + 600, "Test bed", &expect, &Ok(Some(runs))).html;
         for s in [
             "<title>Test bed</title>",
             "Updated 2027-01-15 08:10 UTC. Recording since 2027-01-15 08:00 UTC.",
             "<p class=\"banner\">Maintenance: moving &lt;222&gt;</p>",
             "<p>Pinned to my-branch.</p>",
-            "<li>🟡 Cellar: only host1 hears it well <small>for 0:00</small></li>",
             "<li>🔴 not heard: Attic &lt;b&gt; <small>for 0:00</small></li>",
             "<td>2026-11-06 02:00</td><td>daily check of main (6534f11)</td><td>🟢 success</td>",
             "<td class=\"wrap\">6 tags, test bed faults: 2<br>🟡 Cellar silent for 15 minutes\
