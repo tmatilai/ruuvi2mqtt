@@ -13,6 +13,9 @@ test = false # needs ESP-IDF; the host tests are in the lib
 
 [profile.release]
 opt-level = "s"
+# For a smaller image, see sdkconfig.defaults.
+lto = "fat"
+codegen-units = 1
 
 [profile.dev]
 debug = true

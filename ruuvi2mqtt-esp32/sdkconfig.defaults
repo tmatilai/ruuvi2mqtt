@@ -23,3 +23,10 @@ CONFIG_ESP_TASK_WDT_PANIC=y
 CONFIG_LOG_DEFAULT_LEVEL_INFO=y
 # For verbose C-layer debug output during development:
 # CONFIG_LOG_DEFAULT_LEVEL_DEBUG=y
+
+# A smaller image leaves room for two app slots in a 4 MB flash. The board
+# joins a Personal or open Wi-Fi network as a station, and is a TLS client
+# only.
+CONFIG_ESP_WIFI_SOFTAP_SUPPORT=n
+CONFIG_ESP_WIFI_ENTERPRISE_SUPPORT=n
+CONFIG_MBEDTLS_TLS_CLIENT_ONLY=y
