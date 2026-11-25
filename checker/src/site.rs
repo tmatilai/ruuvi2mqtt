@@ -326,38 +326,19 @@ impl Problem {
 fn problems(columns: &[(&String, &Publisher)], rows: &[(&String, &String)]) -> Vec<Problem> {
     let mut problems = Vec::new();
     let mut unheard = Vec::new();
-    let boards = columns.iter().any(|(_, p)| p.board);
     for (id, name) in rows {
-        let heard: Vec<(&str, &Publisher, Grade)> = columns
+        let grades: Vec<Grade> = columns
             .iter()
-            .filter_map(|(n, p)| Some((label(n), *p, p.cell(id)?.grade())))
+            .filter_map(|(_, p)| Some(p.cell(id)?.grade()))
             .collect();
-        if heard.is_empty() {
+        if grades.is_empty() {
             unheard.push(name.as_str());
-            continue;
+        } else if grades.iter().all(|g| *g == Grade::Poor) {
+            // Fair, as a publisher still hears it.
+            let text = format!("{name}: no publisher hears it well");
+            let problem = Problem::new(Grade::Fair, format!("heard-poorly {id}"), text);
+            problems.push(problem.tag(id));
         }
-        let well: Vec<&(&str, &Publisher, Grade)> =
-            heard.iter().filter(|(_, _, g)| *g < Grade::Poor).collect();
-        let (grade, kind, text) = match well[..] {
-            [] => (
-                Grade::Poor,
-                "heard-poorly",
-                "no publisher hears it well".to_string(),
-            ),
-            _ if boards && !well.iter().any(|(_, p, _)| p.board) => (
-                Grade::Fair,
-                "only-instances",
-                "only instances hear it well, a spot for a board".to_string(),
-            ),
-            [(only, _, _)] => (
-                Grade::Fair,
-                "only-one",
-                format!("only {only} hears it well"),
-            ),
-            _ => continue,
-        };
-        let problem = Problem::new(grade, format!("{kind} {id}"), format!("{name}: {text}"));
-        problems.push(problem.tag(id));
     }
     if !unheard.is_empty() {
         let text = format!("not heard: {}", unheard.join(", "));
@@ -595,9 +576,9 @@ mod tests {
 Over 10:00, the diagnostics of 2 instances and 1 board.
 
 Problems:
-  ! Attic: no publisher hears it well
   ! not heard: Sauna
   ! c6-board: restarted once
+  ~ Attic: no publisher hears it well
 
            host1     host2  c6-board
         instance  instance     board
@@ -613,7 +594,7 @@ cycle (board), and the share of those that heard it. ~ is fair, ! poor.
     }
 
     #[test]
-    fn tags_only_one_publisher_or_only_instances_hear_well() {
+    fn a_tag_that_one_publisher_hears_well_is_fine() {
         let mut site = site();
         minute(
             &mut site,
@@ -625,14 +606,7 @@ cycle (board), and the share of those that heard it. ~ is fair, ! poor.
             1,
             &format!(r#"{{"{TAG2}":{{"rssi":-60,"adverts":9}}}}"#),
         );
-        assert_eq!(
-            problem_lines(&site),
-            [
-                "!not heard: Sauna",
-                "~Cellar: only instances hear it well, a spot for a board",
-                "~Attic: only c6-board hears it well",
-            ]
-        );
+        assert_eq!(problem_lines(&site), ["!not heard: Sauna"]);
     }
 
     #[test]
