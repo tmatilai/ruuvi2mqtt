@@ -12,12 +12,12 @@ use esp_idf_svc::{
     nvs::EspDefaultNvsPartition, sys, sys::EspError,
 };
 use log::{error, info, warn};
+use ruuvi2mqtt_esp32::config::{self, Chip, Config};
 use ruuvi2mqtt_esp32::diagnostics::{CacheUse, Diagnostics, Settings};
 use ruuvi2mqtt_esp32::mac::Mac;
 
 mod antenna;
 mod ble;
-mod config;
 mod gauge;
 mod gpio;
 mod led;
@@ -31,7 +31,7 @@ fn main() {
     // Required by esp-idf-svc: links esp-idf glue patches.
     sys::link_patches();
 
-    log::set_max_level(APP_LEVEL);
+    log::set_max_level(log::LevelFilter::Info);
     log::set_logger(&AppLogger).unwrap();
 
     info!(
@@ -39,6 +39,8 @@ fn main() {
         env!("CARGO_PKG_NAME"),
         env!("BUILD_VERSION")
     );
+    load_config();
+    log::set_max_level(config::get().log_level);
 
     let reset_reason = unsafe { sys::esp_reset_reason() };
 
@@ -80,12 +82,14 @@ fn main() {
     let cycles_failed = if continued {
         CYCLES_FAILED
             .load(Ordering::Relaxed)
-            .wrapping_add(u32::from(failed_before && !config::BLE_SCAN_CONTINUOUS))
+            .wrapping_add(u32::from(
+                failed_before && !config::get().ble_scan_continuous,
+            ))
     } else {
         0
     };
     CYCLES_FAILED.store(cycles_failed, Ordering::Relaxed);
-    if !config::BLE_SCAN_CONTINUOUS {
+    if !config::get().ble_scan_continuous {
         web::set_previous_cycle(cycle.wrapping_sub(1), failed_before);
     }
     if !continued {
@@ -100,18 +104,21 @@ fn main() {
         | sys::esp_reset_reason_t_ESP_RST_INT_WDT
         | sys::esp_reset_reason_t_ESP_RST_TASK_WDT => {
             warn!("Previous cycle crashed, skipping this one");
-            sleep(SLEEP_SECS);
+            sleep(sleep_secs());
         }
         // A weak battery browns out under Wi-Fi load. Give it time to recover.
         sys::esp_reset_reason_t_ESP_RST_BROWNOUT => {
             warn!("Previous cycle browned out (weak battery?), skipping this one");
-            sleep(BROWNOUT_SLEEP_SECS);
+            sleep(brownout_sleep_secs());
         }
         _ => {}
     }
 
-    if config::BLE_SCAN_CONTINUOUS {
-        info!("Cycle: {}s continuous BLE scan", config::BLE_SCAN_DURATION);
+    if config::get().ble_scan_continuous {
+        info!(
+            "Cycle: {}s continuous BLE scan",
+            config::get().ble_scan_duration
+        );
         let Err(e) = run_continuous(cycle, nvs);
         error!("Continuous scan failed: {e:#}");
         // A failed start used a cycle number too. The next boot counts only a
@@ -120,9 +127,9 @@ fn main() {
     } else {
         info!(
             "Cycle: {}s {} BLE scan, {}s deep sleep",
-            config::BLE_SCAN_DURATION,
-            config::BLE_SCAN_MODE,
-            config::BLE_SLEEP_DURATION
+            config::get().ble_scan_duration,
+            config::get().ble_scan_mode.as_str(),
+            config::get().ble_sleep_duration
         );
         match run(cycle, nvs) {
             Ok(()) => LAST_CYCLE_FAILED.store(0, Ordering::Relaxed),
@@ -130,7 +137,7 @@ fn main() {
         }
     }
 
-    sleep(SLEEP_SECS);
+    sleep(sleep_secs());
 }
 
 /// Cycles since a cold boot or a crash. Uninitialized RTC memory, which
@@ -160,10 +167,14 @@ static STAYING_AWAKE: AtomicBool = AtomicBool::new(false);
 static DEADLINE_SECS: AtomicU32 = AtomicU32::new(u32::MAX);
 
 /// Normal deep sleep between cycles.
-const SLEEP_SECS: u64 = config::BLE_SLEEP_DURATION as u64;
+fn sleep_secs() -> u64 {
+    config::get().ble_sleep_duration.unsigned_abs().into()
+}
 
 /// One BLE scan.
-const SCAN_SECS: u64 = config::BLE_SCAN_DURATION as u64;
+fn scan_secs() -> u64 {
+    config::get().ble_scan_duration.unsigned_abs().into()
+}
 
 /// How long to wait for the broker to accept the connection.
 const MQTT_CONNECT_TIMEOUT: Duration = Duration::from_secs(15);
@@ -175,16 +186,16 @@ const MQTT_ACK_TIMEOUT: Duration = Duration::from_secs(5);
 /// but a task blocked on an event does not trip the task watchdog. In the
 /// continuous mode, it is the time since the last cycle that scanned and
 /// published, so one cycle may fail, as when Wi-Fi drops for a while.
-const CYCLE_TIMEOUT_SECS: u32 = 25
-    + wifi::FULL_SCAN_TIMEOUT_SECS
-    + if config::BLE_SCAN_CONTINUOUS {
-        2 * config::BLE_SCAN_DURATION.unsigned_abs()
-    } else {
-        config::BLE_SCAN_DURATION.unsigned_abs()
-    };
+fn cycle_timeout_secs() -> u32 {
+    let config = config::get();
+    let scans = if config.ble_scan_continuous { 2 } else { 1 };
+    25 + wifi::full_scan_timeout_secs() + scans * config.ble_scan_duration.unsigned_abs()
+}
 
 /// Deep sleep after a brownout reset.
-const BROWNOUT_SLEEP_SECS: u64 = 4 * SLEEP_SECS;
+fn brownout_sleep_secs() -> u64 {
+    4 * sleep_secs()
+}
 
 /// Enters deep sleep. On wake, the chip reboots, and `main()` runs afresh.
 /// Deep sleep draws 5–10 µA, and the board awake over 100 mA.
@@ -198,9 +209,9 @@ const BROWNOUT_SLEEP_SECS: u64 = 4 * SLEEP_SECS;
 /// gets here. That mode never deep sleeps, so the board waits awake, and the
 /// LED blinks.
 fn sleep(secs: u64) -> ! {
-    if config::BLE_SCAN_CONTINUOUS || (config::USB_STAY_AWAKE && usb_host_connected()) {
+    if config::get().ble_scan_continuous || (config::get().usb_stay_awake && usb_host_connected()) {
         STAYING_AWAKE.store(true, Ordering::Relaxed);
-        if config::BLE_SCAN_CONTINUOUS {
+        if config::get().ble_scan_continuous {
             led::set_failed(true);
             info!("Restarting in {secs}s");
         } else {
@@ -240,10 +251,10 @@ fn uptime_secs() -> u32 {
     u32::try_from(unsafe { sys::esp_timer_get_time() } / 1_000_000).unwrap_or(u32::MAX)
 }
 
-/// Moves the cycle timeout to `CYCLE_TIMEOUT_SECS` from now.
+/// Moves the cycle timeout to `cycle_timeout_secs()` from now.
 fn extend_deadline() {
     DEADLINE_SECS.store(
-        uptime_secs().saturating_add(CYCLE_TIMEOUT_SECS),
+        uptime_secs().saturating_add(cycle_timeout_secs()),
         Ordering::Relaxed,
     );
 }
@@ -257,9 +268,9 @@ fn start_cycle_timeout() -> anyhow::Result<()> {
         .spawn(|| loop {
             thread::sleep(Duration::from_secs(1));
             if timed_out() && !STAYING_AWAKE.load(Ordering::Relaxed) {
-                error!("Cycle timed out after {CYCLE_TIMEOUT_SECS}s");
-                if !config::BLE_SCAN_CONTINUOUS {
-                    sleep(SLEEP_SECS);
+                error!("Cycle timed out after {}s", cycle_timeout_secs());
+                if !config::get().ble_scan_continuous {
+                    sleep(sleep_secs());
                 }
                 if !recovered() {
                     info!("Restarting");
@@ -278,8 +289,9 @@ fn timed_out() -> bool {
 
 /// After a cycle timeout, how long a cycle has to succeed: the sleep for
 /// Wi-Fi and MQTT to reconnect, then the scan and the publish.
-const RECOVERY_SECS: u64 =
-    SLEEP_SECS + SCAN_SECS + MQTT_CONNECT_TIMEOUT.as_secs() + MQTT_ACK_TIMEOUT.as_secs();
+fn recovery_secs() -> u64 {
+    sleep_secs() + scan_secs() + MQTT_CONNECT_TIMEOUT.as_secs() + MQTT_ACK_TIMEOUT.as_secs()
+}
 
 /// In the continuous mode, Wi-Fi and MQTT reconnect by themselves, so a cycle
 /// gets time to succeed before a restart. Only a cycle that succeeds
@@ -287,8 +299,8 @@ const RECOVERY_SECS: u64 =
 /// restart.
 fn recovered() -> bool {
     led::set_failed(true);
-    info!("Restarting in {RECOVERY_SECS}s unless a cycle succeeds");
-    let until = Instant::now() + Duration::from_secs(RECOVERY_SECS);
+    info!("Restarting in {}s unless a cycle succeeds", recovery_secs());
+    let until = Instant::now() + Duration::from_secs(recovery_secs());
     while timed_out() {
         if Instant::now() >= until {
             return false;
@@ -373,7 +385,7 @@ fn run_continuous(
             // A failed scan returns at once. Wait out the scan, so that the
             // cycle keeps its length and the diagnostics their rate.
             if failed {
-                thread::sleep(Duration::from_secs(SCAN_SECS));
+                thread::sleep(Duration::from_secs(scan_secs()));
             }
         })
         .context("Failed to spawn BLE scan thread")?;
@@ -454,7 +466,7 @@ fn publish(
     for reading in &scan.readings {
         let topic = format!(
             "{}/{}",
-            config::MQTT_BASE_TOPIC,
+            config::get().mqtt_base_topic.as_str(),
             reading.mac.to_topic_string()
         );
         match mqtt.publish(&topic, &reading.payload) {
@@ -466,15 +478,15 @@ fn publish(
     let ap = system::ap_record();
     let diag = Diagnostics {
         firmware: concat!(env!("CARGO_PKG_NAME"), " ", env!("BUILD_VERSION")),
-        client_id: config::MQTT_CLIENT_ID,
+        client_id: config::get().mqtt_client_id.as_str(),
         chip: system::chip(),
         cycle: cycle.number,
         cycles_failed: CYCLES_FAILED.load(Ordering::Relaxed),
         uptime_s: uptime_secs(),
         settings: Settings {
-            scan_mode: config::BLE_SCAN_MODE,
-            scan_duration: config::BLE_SCAN_DURATION.unsigned_abs(),
-            antenna: config::ANTENNA,
+            scan_mode: config::get().ble_scan_mode.as_str(),
+            scan_duration: config::get().ble_scan_duration.unsigned_abs(),
+            antenna: config::get().antenna.as_deref(),
         },
         wifi_rssi: ap.map(|ap| ap.rssi),
         wifi_channel: ap.map(|ap| ap.primary),
@@ -492,8 +504,8 @@ fn publish(
     };
     let topic = format!(
         "{}/diagnostics/{}",
-        config::MQTT_BASE_TOPIC,
-        config::DEVICE_HOSTNAME,
+        config::get().mqtt_base_topic.as_str(),
+        config::get().device_hostname.as_str(),
     );
     let payload = diag.to_json();
     info!("Diagnostics: {payload}");
@@ -542,19 +554,45 @@ fn failed_scan(error: String, start: Instant) -> (ble::Scan, Option<String>) {
     (scan, Some(error))
 }
 
+/// Loads the configuration from the `config` partition. Without a valid one,
+/// the board knows neither its network nor its LED, so it logs the errors
+/// until `make config` writes one.
+fn load_config() {
+    let result = system::config_partition()
+        .map_err(|e| vec![format!("{e:#}")])
+        .and_then(|bytes| config::decode(&bytes).map_err(|e| vec![e]))
+        .and_then(|values| {
+            let chip = Chip::find(system::chip())
+                .ok_or_else(|| vec![format!("Unknown chip: {}", system::chip())])?;
+            Config::parse(&values, chip)
+        });
+    match result {
+        Ok(loaded) => config::set(loaded),
+        Err(errors) => loop {
+            for e in &errors {
+                error!("{e}");
+            }
+            thread::sleep(Duration::from_secs(10));
+        },
+    }
+}
+
+// config::CHIPS copies ESP-IDF's values for the host tool, which has no ESP-IDF.
+const _: () = {
+    let Some(chip) = Chip::find(env!("MCU")) else {
+        panic!("config::CHIPS has no entry for MCU");
+    };
+    #[allow(clippy::cast_sign_loss)] // GPIO_NUM_MAX is positive
+    let gpio_count = sys::gpio_num_t_GPIO_NUM_MAX as u32;
+    assert!(
+        chip.gpio_count == gpio_count && chip.wifi_5g == cfg!(esp_idf_soc_wifi_support_5g),
+        "config::CHIPS differs from ESP-IDF for MCU"
+    );
+};
+
 /// Applies `LOG_LEVEL` to this crate's modules. Library code logs at `Info`
 /// at most, so that the debug logs show only this crate's.
 struct AppLogger;
-
-/// `LOG_LEVEL` as a filter.
-static APP_LEVEL: log::LevelFilter = match config::LOG_LEVEL.as_bytes() {
-    b"trace" | b"TRACE" => log::LevelFilter::Trace,
-    b"debug" | b"DEBUG" => log::LevelFilter::Debug,
-    b"warn" | b"WARN" => log::LevelFilter::Warn,
-    b"error" | b"ERROR" => log::LevelFilter::Error,
-    b"off" | b"OFF" => log::LevelFilter::Off,
-    _ => log::LevelFilter::Info,
-};
 
 const APP_MODULE_PREFIX: &str = env!("CARGO_CRATE_NAME");
 
@@ -564,7 +602,7 @@ static ESP_LOGGER: EspIdfLogger<()> = EspIdfLogger::new(());
 impl log::Log for AppLogger {
     fn enabled(&self, metadata: &log::Metadata) -> bool {
         let level = if metadata.target().starts_with(APP_MODULE_PREFIX) {
-            APP_LEVEL
+            config::try_get().map_or(log::LevelFilter::Info, |c| c.log_level)
         } else {
             log::LevelFilter::Info
         };

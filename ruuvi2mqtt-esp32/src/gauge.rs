@@ -11,15 +11,16 @@ use esp_idf_svc::hal::units::FromValueType;
 use esp_idf_svc::sys::{self, EspError};
 use log::{debug, warn};
 use ruuvi2mqtt_esp32::battery::{Battery, Gauge};
+use ruuvi2mqtt_esp32::config;
 
-use crate::{config, gpio};
+use crate::gpio;
 
 /// The reading for the diagnostics: `None` without `BATTERY`, `Some(None)`
 /// when the read failed.
 #[allow(clippy::option_option)]
 pub fn read() -> Option<Option<Battery>> {
-    let gauge = config::BATTERY_GAUGE?;
-    let (sda, scl) = config::BATTERY_SDA.zip(config::BATTERY_SCL)?;
+    let gauge = config::get().battery_gauge?;
+    let (sda, scl) = config::get().battery_sda.zip(config::get().battery_scl)?;
     let battery = powered(|| {
         let mut bus = Bus::new(sda, scl, gauge.address())?;
         match gauge {
@@ -38,14 +39,14 @@ pub fn read() -> Option<Option<Battery>> {
 /// the gauge.
 #[allow(clippy::option_option)]
 pub fn last() -> Option<Option<Battery>> {
-    config::BATTERY_GAUGE.map(|_| *LAST.lock().unwrap())
+    config::get().battery_gauge.map(|_| *LAST.lock().unwrap())
 }
 
 static LAST: Mutex<Option<Battery>> = Mutex::new(None);
 
 /// Runs `read` with `BATTERY_POWER_GPIO` high.
 fn powered<T>(read: impl FnOnce() -> Result<T, EspError>) -> Result<T, EspError> {
-    let Some(pin) = config::BATTERY_POWER_GPIO else {
+    let Some(pin) = config::get().battery_power_gpio else {
         return read();
     };
     let gpio = sys::gpio_num_t::from(pin);
@@ -53,7 +54,7 @@ fn powered<T>(read: impl FnOnce() -> Result<T, EspError>) -> Result<T, EspError>
     let result = read();
     // The pin may power other things too, such as the Feather's LED, which
     // draws about 1 mA even when dark. The LED code keeps its own power on.
-    if config::LED_POWER_GPIO != Some(u32::from(pin)) {
+    if config::get().led_power_gpio != Some(u32::from(pin)) {
         gpio::output(gpio, false)?;
     }
     result

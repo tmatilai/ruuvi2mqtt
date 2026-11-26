@@ -3,6 +3,7 @@
 
 pub mod battery;
 pub mod button;
+pub mod config;
 pub mod diagnostics;
 pub mod homeassistant;
 pub mod led_pattern;

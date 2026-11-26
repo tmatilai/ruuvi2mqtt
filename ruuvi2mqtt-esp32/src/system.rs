@@ -2,7 +2,9 @@
 
 use std::ffi::CStr;
 
+use esp_idf_svc::partition::EspPartition;
 use esp_idf_svc::sys;
+use ruuvi2mqtt_esp32::config;
 
 /// The connected access point.
 pub fn ap_record() -> Option<sys::wifi_ap_record_t> {
@@ -27,4 +29,14 @@ pub fn chip() -> &'static str {
         .ok()
         .and_then(|s| s.to_str().ok())
         .unwrap_or("unknown")
+}
+
+/// The contents of the `config` partition.
+pub fn config_partition() -> anyhow::Result<Vec<u8>> {
+    // SAFETY: only this function opens the partition, once at boot.
+    let mut partition = unsafe { EspPartition::new("config") }?
+        .ok_or_else(|| anyhow::anyhow!("No config partition. Flash the board with `make flash`"))?;
+    let mut bytes = vec![0; config::PARTITION_SIZE.min(partition.size())];
+    partition.read(0, &mut bytes)?;
+    Ok(bytes)
 }

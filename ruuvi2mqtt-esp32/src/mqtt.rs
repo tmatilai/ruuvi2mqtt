@@ -12,11 +12,12 @@ use esp_idf_svc::mqtt::client::{
 };
 use esp_idf_svc::tls::X509;
 use log::{info, warn};
+use ruuvi2mqtt_esp32::config;
 use ruuvi2mqtt_esp32::homeassistant::{self, Board, Mode};
 use ruuvi2mqtt_esp32::payload;
 use ruuvi2mqtt_esp32::status::DISCOVERY_TOPIC;
 
-use crate::{config, system};
+use crate::system;
 
 /// Events forwarded from the event-loop thread to [`Mqtt`].
 #[derive(Clone, Copy)]
@@ -48,28 +49,34 @@ impl Mqtt {
     /// Call [`Mqtt::wait_connected`] before publishing. With `discovery`, it
     /// publishes the discovery configs on connect.
     pub fn connect(discovery: bool) -> anyhow::Result<Self> {
-        let scheme = if config::MQTT_TLS { "mqtts" } else { "mqtt" };
-        let broker_url = format!("{scheme}://{}:{}", config::MQTT_SERVER, config::MQTT_PORT);
+        let scheme = if config::get().mqtt_tls {
+            "mqtts"
+        } else {
+            "mqtt"
+        };
+        let broker_url = format!(
+            "{scheme}://{}:{}",
+            config::get().mqtt_server.as_str(),
+            config::get().mqtt_port
+        );
 
-        if config::MQTT_TLS {
-            if config::MQTT_TLS_INSECURE {
+        if config::get().mqtt_tls {
+            if config::get().mqtt_tls_insecure {
                 warn!("TLS hostname check is disabled (MQTT_TLS_INSECURE=true)");
             }
-        } else if config::MQTT_CA_FILE.is_some() {
+        } else if config::get().mqtt_ca.is_some() {
             warn!("MQTT_CA_FILE is set but TLS is disabled; the CA file is ignored");
         }
-
-        let server_certificate = ca_certificate();
 
         // The deep-sleep mode leaves the broker every cycle, so it would be
         // offline most of the time.
         let status_topic = format!(
             "{}/status/{}",
-            config::MQTT_BASE_TOPIC,
-            config::MQTT_CLIENT_ID
+            config::get().mqtt_base_topic.as_str(),
+            config::get().mqtt_client_id.as_str()
         );
         let offline = payload::status(None);
-        let lwt = config::BLE_SCAN_CONTINUOUS.then(|| LwtConfiguration {
+        let lwt = config::get().ble_scan_continuous.then(|| LwtConfiguration {
             topic: &status_topic,
             payload: offline.as_bytes(),
             qos: QoS::AtLeastOnce,
@@ -77,20 +84,23 @@ impl Mqtt {
         });
 
         let cfg = MqttClientConfiguration {
-            client_id: Some(config::MQTT_CLIENT_ID),
-            username: config::MQTT_USER,
-            password: config::MQTT_PASSWORD,
+            client_id: Some(config::get().mqtt_client_id.as_str()),
+            username: config::get().mqtt_user.as_deref(),
+            password: config::get().mqtt_password.as_deref(),
             keep_alive_interval: Some(Duration::from_secs(15)),
-            server_certificate,
+            server_certificate: config::get().mqtt_ca.as_deref().map(X509::pem),
             crt_bundle_attach: crt_bundle_attach(),
-            skip_cert_common_name_check: config::MQTT_TLS_INSECURE,
+            skip_cert_common_name_check: config::get().mqtt_tls_insecure,
             lwt,
             ..Default::default()
         };
 
         let (client, connection) = EspMqttClient::new(&broker_url, &cfg)?;
         info!("Connecting to MQTT: {broker_url}");
-        match (config::MQTT_USER, config::MQTT_PASSWORD) {
+        match (
+            config::get().mqtt_user.as_deref(),
+            config::get().mqtt_password.as_deref(),
+        ) {
             (Some(user), Some(_)) => info!("MQTT login: user '{user}' with a password"),
             (Some(user), None) => info!("MQTT login: user '{user}' without a password"),
             (None, _) => info!("MQTT login: anonymous"),
@@ -174,7 +184,7 @@ impl Mqtt {
                 self.connected_at = Some(at);
                 // The tag names for the status page. A clean session
                 // forgets the subscription.
-                if config::BLE_SCAN_CONTINUOUS {
+                if config::get().ble_scan_continuous {
                     if let Err(e) = self.client.subscribe(DISCOVERY_TOPIC, QoS::AtMostOnce) {
                         warn!("Failed to subscribe to {DISCOVERY_TOPIC}: {e}");
                     }
@@ -206,7 +216,7 @@ impl Mqtt {
                 .client
                 .publish(topic, QoS::AtLeastOnce, true, json.as_bytes())
             {
-                Ok(id) if !config::BLE_SCAN_CONTINUOUS => self.pending.push(id),
+                Ok(id) if !config::get().ble_scan_continuous => self.pending.push(id),
                 Ok(_) => {}
                 Err(e) => {
                     warn!("Failed to publish {topic}: {e}");
@@ -225,52 +235,38 @@ impl Mqtt {
 
 fn discovery_configs(status_topic: &str) -> Vec<(String, String)> {
     let mut configs = homeassistant::configs(&Board {
-        client_id: config::MQTT_CLIENT_ID,
-        hostname: config::DEVICE_HOSTNAME,
-        base_topic: config::MQTT_BASE_TOPIC,
+        client_id: config::get().mqtt_client_id.as_str(),
+        hostname: config::get().device_hostname.as_str(),
+        base_topic: config::get().mqtt_base_topic.as_str(),
         version: env!("BUILD_VERSION"),
         chip: system::chip(),
-        mode: if config::BLE_SCAN_CONTINUOUS {
+        mode: if config::get().ble_scan_continuous {
             Mode::Continuous
         } else {
             // Three cycles, and half a cycle more, as a cycle is also awake
             // before and after its scan.
             Mode::DeepSleep {
-                expire_after: (config::BLE_SCAN_DURATION + config::BLE_SLEEP_DURATION)
+                expire_after: (config::get().ble_scan_duration + config::get().ble_sleep_duration)
                     .unsigned_abs()
                     * 7
                     / 2,
             }
         },
-        battery: config::BATTERY_GAUGE,
+        battery: config::get().battery_gauge,
     });
     // Deep sleep has no status. Deletes the one that the continuous mode
     // left, which would stay offline.
-    if !config::BLE_SCAN_CONTINUOUS {
+    if !config::get().ble_scan_continuous {
         configs.push((status_topic.to_string(), String::new()));
     }
     configs
-}
-
-/// Returns the embedded CA certificate, if `MQTT_CA_FILE` was set at build
-/// time.
-fn ca_certificate() -> Option<X509<'static>> {
-    #[cfg(not(mqtt_ca_file))]
-    {
-        None
-    }
-    #[cfg(mqtt_ca_file)]
-    {
-        static CA_PEM: &[u8] = include_bytes!(env!("MQTT_CA_PEM_PATH"));
-        Some(X509::pem_until_nul(CA_PEM))
-    }
 }
 
 /// Uses ESP-IDF's CA certificate bundle when TLS is on without
 /// `MQTT_CA_FILE`.
 fn crt_bundle_attach(
 ) -> Option<unsafe extern "C" fn(conf: *mut core::ffi::c_void) -> esp_idf_svc::sys::esp_err_t> {
-    if config::MQTT_TLS && config::MQTT_CA_FILE.is_none() {
+    if config::get().mqtt_tls && config::get().mqtt_ca.is_none() {
         Some(esp_idf_svc::sys::esp_crt_bundle_attach)
     } else {
         None

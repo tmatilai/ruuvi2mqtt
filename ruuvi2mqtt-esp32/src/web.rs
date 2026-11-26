@@ -15,10 +15,11 @@ use esp_idf_svc::{
     sys,
 };
 use log::info;
+use ruuvi2mqtt_esp32::config;
 use ruuvi2mqtt_esp32::mac::Mac;
 use ruuvi2mqtt_esp32::status::{self, Board, Grade, Live};
 
-use crate::{config, gauge, system};
+use crate::{gauge, system};
 
 static LIVE: Mutex<Live> = Mutex::new(Live::new());
 
@@ -56,7 +57,7 @@ pub fn set_previous_cycle(cycles: u32, failed: bool) {
 pub fn link_grade() -> Grade {
     status::link_grade(
         system::ap_record().map(|ap| (ap.rssi, WIFI_DROPS.load(Ordering::Relaxed))),
-        config::BLE_SCAN_CONTINUOUS,
+        config::get().ble_scan_continuous,
         CYCLES.load(Ordering::Relaxed),
         CYCLES_FAILED.load(Ordering::Relaxed),
         LAST_CYCLE_FAILED.load(Ordering::Relaxed),
@@ -86,8 +87,8 @@ pub struct Web {
 /// Serves the page, once Wi-Fi is up.
 pub fn start() -> anyhow::Result<Web> {
     let mut mdns = EspMdns::take()?;
-    mdns.set_hostname(config::DEVICE_HOSTNAME)?;
-    mdns.set_instance_name(config::DEVICE_HOSTNAME)?;
+    mdns.set_hostname(config::get().device_hostname.as_str())?;
+    mdns.set_instance_name(config::get().device_hostname.as_str())?;
     mdns.add_service(None, "_http", "_tcp", 80, &[])?;
 
     let mut server = EspHttpServer::new(&Configuration::default())?;
@@ -110,7 +111,10 @@ pub fn start() -> anyhow::Result<Web> {
         Ok(())
     })?;
 
-    info!("Status page: http://{}.local/", config::DEVICE_HOSTNAME);
+    info!(
+        "Status page: http://{}.local/",
+        config::get().device_hostname.as_str()
+    );
     Ok(Web {
         _server: server,
         _mdns: mdns,
@@ -119,9 +123,9 @@ pub fn start() -> anyhow::Result<Web> {
 
 fn report(targets: &[Mac]) -> anyhow::Result<String> {
     let board = Board {
-        hostname: config::DEVICE_HOSTNAME,
+        hostname: config::get().device_hostname.as_str(),
         firmware: concat!(env!("CARGO_PKG_NAME"), " ", env!("BUILD_VERSION")),
-        antenna: config::ANTENNA,
+        antenna: config::get().antenna.as_deref(),
         uptime_ms: uptime_ms(),
         // The request came over Wi-Fi.
         wifi: system::ap_record()

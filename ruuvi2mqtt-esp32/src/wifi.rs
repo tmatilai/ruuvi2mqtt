@@ -13,6 +13,7 @@ use esp_idf_svc::{
     },
 };
 use log::info;
+use ruuvi2mqtt_esp32::config;
 use ruuvi2mqtt_esp32::diagnostics::CacheUse;
 use ruuvi2mqtt_esp32::mac::Mac;
 use ruuvi2mqtt_esp32::roam::{self, Decision};
@@ -22,7 +23,7 @@ use std::sync::{mpsc, Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
 
-use crate::{ble, config, led, system};
+use crate::{ble, led, system};
 
 /// Connects to Wi-Fi and returns the `BlockingWifi` guard, and how the NVS
 /// cache was used.
@@ -35,8 +36,8 @@ pub fn connect(
 ) -> anyhow::Result<(BlockingWifi<EspWifi<'static>>, CacheUse)> {
     let esp_wifi = EspWifi::new(modem, sysloop.clone(), Some(nvs))?;
 
-    let hostname =
-        CString::new(config::DEVICE_HOSTNAME).expect("DEVICE_HOSTNAME contains a null byte");
+    let hostname = CString::new(config::get().device_hostname.as_str())
+        .expect("DEVICE_HOSTNAME contains a null byte");
     if let Err(e) = unsafe {
         sys::esp!(sys::esp_netif_set_hostname(
             esp_wifi.sta_netif().handle(),
@@ -46,7 +47,7 @@ pub fn connect(
         log::warn!("Could not set hostname: {e}");
     }
 
-    if let Some(ip) = config::WIFI_IP {
+    if let Some(ip) = config::get().wifi_ip.as_deref() {
         configure_static_ip(esp_wifi.sta_netif().handle(), ip)?;
     }
 
@@ -69,7 +70,10 @@ pub fn connect(
 
     wifi.start()?;
     set_band()?;
-    info!("Connecting to Wi-Fi '{}'...", config::WIFI_SSID);
+    info!(
+        "Connecting to Wi-Fi '{}'...",
+        config::get().wifi_ssid.as_str()
+    );
 
     // A fast reconnect fails as soon as the driver gives up on the cached
     // access point. A full scan moves on to the next one itself, so it waits
@@ -91,10 +95,13 @@ pub fn connect(
         Err(e) => return Err(e),
     };
 
-    if config::WIFI_IP.is_none() {
+    if config::get().wifi_ip.is_none() {
         wifi.wait_netif_up()?;
     }
-    info!("Connected to Wi-Fi as '{}'", config::DEVICE_HOSTNAME);
+    info!(
+        "Connected to Wi-Fi as '{}'",
+        config::get().device_hostname.as_str()
+    );
 
     update_wifi_cache(cached.as_ref());
 
@@ -105,14 +112,20 @@ pub fn connect(
 /// BSSID, and skips the full scan.
 fn client_configuration(cache: Option<&WifiCache>) -> Configuration {
     Configuration::Client(ClientConfiguration {
-        // config.rs checks both lengths at build time.
-        ssid: config::WIFI_SSID.try_into().expect("WIFI_SSID fits"),
-        password: config::WIFI_PASS
+        // Config::parse checks both lengths.
+        ssid: config::get()
+            .wifi_ssid
+            .as_str()
+            .try_into()
+            .expect("WIFI_SSID fits"),
+        password: config::get()
+            .wifi_pass
+            .as_deref()
             .unwrap_or_default()
             .try_into()
             .expect("WIFI_PASS fits"),
         // The weakest security the driver accepts from an access point.
-        auth_method: if config::WIFI_OPEN {
+        auth_method: if config::get().wifi_open {
             AuthMethod::None
         } else {
             AuthMethod::WPA2Personal
@@ -339,7 +352,7 @@ fn scan_for_stronger() -> anyhow::Result<bool> {
     };
     let current = Mac::from(ap.bssid);
 
-    let ssid = CString::new(config::WIFI_SSID)?;
+    let ssid = CString::new(config::get().wifi_ssid.as_str())?;
     let scanned = unsafe {
         let mut scan: sys::wifi_scan_config_t = std::mem::zeroed();
         scan.ssid = ssid.as_ptr().cast_mut().cast();
@@ -403,7 +416,7 @@ fn scan_for_stronger() -> anyhow::Result<bool> {
 
 /// Sets the band to `WIFI_BAND`, or to both on a dual-band chip.
 fn set_band() -> anyhow::Result<()> {
-    let (mode, band) = match config::WIFI_BAND {
+    let (mode, band) = match config::get().wifi_band.as_deref() {
         Some("2.4") => (sys::wifi_band_mode_t_WIFI_BAND_MODE_2G_ONLY, "2.4"),
         Some(_) => (sys::wifi_band_mode_t_WIFI_BAND_MODE_5G_ONLY, "5"),
         // The driver keeps the previous firmware's band in NVS.
@@ -422,14 +435,20 @@ const CACHED_CONNECT_TIMEOUT: Duration = Duration::from_secs(15);
 
 /// How long to wait for a connect with a full scan. The DFS channels of
 /// 5 GHz are scanned passively, so a scan of both bands takes about 25 s.
-pub const FULL_SCAN_TIMEOUT_SECS: u32 = if config::WIFI_SCANS_5G { 40 } else { 15 };
+pub fn full_scan_timeout_secs() -> u32 {
+    if config::get().wifi_scans_5g {
+        40
+    } else {
+        15
+    }
+}
 
 /// Connects with a full scan. `BlockingWifi::connect` gives up after 15 s.
 fn connect_full(wifi: &mut BlockingWifi<EspWifi<'static>>) -> anyhow::Result<()> {
     wifi.wifi_mut().connect()?;
     wifi.wifi_wait_while(
         || wifi.wifi().is_connected().map(|c| !c),
-        Some(Duration::from_secs(FULL_SCAN_TIMEOUT_SECS.into())),
+        Some(Duration::from_secs(full_scan_timeout_secs().into())),
     )?;
     Ok(())
 }
@@ -478,9 +497,15 @@ fn connect_cached(
 
 /// Configures the static IP on the STA netif, without DHCP.
 fn configure_static_ip(netif: *mut sys::esp_netif_t, ip: &str) -> anyhow::Result<()> {
-    let gateway = config::WIFI_GATEWAY.expect("WIFI_GATEWAY must be set when WIFI_IP is set");
-    let netmask = config::WIFI_NETMASK.unwrap_or("255.255.255.0");
-    let dns = config::WIFI_DNS.unwrap_or(gateway);
+    let gateway = config::get()
+        .wifi_gateway
+        .as_deref()
+        .expect("WIFI_GATEWAY must be set when WIFI_IP is set");
+    let netmask = config::get()
+        .wifi_netmask
+        .as_deref()
+        .unwrap_or("255.255.255.0");
+    let dns = config::get().wifi_dns.as_deref().unwrap_or(gateway);
 
     let ip_info = sys::esp_netif_ip_info_t {
         ip: str_to_ip4(ip),

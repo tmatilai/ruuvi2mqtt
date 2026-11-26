@@ -75,10 +75,6 @@ jobs:
   clippy-esp32:
     name: Clippy (ESP32-C6)
     runs-on: ubuntu-latest
-    env:
-      WIFI_SSID: dummy
-      WIFI_PASS: dummy-password
-      MQTT_SERVER: dummy
     steps:
       - name: Setup | Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -130,7 +126,7 @@ jobs:
           save-if: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Run clippy (host tests)
-        run: cd ruuvi2mqtt-esp32 && cargo +stable clippy --locked --target host-tuple --lib --tests -- -D clippy::all -W clippy::pedantic
+        run: cd ruuvi2mqtt-esp32 && cargo +stable clippy --locked --target host-tuple --lib --tests --bin ruuvi2mqtt-config -- -D clippy::all -W clippy::pedantic
 
       - name: Run tests
         run: make -C ruuvi2mqtt-esp32 test
@@ -167,9 +163,6 @@ jobs:
     env:
       MCU: ${{ matrix.chip }}
       TARGET: ${{ matrix.target }}
-      WIFI_SSID: dummy
-      WIFI_PASS: dummy-password
-      MQTT_SERVER: dummy
     steps:
       - name: Setup | Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -213,7 +206,7 @@ jobs:
           save-if: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Build firmware
-        run: cd ruuvi2mqtt-esp32 && cargo build --release --locked --target "$TARGET"
+        run: cd ruuvi2mqtt-esp32 && cargo build --release --locked --target "$TARGET" --bin ruuvi2mqtt-esp32
 
   test-checker:
     name: Test (checker)

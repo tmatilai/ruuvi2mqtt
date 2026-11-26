@@ -6,9 +6,9 @@
 #
 # Auto-detection runs only for targets that need it and only when
 # boards/boards.conf exists. ESPFLASH_PORT limits it to one port.
-BOARD_TARGETS := all lint build flash monitor log
+BOARD_TARGETS := all lint build flash config monitor log
 # The targets that talk to the board. They get its port in ESPFLASH_PORT.
-PORT_TARGETS := flash monitor log
+PORT_TARGETS := flash config monitor log
 BOARDS_SH = ESPFLASH_PORT='$(ESPFLASH_PORT)' WAIT='$(WAIT)' ./boards.sh
 
 # Seconds to wait for a board's port. In deep sleep, the chip's own USB
@@ -164,7 +164,7 @@ esp-idf-sys-config:
 lint: esp-idf-sys-config ## Format and lint
 	$(CARGO) fmt
 	$(CARGO) clippy --target $(TARGET) -- -D clippy::all -W clippy::pedantic
-	$(HOST_CARGO) clippy $(HOST_TARGET) --lib --tests -- -D clippy::all -W clippy::pedantic
+	$(HOST_CARGO) clippy $(HOST_TARGET) --lib --tests --bin ruuvi2mqtt-config -- -D clippy::all -W clippy::pedantic
 
 .PHONY: test
 test: ## Run host-side unit tests (pure-Rust modules only)
@@ -172,11 +172,26 @@ test: ## Run host-side unit tests (pure-Rust modules only)
 
 .PHONY: build
 build: esp-idf-sys-config ## Build the firmware (release)
-	$(CARGO) build --release --target $(TARGET)
+	$(CARGO) build --release --target $(TARGET) --bin ruuvi2mqtt-esp32
+
+CONFIG_FILE = $(CARGO_TARGET_DIR)/config.bin
+CONFIG_OFFSET := $(shell awk -F, '$$1 == "config" { gsub(/ /, "", $$4); print $$4 }' partitions.csv)
+
+# Fails on an invalid configuration before anything is flashed.
+.PHONY: config-file
+config-file:
+	@mkdir -p $(CARGO_TARGET_DIR)
+	$(HOST_CARGO) run --quiet $(HOST_TARGET) --bin ruuvi2mqtt-config -- $(CHIP) $(CONFIG_FILE)
 
 .PHONY: flash
-flash: build ## Build and flash the firmware (`make flash monitor` to watch it)
-	espflash flash --non-interactive $(CARGO_TARGET_DIR)/$(TARGET)/release/ruuvi2mqtt-esp32
+flash: build config-file ## Build and flash the firmware and the configuration (`make flash monitor` to watch it)
+	espflash flash --non-interactive --partition-table partitions.csv --erase-parts otadata \
+	  $(CARGO_TARGET_DIR)/$(TARGET)/release/ruuvi2mqtt-esp32
+	espflash write-bin --non-interactive $(CONFIG_OFFSET) $(CONFIG_FILE)
+
+.PHONY: config
+config: config-file ## Write only the configuration, without building the firmware
+	espflash write-bin --non-interactive $(CONFIG_OFFSET) $(CONFIG_FILE)
 
 .PHONY: monitor
 monitor: ## Open the interactive serial monitor
