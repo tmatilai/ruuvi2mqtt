@@ -5,12 +5,15 @@
 #### Breaking changes
 
 - Rename the Makefile's `DEVICE` variable to `BOARD`, and the board files' `devices/` directory to `boards/`.
+- Trust only the common CAs of ESP-IDF's certificate bundle, to fit two firmware images in 4 MB of flash. A broker whose certificate comes from a rarer public CA needs `MQTT_CA_FILE`.
+- Drop support for WPA3 OWE ("enhanced open") Wi-Fi networks, also to fit two firmware images in 4 MB of flash.
 
 #### Features
 
 - Add `BUTTON_GPIO` for a button that shows the board's status on the LED and switches the LED on and off.
 - Add `BATTERY` to report the battery from a MAX17048 fuel gauge or an M5PM1 power chip.
 - Add `LED_POWER_GPIO` for boards that switch the LED's power.
+- Keep the configuration in a flash partition of its own instead of the firmware image, and add `make config` to change it without rebuilding the firmware.
 
 #### Fixes
 

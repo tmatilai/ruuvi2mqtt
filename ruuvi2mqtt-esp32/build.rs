@@ -1,40 +1,17 @@
-//! The embuild glue for ESP-IDF, the embedded CA certificate, and
-//! `BUILD_VERSION`.
+//! The embuild glue for ESP-IDF, and `BUILD_VERSION`.
 
-use std::path::PathBuf;
 use std::process::Command;
 
 fn main() {
-    println!("cargo:rerun-if-env-changed=MQTT_CA_FILE");
-
     // Required by esp-idf-sys (via embuild) to export ESP-IDF build environment
     // variables so that the linker and the Rust crate can find ESP-IDF headers
     // and libraries that are downloaded/built by embuild.
     embuild::espidf::sysenv::output();
 
-    println!("cargo:rustc-check-cfg=cfg(mqtt_ca_file)");
-    // Set by esp-idf-sys on chips with 5 GHz Wi-Fi. config.rs checks WIFI_BAND with it.
+    // Set by esp-idf-sys on chips with 5 GHz Wi-Fi.
     println!("cargo:rustc-check-cfg=cfg(esp_idf_soc_wifi_support_5g)");
     // Set by esp-idf-sys on chips with a USB port of their own. main.rs checks it.
     println!("cargo:rustc-check-cfg=cfg(esp_idf_soc_usb_serial_jtag_supported)");
-
-    // If MQTT_CA_FILE is set, copy the CA certificate into OUT_DIR so that
-    // the source code can embed it with `include_bytes!`.
-    if let Ok(ca_path) = std::env::var("MQTT_CA_FILE") {
-        let out_dir = PathBuf::from(std::env::var("OUT_DIR").unwrap());
-        let dest = out_dir.join("mqtt_ca.pem");
-        let mut pem = std::fs::read(&ca_path).unwrap_or_else(|e| {
-            panic!("Failed to read MQTT_CA_FILE ({ca_path}): {e}");
-        });
-        // esp-idf-svc wants the PEM NUL-terminated.
-        if pem.last() != Some(&0) {
-            pem.push(0);
-        }
-        std::fs::write(&dest, pem).unwrap();
-        println!("cargo:rerun-if-changed={ca_path}");
-        println!("cargo:rustc-env=MQTT_CA_PEM_PATH={}", dest.display());
-        println!("cargo:rustc-cfg=mqtt_ca_file");
-    }
 
     // The package version plus the git commit, so the diagnostics show
     // exactly what a board was flashed with.

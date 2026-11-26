@@ -23,10 +23,11 @@ use esp_idf_svc::hal::{
 use esp_idf_svc::sys::EspError;
 use log::{info, warn};
 use ruuvi2mqtt_esp32::button::{Button, Gesture};
+use ruuvi2mqtt_esp32::config;
 use ruuvi2mqtt_esp32::led_pattern::{self, ws2812_grb, Pattern};
 use ruuvi2mqtt_esp32::status::Grade;
 
-use crate::{config, settings, web};
+use crate::{settings, web};
 
 /// Set while Wi-Fi is down, for the LED thread of [`start`].
 static WIFI_DOWN: AtomicBool = AtomicBool::new(false);
@@ -74,40 +75,45 @@ const DARK_STEP: Duration = Duration::from_millis(100);
 const STATUS_MS: u64 = 10_000;
 
 /// The LED thread's stack, in bytes. The button's NVS writes run on it too.
-const STACK_SIZE: usize = if config::BUTTON_GPIO.is_some() {
-    8192
-} else {
-    4096
-};
+fn stack_size() -> usize {
+    if config::get().button_gpio.is_some() {
+        8192
+    } else {
+        4096
+    }
+}
 
 /// Runs the LED in a thread of its own, as `LED_MODE` and the button say.
 pub fn start() -> anyhow::Result<()> {
-    // config.rs fails the build when LED_MODE is set without LED_GPIO.
-    let (Some(mode), Some(gpio)) = (config::LED_MODE, config::LED_GPIO) else {
+    // Config::parse rejects LED_MODE without LED_GPIO.
+    let (Some(mode), Some(gpio)) = (config::get().led_mode.as_deref(), config::get().led_gpio)
+    else {
         return Ok(());
     };
     // Without a button, NVS has no choice that counts.
-    let choice = config::BUTTON_GPIO.and_then(|_| settings::led_lit());
+    let choice = config::get().button_gpio.and_then(|_| settings::led_lit());
     info!(
         "LED: type={}{}, gpio={}{}, color={:06x}, mode={}{}",
-        config::LED_TYPE,
-        if config::LED_ACTIVE_LOW {
+        config::get().led_type.as_str(),
+        if config::get().led_active_low {
             " (active low)"
         } else {
             ""
         },
         gpio,
-        config::LED_POWER_GPIO
+        config::get()
+            .led_power_gpio
             .map(|power| format!(", power gpio={power}"))
             .unwrap_or_default(),
-        config::LED_COLOR,
+        config::get().led_color,
         led_pattern::mode(mode, choice),
-        config::BUTTON_GPIO
+        config::get()
+            .button_gpio
             .map(|button| format!(", button gpio={button}"))
             .unwrap_or_default(),
     );
     thread::Builder::new()
-        .stack_size(STACK_SIZE)
+        .stack_size(stack_size())
         .spawn(move || {
             if let Err(e) = Light::new(gpio, mode, choice).and_then(Light::run) {
                 warn!("LED stopped: {e}");
@@ -140,12 +146,13 @@ enum Driver {
 impl Light {
     fn new(gpio: u32, mode: &'static str, choice: Option<bool>) -> Result<Self, EspError> {
         // The LED works without the button.
-        let button = config::BUTTON_GPIO.and_then(|pin| {
+        let button = config::get().button_gpio.and_then(|pin| {
             Controls::new(pin)
                 .inspect_err(|e| warn!("Button failed: {e}"))
                 .ok()
         });
-        let power = config::LED_POWER_GPIO
+        let power = config::get()
+            .led_power_gpio
             .map(|power| {
                 let mut power = PinDriver::output(output_pin(power))?;
                 power.set_high()?;
@@ -153,7 +160,7 @@ impl Light {
             })
             .transpose()?;
         let pin = output_pin(gpio);
-        let driver = if config::LED_TYPE == "ws2812" {
+        let driver = if config::get().led_type.as_str() == "ws2812" {
             let config = TxChannelConfig {
                 resolution: 10.MHz().into(),
                 ..Default::default()
@@ -226,7 +233,7 @@ impl Light {
     /// Returns the pattern at `now` ms: a press's feedback, the status for a
     /// while after a click, or the mode's pattern.
     fn pattern(&self, now: u64) -> Pattern {
-        let continuous = config::BLE_SCAN_CONTINUOUS;
+        let continuous = config::get().ble_scan_continuous;
         if let Some(controls) = &self.button {
             // Without the alarm, so that the preview shows the toggle.
             let preview = Pattern::for_mode(
@@ -286,13 +293,13 @@ impl Light {
         match &mut self.driver {
             Driver::Ws2812(tx) => ws2812_send(
                 tx,
-                ws2812_grb(pattern.ws2812_color(config::LED_COLOR), level),
+                ws2812_grb(pattern.ws2812_color(config::get().led_color), level),
             ),
             Driver::Gpio(channel) => {
                 let max = channel.get_max_duty();
                 let peak = max / pattern.gpio_divisor();
                 let duty = peak * u32::from(level) / 255;
-                channel.set_duty(if config::LED_ACTIVE_LOW {
+                channel.set_duty(if config::get().led_active_low {
                     max - duty
                 } else {
                     duty
@@ -313,7 +320,7 @@ impl Controls {
     /// Takes the button's pin, from the LED thread: the interrupt notifies the
     /// thread that creates the notification.
     fn new(gpio: u32) -> Result<Self, EspError> {
-        // SAFETY: nothing else uses the button's pin. config.rs checks that
+        // SAFETY: nothing else uses the button's pin. Config::parse checks that
         // it exists on the chip.
         #[allow(clippy::cast_possible_truncation)] // GPIO numbers always fit in u8
         let mut pin = PinDriver::input(unsafe { AnyInputPin::steal(gpio as u8) }, Pull::Up)?;
@@ -347,7 +354,7 @@ impl Controls {
     }
 }
 
-/// The LED's pin. config.rs checks that it exists on the chip.
+/// The LED's pin. `Config::parse` checks that it exists on the chip.
 fn output_pin(gpio: u32) -> AnyOutputPin<'static> {
     // SAFETY: nothing else uses the LED's pins or the LEDC.
     #[allow(clippy::cast_possible_truncation)] // GPIO numbers always fit in u8

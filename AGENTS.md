@@ -25,9 +25,9 @@ Firmware on esp-idf-svc (ESP-IDF pinned in `.cargo/config.toml`). The continuous
 mode, the default, scans all the time, stays connected, and publishes each
 scan's readings over MQTT while the next scan runs. The deep-sleep mode runs one
 cycle per wake instead: start a BLE scan thread, connect Wi-Fi, publish, deep
-sleep. Configuration is compile-time via environment variables, see
-`ruuvi2mqtt-esp32/README.md`. `ruuvi2mqtt-esp32/boards.md` has each known
-board's settings.
+sleep. Environment variables set the configuration, which `make flash` writes to
+a flash partition of its own, see `ruuvi2mqtt-esp32/README.md`.
+`ruuvi2mqtt-esp32/boards.md` has each known board's settings.
 
 The bin, `src/main.rs` and the modules it declares, runs on the board. Every
 module of it uses esp-idf-svc, so an update to that touches the whole firmware.

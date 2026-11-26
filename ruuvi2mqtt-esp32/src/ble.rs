@@ -8,12 +8,14 @@ use std::time::Instant;
 use esp32_nimble::{BLEDevice, BLEScan};
 use esp_idf_svc::hal::task::block_on;
 use log::{debug, warn};
+use ruuvi2mqtt_esp32::config;
 use ruuvi2mqtt_esp32::mac::Mac;
 use ruuvi2mqtt_esp32::payload;
 use ruuvi2mqtt_esp32::scan::ScanStats;
 use ruuvi_sensor_protocol::SensorValues;
 
-use crate::config;
+/// Ruuvi manufacturer-specific data company identifier (little-endian 0x0499).
+const RUUVI_MANUFACTURER_ID: u16 = 0x0499;
 
 /// A decoded reading, ready to publish.
 #[derive(Debug, Clone)]
@@ -75,7 +77,7 @@ pub fn scan(start: Instant) -> anyhow::Result<Scan> {
         ble_scan
             .start(
                 ble_device,
-                config::BLE_SCAN_DURATION * 1000,
+                config::get().ble_scan_duration * 1000,
                 |device, data| -> Option<()> {
                     let at_ms = crate::ms_since(start);
                     let wifi_connected = WIFI_CONNECTED.load(Ordering::Relaxed);
@@ -83,7 +85,7 @@ pub fn scan(start: Instant) -> anyhow::Result<Scan> {
 
                     let Some(mfr_data) = data
                         .manufacture_data()
-                        .filter(|m| m.company_identifier == config::RUUVI_MANUFACTURER_ID)
+                        .filter(|m| m.company_identifier == RUUVI_MANUFACTURER_ID)
                     else {
                         state.stats.other(wifi_connected);
                         return None;
@@ -92,7 +94,7 @@ pub fn scan(start: Instant) -> anyhow::Result<Scan> {
                     let addr = device.addr().as_le_bytes();
                     let mac = Mac([addr[5], addr[4], addr[3], addr[2], addr[1], addr[0]]);
                     state.stats.ruuvi(mac, device.rssi(), at_ms, wifi_connected);
-                    if config::BLE_SCAN_CONTINUOUS {
+                    if config::get().ble_scan_continuous {
                         crate::web::record(mac, device.rssi());
                     }
 
@@ -108,7 +110,7 @@ pub fn scan(start: Instant) -> anyhow::Result<Scan> {
                         }
                     };
 
-                    let payload = payload::encode(&values, config::MQTT_CLIENT_ID);
+                    let payload = payload::encode(&values, config::get().mqtt_client_id.as_str());
                     debug!("Ruuvi data: [{mac}] {} dBm -> {payload}", device.rssi());
 
                     if state

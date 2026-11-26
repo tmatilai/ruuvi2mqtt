@@ -11,6 +11,12 @@ rust-version = "1.85"
 name = "ruuvi2mqtt-esp32"
 test = false # needs ESP-IDF; the host tests are in the lib
 
+# Runs on the computer, not on the board.
+[[bin]]
+name = "ruuvi2mqtt-config"
+path = "src/bin/config.rs"
+test = false
+
 [profile.release]
 opt-level = "s"
 # For a smaller image, see sdkconfig.defaults.

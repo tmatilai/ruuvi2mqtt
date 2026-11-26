@@ -70,7 +70,9 @@ after pulling.
 
 ## Configuration
 
-Environment variables set the configuration at compile time.
+Environment variables set the configuration. `make flash` checks it and writes
+it to the board's `config` partition, so every board of a chip runs the same
+firmware image. `make config` writes only the configuration.
 
 ### Required
 
@@ -93,7 +95,7 @@ Environment variables set the configuration at compile time.
 | `DEVICE_HOSTNAME`    | —                   | `ruuvi2mqtt-esp32`   | Hostname for DHCP and mDNS, and the default MQTT client ID                                                                                                                                                                       |
 | `MQTT_PORT`          | `mqtt.port`         | `1883` / `8883`      | MQTT broker port (default depends on TLS)                                                                                                                                                                                        |
 | `MQTT_TLS`           | `mqtt.tls`          | `false`              | Set to `true` to enable TLS (`mqtts://`)                                                                                                                                                                                         |
-| `MQTT_CA_FILE`       | `mqtt.ca_file`      | —                    | Path to a PEM CA cert, embedded at compile time                                                                                                                                                                                  |
+| `MQTT_CA_FILE`       | `mqtt.ca_file`      | —                    | Path to a PEM CA cert, written to the `config` partition. Without it, the firmware trusts the common CAs of ESP-IDF's bundle, which sign most public servers                                                                     |
 | `MQTT_TLS_INSECURE`  | `mqtt.tls_insecure` | `false`              | Set to `true` to skip the certificate's hostname check. The app's `mqtt.tls_insecure` skips the whole verification                                                                                                               |
 | `MQTT_CLIENT_ID`     | `mqtt.client_id`    | _hostname_           | MQTT client ID, also sent as `publisher` in each reading                                                                                                                                                                         |
 | `MQTT_USER`          | `mqtt.user`         | _(anonymous)_        | MQTT username                                                                                                                                                                                                                    |
@@ -228,10 +230,11 @@ without touching them. An unknown board behind a bridge is identified with
 auto-detection, and when looking for a board registered without the serial
 number. Run `make register` again to record the serial number.
 
-**Auto-detection:** `make flash` (or `all`, `build`, `lint`, `monitor`, `log`)
-without `BOARD` identifies the attached board and loads its `.mk` file. With
-several boards attached, it lists them and asks for `BOARD`. A target that talks
-to the board finds its port from `BOARD`, and never uses another board.
+**Auto-detection:** `make flash` (or `all`, `build`, `lint`, `config`,
+`monitor`, `log`) without `BOARD` identifies the attached board and loads its
+`.mk` file. With several boards attached, it lists them and asks for `BOARD`. A
+target that talks to the board finds its port from `BOARD`, and never uses
+another board.
 
 ```sh
 make flash BOARD=kitchen                  # flash the board named kitchen
@@ -247,7 +250,8 @@ wake.
 ## Build & flash
 
 ```sh
-make flash               # build and flash (the first build compiles ESP-IDF, so it is slow)
+make flash               # build and flash the firmware and the configuration (the first build compiles ESP-IDF, so it is slow)
+make config              # write only the configuration
 make flash monitor       # build, flash, and open the serial monitor
 make build               # build only
 make monitor             # open the interactive serial monitor
@@ -420,9 +424,9 @@ All times are in milliseconds from the start of the cycle. The test bed's
 
 ## Security
 
-The built firmware embeds `WIFI_PASS` and `MQTT_PASSWORD` as plaintext constants
-in flash. Don't share or publish built images, and note that physical access to
-a board is enough to read the credentials back with `espflash`/`esptool`.
+`WIFI_PASS` and `MQTT_PASSWORD` are plaintext in the `config` partition and in
+`target/<chip>/config.bin`, which `make` writes to the partition. Physical
+access to a board is enough to read them back with `espflash`/`esptool`.
 
 ESP-IDF [flash encryption][flash-enc] prevents this. Enable it with
 `CONFIG_SECURE_FLASH_ENC_ENABLED` in `sdkconfig.defaults`. It is off because the
