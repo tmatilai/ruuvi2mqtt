@@ -28,7 +28,7 @@ debug = true
 opt-level = "z"
 
 [dependencies]
-anyhow = "=1.0.104"
+anyhow = "=1.0.105"
 ruuvi-sensor-protocol = "=0.7.0"
 log = "=0.4.35"
 serde = { version = "=1.0.229", features = ["derive"] }
