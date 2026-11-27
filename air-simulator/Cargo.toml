@@ -20,7 +20,7 @@ debug = true
 opt-level = "z"
 
 [dependencies]
-anyhow = "=1.0.104"
+anyhow = "=1.0.105"
 log = "=0.4.35"
 
 # Only on the ESP32, so the lib builds and tests on the host.
