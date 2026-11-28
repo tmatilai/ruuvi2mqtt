@@ -37,7 +37,7 @@ konst = "=0.4.3"
 
 # Only on the ESP32, so the lib's pure-Rust modules build and test on the host.
 [target.'cfg(target_os = "espidf")'.dependencies]
-esp-idf-svc = "=0.53.0"
+esp-idf-svc = "=0.54.1"
 esp32-nimble = "=0.13.0"
 
 [build-dependencies]
